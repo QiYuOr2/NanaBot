@@ -96,6 +96,7 @@ export function createApp(options: CreateAppOptions): App {
       await Promise.all(pluginTasks);
       registerSignalHandlers(app, cleanupManager);
       await ws.connect();
+      console.log('[NanaBot] Connected')
       state = "started";
     },
     async stop(stopOptions) {
