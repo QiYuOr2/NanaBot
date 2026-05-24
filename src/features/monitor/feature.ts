@@ -1,7 +1,7 @@
 import { startListen, type MessageListener } from "blive-message-listener";
 import { Structs } from "node-napcat-ts";
-import { defineFeature, type FeatureContext } from "../../core/index.js";
-import { dateFormat } from "../../lib/date.js";
+import { defineFeature, type FeatureContext } from "../../core/index";
+import { dateFormat } from "../../lib/date";
 
 export interface MonitorFeatureOptions {
   roomId: number;

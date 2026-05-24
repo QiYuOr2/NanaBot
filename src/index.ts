@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { createApp } from "./core/index.js";
-import { loadMonitorConfig, monitorFeature } from "./features/monitor/index.js";
-import { readOptionalNumberEnv } from "./lib/utils.js";
+import { createApp } from "./core";
+import { loadMonitorConfig, monitorFeature } from "./features/monitor";
+import { readOptionalNumberEnv } from "./lib/utils";
 
 const app = createApp({
   websocket: {

@@ -1,7 +1,7 @@
 import { NCWebsocket, SendMessageSegment, Structs, type EventHandleMap, type EventKey, type NCWebsocketOptions } from "node-napcat-ts";
-import { createCleanupManager, type Cleanup, type MaybePromise } from "./event.js";
-import type { FeatureContext, FeatureDefinition } from "./feature.js";
-import { readOptionalNumberEnv } from "../lib/utils.js";
+import { createCleanupManager, type Cleanup, type MaybePromise } from "./event";
+import type { FeatureContext, FeatureDefinition } from "./feature";
+import { readOptionalNumberEnv } from "../lib/utils";
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;

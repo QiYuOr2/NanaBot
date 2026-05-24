@@ -1,5 +1,5 @@
 import type { NCWebsocket, EventHandleMap, EventKey, SendMessageSegment } from "node-napcat-ts";
-import type { Cleanup, MaybePromise } from "./event.js";
+import type { Cleanup, MaybePromise } from "./event";
 
 export interface FeatureContext {
   ws: NCWebsocket;
