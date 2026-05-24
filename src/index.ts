@@ -22,16 +22,16 @@ app.on("socket.open", () => {
   });
 });
 
-const monitorConfig = loadMonitorConfig();
+// const monitorConfig = loadMonitorConfig();
 
-for (const streamerConfig of monitorConfig.streamers) {
-  app.use(monitorFeature, {
-    roomId: streamerConfig.roomId,
-    streamer: streamerConfig.streamer,
-    notifyGroupIds: streamerConfig.notifyGroups,
-    messages: streamerConfig.messages,
-  });
-}
+// for (const streamerConfig of monitorConfig.streamers) {
+//   app.use(monitorFeature, {
+//     roomId: streamerConfig.roomId,
+//     streamer: streamerConfig.streamer,
+//     notifyGroupIds: streamerConfig.notifyGroups,
+//     messages: streamerConfig.messages,
+//   });
+// }
 
 app.start().catch((error) => {
   console.error("[app] 启动失败", error);
