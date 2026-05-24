@@ -1,6 +1,7 @@
 import { NCWebsocket, Structs, type EventHandleMap, type EventKey, type NCWebsocketOptions } from "node-napcat-ts";
 import { createCleanupManager, type Cleanup, type MaybePromise } from "./event.js";
 import type { FeatureContext, FeatureDefinition } from "./feature.js";
+import { readOptionalNumberEnv } from "../lib/utils.js";
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;
@@ -27,17 +28,25 @@ type AppState = "idle" | "starting" | "started" | "stopping" | "stopped";
 const SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 
 export function createApp(options: CreateAppOptions): App {
-  const ws = new NCWebsocket(options.websocket);
+  const isOpenDebug = readOptionalNumberEnv('NC_DEBUG') === 1
+  isOpenDebug && console.log(`[NanaBot] 调试模式`)
+
+  const napcat = new NCWebsocket(
+    options.websocket,
+    isOpenDebug
+  );
+  console.log(`[NanaBot] ${(options.websocket as any)['baseUrl']}`)
+
   const cleanupManager = createCleanupManager();
   const pluginTasks: Promise<void>[] = [];
   let state: AppState = "idle";
   let stopTask: Promise<void> | undefined;
 
   const featureContext: FeatureContext = {
-    ws,
+    ws: napcat,
     adminGroupId: options.adminGroupId,
     on(event, handler) {
-      const unsubscribe = ws.subscribe(event, handler);
+      const unsubscribe = napcat.subscribe(event, handler);
       cleanupManager.add(() => {
         unsubscribe();
       });
@@ -51,7 +60,7 @@ export function createApp(options: CreateAppOptions): App {
         return;
       }
 
-      await ws.send_group_msg({
+      await napcat.send_group_msg({
         group_id: options.adminGroupId,
         message: [Structs.text(text)],
       });
@@ -59,7 +68,7 @@ export function createApp(options: CreateAppOptions): App {
   };
 
   const app: App = {
-    ws,
+    ws: napcat,
     adminGroupId: options.adminGroupId,
     use(feature, featureOptions) {
       if (state !== "idle") {
@@ -84,6 +93,7 @@ export function createApp(options: CreateAppOptions): App {
       await featureContext.sendAdminText(text);
     },
     async start() {
+      console.log(`[NanaBot] start() state === ${state}`)
       if (state === "started") {
         return;
       }
@@ -94,10 +104,11 @@ export function createApp(options: CreateAppOptions): App {
 
       state = "starting";
       await Promise.all(pluginTasks);
+      console.log(`[NanaBot] 插件注册数量：${pluginTasks.length}`)
       registerSignalHandlers(app, cleanupManager);
-      await ws.connect();
-      console.log('[NanaBot] Connected')
+      await napcat.connect();
       state = "started";
+      console.log(`[NanaBot] Connected state === ${state}`)
     },
     async stop(stopOptions) {
       if (state === "stopped") {
@@ -116,7 +127,7 @@ export function createApp(options: CreateAppOptions): App {
         }
 
         await safely(() => cleanupManager.run());
-        await safely(() => ws.disconnect());
+        await safely(() => napcat.disconnect());
         state = "stopped";
       })();
 
@@ -135,7 +146,7 @@ function registerSignalHandlers(app: App, cleanupManager: ReturnType<typeof crea
           announce: `我溜了~`,
         })
         .catch((error) => {
-          console.error("[app] 关闭应用时发生错误", error);
+          console.error("[NanaBot] 关闭应用时发生错误", error);
         });
     };
 
@@ -150,6 +161,6 @@ async function safely(task: () => Promise<void>) {
   try {
     await task();
   } catch (error) {
-    console.error("[app] 执行清理任务时发生错误", error);
+    console.error("[NanaBot] 执行清理任务时发生错误", error);
   }
 }

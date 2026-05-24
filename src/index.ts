@@ -5,7 +5,7 @@ import { readOptionalNumberEnv } from "./lib/utils.js";
 
 const app = createApp({
   websocket: {
-    baseUrl: process.env.NC_WS_URL ?? "ws://127.0.0.1:6099",
+    baseUrl: process.env.NC_WS_URL ?? "ws://127.0.0.1:1111",
     accessToken: process.env.NC_ACCESS_TOKEN,
     reconnection: {
       enable: true,
@@ -22,16 +22,16 @@ app.on("socket.open", () => {
   });
 });
 
-const monitorConfig = loadMonitorConfig();
+// const monitorConfig = loadMonitorConfig();
 
-for (const streamerConfig of monitorConfig.streamers) {
-  app.use(monitorFeature, {
-    roomId: streamerConfig.roomId,
-    streamer: streamerConfig.streamer,
-    notifyGroupIds: streamerConfig.notifyGroups,
-    messages: streamerConfig.messages,
-  });
-}
+// for (const streamerConfig of monitorConfig.streamers) {
+//   app.use(monitorFeature, {
+//     roomId: streamerConfig.roomId,
+//     streamer: streamerConfig.streamer,
+//     notifyGroupIds: streamerConfig.notifyGroups,
+//     messages: streamerConfig.messages,
+//   });
+// }
 
 app.start().catch((error) => {
   console.error("[app] 启动失败", error);
