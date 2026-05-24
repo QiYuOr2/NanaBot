@@ -1,0 +1,13 @@
+{
+  "streamers": [
+    {
+      "roomId": 544786,
+      "streamer": "12dora",
+      "notifyGroups": [],
+      "messages": {
+        "liveStart": "{streamer} 开播了",
+        "liveEnd": "{streamer} 下播了"
+      }
+    }
+  ]
+}

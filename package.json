@@ -1,0 +1,17 @@
+{
+	"scripts": {
+		"build": "tsdown"
+	},
+	"devDependencies": {
+		"@types/node": "^25.9.1",
+		"tsdown": "^0.22.0",
+		"typescript": "^6.0.3",
+		"unrun": "^0.3.0"
+	},
+	"dependencies": {
+		"blive-message-listener": "^0.5.5",
+		"dayjs": "^1.11.20",
+		"dotenv": "^17.4.2",
+		"node-napcat-ts": "^0.4.25"
+	}
+}
