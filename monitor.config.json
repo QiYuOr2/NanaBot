@@ -5,8 +5,8 @@
       "streamer": "12dora",
       "notifyGroups": [646247690],
       "messages": {
-        "liveStart": "{streamer} 当家播了 https://live.bilibili.com/544786",
-        "liveEnd": "{streamer} 当家溜了"
+        "liveStart": "当家播了 https://live.bilibili.com/544786",
+        "liveEnd": "当家溜了"
       }
     }
   ]
