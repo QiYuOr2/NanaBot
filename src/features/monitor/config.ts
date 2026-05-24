@@ -3,7 +3,6 @@ import { resolve } from "node:path";
 
 export interface MonitorMessageConfig {
   liveStart: string;
-  replayStart: string;
   liveEnd: string;
 }
 
@@ -51,10 +50,10 @@ function normalizeStreamerConfig(streamer: unknown): MonitorStreamerConfig {
     throw new Error("streamers 中的每一项都必须是对象。");
   }
 
-  const roomId = Reflect.get(streamer, "roomId");
-  const streamerName = Reflect.get(streamer, "streamer");
-  const notifyGroups = Reflect.get(streamer, "notifyGroups");
-  const messages = Reflect.get(streamer, "messages");
+  const roomId: number = Reflect.get(streamer, "roomId");
+  const streamerName: string = Reflect.get(streamer, "streamer");
+  const notifyGroups: number[] = Reflect.get(streamer, "notifyGroups");
+  const messages: string[] = Reflect.get(streamer, "messages");
 
   if (!Number.isInteger(roomId) || typeof streamerName !== "string" || streamerName.length === 0) {
     throw new Error("streamers 中的每一项都必须包含有效的 roomId 和非空的 streamer。");
@@ -101,7 +100,6 @@ function normalizeMessageConfig(streamer: string, messages: unknown): MonitorMes
 
   return {
     liveStart: liveStart ?? defaults.liveStart,
-    replayStart: replayStart ?? defaults.replayStart,
     liveEnd: liveEnd ?? defaults.liveEnd,
   };
 }
@@ -109,7 +107,6 @@ function normalizeMessageConfig(streamer: string, messages: unknown): MonitorMes
 function createDefaultMessages(streamer: string): MonitorMessageConfig {
   return {
     liveStart: `${streamer} 开播了`,
-    replayStart: `${streamer} 开始推流`,
     liveEnd: `${streamer} 下播了`,
   };
 }

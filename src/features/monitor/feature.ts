@@ -28,10 +28,10 @@ export const monitorFeature = defineFeature<MonitorFeatureOptions>({
 function createMonitorListener(context: FeatureContext, options: MonitorFeatureOptions): MessageListener {
   return startListen(options.roomId, {
     onLiveStart: (message) => {
-      const isReplay = Boolean(message.raw["live_time"]);
-      const text = isReplay
-        ? renderMessage(options.messages?.replayStart ?? `${options.streamer} 开始直播`, options)
-        : renderMessage(options.messages?.liveStart ?? `${options.streamer} 推流 LOG`, options);
+      const hasLiveTime = Boolean(message.raw["live_time"]);
+      const text = hasLiveTime
+        ? renderMessage(options.messages?.liveStart ?? `${options.streamer} 开始直播`, options)
+        : `${options.streamer} 推流 LOG`;
 
       if (message.raw["live_time"]) {
         sendGroupText(context, options, text)
