@@ -30,8 +30,8 @@ function createMonitorListener(context: FeatureContext, options: MonitorFeatureO
     onLiveStart: (message) => {
       const isReplay = Boolean(message.raw["live_time"]);
       const text = isReplay
-        ? renderMessage(options.messages?.replayStart ?? `${options.streamer} 开始推流`, options)
-        : renderMessage(options.messages?.liveStart ?? `${options.streamer} 开播了`, options);
+        ? renderMessage(options.messages?.replayStart ?? `${options.streamer} 开始直播`, options)
+        : renderMessage(options.messages?.liveStart ?? `${options.streamer} 推流 LOG`, options);
 
       if (message.raw["live_time"]) {
         sendGroupText(context, options, text)
@@ -44,6 +44,14 @@ function createMonitorListener(context: FeatureContext, options: MonitorFeatureO
       }
 
       console.log(`[${dateFormat(message.timestamp)}] ${text}`);
+    },
+    onIncomeDanmu(message) {
+      if (message.body.content === 'qiyuor2') {
+        context.sendAdminMsg([
+          Structs.text('直播间连接测试'),
+          Structs.at('all')
+        ])
+      }
     },
     onLiveEnd: (message) => {
       const text = renderMessage(options.messages?.liveEnd ?? `${options.streamer} 下播了`, options);
@@ -58,12 +66,14 @@ function createMonitorListener(context: FeatureContext, options: MonitorFeatureO
       });
     },
     onOpen: () => {
+      context.sendAdminText(`打开直播间 ${options.roomId}`)
       console.log(`[直播监控] 已连接直播间 ${options.roomId}`);
     },
     onClose: () => {
       console.log(`[直播监控] 直播间 ${options.roomId} 连接已关闭`);
     },
     onError: (error) => {
+      context.sendAdminText('发现了一个问题，请上线检查')
       console.error(`[直播监控] 直播间 ${options.roomId} 监听异常`, error);
     },
   });
@@ -79,7 +89,7 @@ async function sendGroupText(context: FeatureContext, options: MonitorFeatureOpt
   for (const groupId of groupIds) {
     await context.ws.send_group_msg({
       group_id: groupId,
-      message: [Structs.text(text)],
+      message: [Structs.text(text), Structs.at('all')],
     });
   }
 }

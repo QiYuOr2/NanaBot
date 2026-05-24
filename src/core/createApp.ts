@@ -1,4 +1,4 @@
-import { NCWebsocket, Structs, type EventHandleMap, type EventKey, type NCWebsocketOptions } from "node-napcat-ts";
+import { NCWebsocket, SendMessageSegment, Structs, type EventHandleMap, type EventKey, type NCWebsocketOptions } from "node-napcat-ts";
 import { createCleanupManager, type Cleanup, type MaybePromise } from "./event.js";
 import type { FeatureContext, FeatureDefinition } from "./feature.js";
 import { readOptionalNumberEnv } from "../lib/utils.js";
@@ -19,6 +19,7 @@ export interface App {
   on<T extends EventKey>(event: T, handler: EventHandleMap[T]): () => void;
   onCleanup(cleanup: Cleanup): void;
   sendAdminText(text: string): Promise<void>;
+  sendAdminMsg(messages: SendMessageSegment[]): Promise<void>;
   start(): Promise<void>;
   stop(options?: StopOptions): Promise<void>;
 }
@@ -65,6 +66,16 @@ export function createApp(options: CreateAppOptions): App {
         message: [Structs.text(text)],
       });
     },
+    async sendAdminMsg(messages) {
+      if (!options.adminGroupId) {
+        return;
+      }
+
+      await napcat.send_group_msg({
+        group_id: options.adminGroupId,
+        message: messages,
+      });  
+    }
   };
 
   const app: App = {
@@ -91,6 +102,9 @@ export function createApp(options: CreateAppOptions): App {
     },
     async sendAdminText(text) {
       await featureContext.sendAdminText(text);
+    },
+    async sendAdminMsg(messages) {
+      await featureContext.sendAdminMsg(messages)
     },
     async start() {
       console.log(`[NanaBot] start() state === ${state}`)
