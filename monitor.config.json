@@ -1,12 +1,11 @@
 {
   "streamers": [
     {
-      "roomId": 544786,
-      "streamer": "12dora",
-      "notifyGroups": [646247690],
+      "roomId": 4629447,
+      "streamer": "饭总",
+      "notifyGroups": [1101365727],
       "messages": {
-        "liveStart": "当家播了 https://live.bilibili.com/544786",
-        "liveEnd": "当家溜了"
+        "liveStart": "饭总播了 http://live.bilibili.com/4629447"
       }
     }
   ]
