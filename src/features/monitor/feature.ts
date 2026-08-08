@@ -19,6 +19,13 @@ export const monitorFeature = defineFeature<MonitorFeatureOptions>({
   setup(context, options) {
     const listener = createMonitorListener(context, options);
 
+    if (options.notifyGroupIds?.length) {
+      context.sendAdminMsg([
+        Structs.text(`已配置 ${options.notifyGroupIds.join(',')}\n`),
+        Structs.text(`AdminID -> ${context.adminGroupId}`)
+      ])
+    }
+
     return () => {
       listener.close();
     };
