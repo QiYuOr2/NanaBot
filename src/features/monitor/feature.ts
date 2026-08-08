@@ -19,10 +19,6 @@ export const monitorFeature = defineFeature<MonitorFeatureOptions>({
   setup(context, options) {
     const listener = createMonitorListener(context, options);
 
-    if (options.notifyGroupIds?.length) {
-      context.sendAdminText(`已配置 ${options.notifyGroupIds.join(',')} \nAdminID -> ${context.adminGroupId}`)
-    }
-
     return () => {
       listener.close();
     };
@@ -62,7 +58,13 @@ function createMonitorListener(context: FeatureContext, options: MonitorFeatureO
       console.log(`[${dateFormat(message.timestamp)}] ${text}`);
     },
     onOpen: () => {
-      context.sendAdminText(`打开直播间 ${options.roomId}`)
+      if (options.notifyGroupIds?.length) {
+        context.sendAdminMsg([
+          Structs.text(`对应直播间 ${options.roomId}\n`),
+          Structs.text(`已配置 ${options.notifyGroupIds.join(',')}\n`),
+          Structs.text(`AdminID ${context.adminGroupId}`)
+        ])
+      }
       console.log(`[直播监控] 已连接直播间 ${options.roomId}`);
     },
     onClose: () => {
