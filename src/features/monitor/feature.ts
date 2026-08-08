@@ -20,10 +20,7 @@ export const monitorFeature = defineFeature<MonitorFeatureOptions>({
     const listener = createMonitorListener(context, options);
 
     if (options.notifyGroupIds?.length) {
-      context.sendAdminMsg([
-        Structs.text(`已配置 ${options.notifyGroupIds.join(',')}\n`),
-        Structs.text(`AdminID -> ${context.adminGroupId}`)
-      ])
+      context.sendAdminText(`已配置 ${options.notifyGroupIds.join(',')} \nAdminID -> ${context.adminGroupId}`)
     }
 
     return () => {
