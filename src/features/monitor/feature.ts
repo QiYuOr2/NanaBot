@@ -55,15 +55,7 @@ function createMonitorListener(context: FeatureContext, options: MonitorFeatureO
     },
     onLiveEnd: (message) => {
       const text = renderMessage(options.messages?.liveEnd ?? `${options.streamer} 下播了`, options);
-
       console.log(`[${dateFormat(message.timestamp)}] ${text}`);
-
-      sendGroupText(context, options, text).catch((error) => {
-        console.error(
-          `[直播监控] 向群发送 "${options.streamer}" 下播通知失败`,
-          error,
-        );
-      });
     },
     onOpen: () => {
       context.sendAdminText(`打开直播间 ${options.roomId}`)
