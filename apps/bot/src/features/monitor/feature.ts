@@ -47,7 +47,7 @@ function createMonitorListener(context: FeatureContext, options: MonitorFeatureO
     },
     onIncomeDanmu(message) {
       if (message.body.content === 'qiyuor2') {
-        context.sendAdminMsg([
+        context.messenger.sendAdminMsg([
           Structs.text('直播间连接测试'),
           Structs.at('all')
         ])
@@ -59,7 +59,7 @@ function createMonitorListener(context: FeatureContext, options: MonitorFeatureO
     },
     onOpen: () => {
       if (options.notifyGroupIds?.length) {
-        context.sendAdminMsg([
+        context.messenger.sendAdminMsg([
           Structs.text(`对应直播间 ${options.roomId}\n`),
           Structs.text(`已配置 ${options.notifyGroupIds.join(',')}\n`),
           Structs.text(`AdminID ${context.adminGroupId}`)
@@ -71,7 +71,7 @@ function createMonitorListener(context: FeatureContext, options: MonitorFeatureO
       console.log(`[直播监控] 直播间 ${options.roomId} 连接已关闭`);
     },
     onError: (error) => {
-      context.sendAdminText('发现了一个问题，请上线检查')
+      context.messenger.sendAdminText('发现了一个问题，请上线检查')
       console.error(`[直播监控] 直播间 ${options.roomId} 监听异常`, error);
     },
   });
@@ -85,10 +85,7 @@ async function sendGroupText(context: FeatureContext, options: MonitorFeatureOpt
   }
 
   for (const groupId of groupIds) {
-    await context.ws.send_group_msg({
-      group_id: groupId,
-      message: [Structs.text(text), Structs.at('all')],
-    });
+    await context.messenger.sendGroupMsg(groupId, [Structs.text(text), Structs.at('all')]);
   }
 }
 

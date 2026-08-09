@@ -1,11 +1,13 @@
-import { NCWebsocket, SendMessageSegment, Structs, type EventHandleMap, type EventKey, type NCWebsocketOptions } from "node-napcat-ts";
-import { createCleanupManager, type Cleanup, type MaybePromise } from "./event";
+import { NCWebsocket, type SendMessageSegment, type EventHandleMap, type EventKey, type NCWebsocketOptions } from "node-napcat-ts";
+import { createCleanupManager, type Cleanup } from "./event";
 import type { FeatureContext, FeatureDefinition } from "./feature";
+import { createDefaultMessengerFactory, type MessengerFactory } from "./messenger";
 import { readOptionalNumberEnv } from "../lib/utils";
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;
   adminGroupId?: number;
+  messengerFactory?: MessengerFactory;
 }
 
 export interface StopOptions {
@@ -43,9 +45,19 @@ export function createApp(options: CreateAppOptions): App {
   let state: AppState = "idle";
   let stopTask: Promise<void> | undefined;
 
-  const featureContext: FeatureContext = {
-    ws: napcat,
+  const messengerFactory = options.messengerFactory ?? createDefaultMessengerFactory();
+  const messenger = messengerFactory.createMessenger({
     adminGroupId: options.adminGroupId,
+    napcat: {
+      async sendGroupMsg(payload) {
+        await napcat.send_group_msg(payload);
+      },
+    },
+  });
+
+  const featureContext: FeatureContext = {
+    adminGroupId: options.adminGroupId,
+    messenger,
     on(event, handler) {
       const unsubscribe = napcat.subscribe(event, handler);
       cleanupManager.add(() => {
@@ -56,26 +68,6 @@ export function createApp(options: CreateAppOptions): App {
     onCleanup(cleanup) {
       cleanupManager.add(cleanup);
     },
-    async sendAdminText(text) {
-      if (!options.adminGroupId) {
-        return;
-      }
-
-      await napcat.send_group_msg({
-        group_id: options.adminGroupId,
-        message: [Structs.text(text)],
-      });
-    },
-    async sendAdminMsg(messages) {
-      if (!options.adminGroupId) {
-        return;
-      }
-
-      await napcat.send_group_msg({
-        group_id: options.adminGroupId,
-        message: messages,
-      });  
-    }
   };
 
   const app: App = {
@@ -101,10 +93,10 @@ export function createApp(options: CreateAppOptions): App {
       featureContext.onCleanup(cleanup);
     },
     async sendAdminText(text) {
-      await featureContext.sendAdminText(text);
+      await featureContext.messenger.sendAdminText(text);
     },
     async sendAdminMsg(messages) {
-      await featureContext.sendAdminMsg(messages)
+      await featureContext.messenger.sendAdminMsg(messages);
     },
     async start() {
       console.log(`[NanaBot] start() state === ${state}`)
