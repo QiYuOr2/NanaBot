@@ -1,119 +1,152 @@
 # NanaBot
 
-NanaBot 是一个基于 NapCat WebSocket 的轻量机器人项目，当前内置了直播间监控能力，可在指定 Bilibili 直播间开播/下播时向 QQ 群发送通知。
+NanaBot 是一个基于 NapCat WebSocket 的 TypeScript 机器人。当前应用为 QQ 机器人提供 Bilibili 直播间监控：监听开播、下播和连接状态，并按主播配置向 QQ 群发送通知。
 
-它适合用于个人运营、群内提醒、直播关注等场景，也可作为一个可扩展的机器人骨架继续开发更多功能。
+项目采用 pnpm workspace 和 Vite+ 管理，应用与可复用逻辑已经拆分到 `apps/` 和 `packages/`。
 
-## ✨ 功能特性
+## 功能
 
-- 连接 NapCat WebSocket 服务，接入 QQ 机器人能力
-- 启动后自动向管理员群发送上线提示
-- 监控指定 Bilibili 直播间的开播与下播状态
-- 支持向多个 QQ 群发送通知
-- 支持自定义通知文案模板
-- 内置 PM2 启动脚本，适合长期运行
+- 连接 NapCat WebSocket，接入 QQ 消息能力
+- 启动和退出时向管理员群发送状态消息
+- 监听多个 Bilibili 直播间的开播、下播状态
+- 为每个主播配置通知群和开播文案
+- 将直播状态持久化到 `db/live-status.yaml`
+- 使用 PM2 长期运行机器人
 
-## 🧰 环境要求
+## 环境要求
 
-- Node.js（建议使用最新 LTS 版本）
-- pnpm
-- 一个可用的 NapCat 服务实例
-- 可访问的 Bilibili 直播间信息
+- Node.js `>=22.18.0`
+- pnpm `11.20.0`
+- 可用的 NapCat WebSocket 服务
+- 能访问 Bilibili 直播信息的网络环境
 
-## 🚀 快速开始
+## 快速开始
 
-### 1. 安装依赖
+### 安装
 
 ```bash
 pnpm install
 ```
 
-### 2. 配置环境变量
+### 配置 NapCat
 
-在项目根目录创建 `.env` 文件：
+在项目根目录创建 `.env`：
 
 ```env
 NC_WS_URL=ws://127.0.0.1:1111
-# 可选
 NC_ACCESS_TOKEN=your_access_token
 ADM_GROUP=123456789
 NC_DEBUG=1
 ```
 
-说明：
+- `NC_WS_URL`：NapCat WebSocket 地址，默认值为 `ws://127.0.0.1:1111`
+- `NC_ACCESS_TOKEN`：NapCat 启用鉴权时填写
+- `ADM_GROUP`：管理员 QQ 群号；不填写则不发送管理员状态消息
+- `NC_DEBUG`：值为 `1` 时启用调试日志
 
-- `NC_WS_URL`：NapCat 的 WebSocket 地址
-- `NC_ACCESS_TOKEN`：如有需要可填写访问令牌
-- `ADM_GROUP`：管理员群号，用于发送机器人状态通知
-- `NC_DEBUG`：设置为 `1` 时启用调试日志
+### 配置直播监控
 
-### 3. 配置直播监控
-
-编辑项目根目录下的 `nana.config.yaml`，在 `up` 数组中配置直播间：
+编辑根目录的 `nana.config.yaml`。只有 `live: true` 的条目会启动监控：
 
 ```yaml
 up:
-  - live: true
-    liveRoomId: 4629447
-    uname: 饭总
+  - dynamic: false
+    dynamicMonitorConfig: {}
+    live: true
     liveMonitorConfig:
       enableNotify: true
-      notifyGroups: [123456789]
+      notifyGroups:
+        - 123456789
       messageTemplate:
-        start: "饭总播了 http://live.bilibili.com/4629447"
+        start: "{uname}播了 http://live.bilibili.com/{roomId}"
+    uid: 145149047
+    liveRoomId: 4629447
+    uname: 饭总
 ```
 
-字段说明：
+配置字段：
 
+- `live`：是否启用该主播的监控
+- `uid`：Bilibili 用户 ID
 - `liveRoomId`：Bilibili 直播间 ID
 - `uname`：主播名称
-- `liveMonitorConfig.enableNotify`：是否发送直播和监控通知，默认为 `true`
-- `liveMonitorConfig.notifyGroups`：接收通知的 QQ 群号列表
-- `liveMonitorConfig.messageTemplate.start`：开播通知文案
-- `messages.liveEnd`：下播通知文案
+- `liveMonitorConfig.enableNotify`：是否向 QQ 群发送通知
+- `liveMonitorConfig.notifyGroups`：通知目标群号列表
+- `liveMonitorConfig.messageTemplate.start`：开播通知文案，可使用 `{uname}` 和 `{roomId}` 占位符
+- 下播文案当前由应用自动生成为 `{uname} 下播了`
 
-### 4. 构建项目
+### 构建并启动
 
-```bash
-pnpm build
-```
-
-### 5. 启动项目
-
-直接运行：
+构建 bot 及其 workspace 依赖：
 
 ```bash
-node dist/index.mjs
+pnpm build:bot
 ```
 
-或使用 PM2：
+构建产物位于 `apps/bot/dist/index.mjs`。手动启动：
+
+```bash
+node apps/bot/dist/index.mjs
+```
+
+也可以使用 PM2：
 
 ```bash
 pnpm pm2:start
 ```
 
-## 🏗️ 项目结构
+PM2 的工作目录是 `apps/bot`。使用 PM2 时，将运行时环境变量放在 `apps/bot/.env`，或通过 PM2/系统环境注入。
+
+## 开发与测试
+
+bot 开发模式：
+
+```bash
+pnpm --filter @nana/bot dev
+```
+
+运行 bot 测试：
+
+```bash
+pnpm --filter @nana/bot test
+```
+
+运行全部 workspace 检查和测试：
+
+```bash
+vp check
+vp test
+```
+
+单个 package 也提供 `build`、`dev`、`test` 和 `check` 脚本，例如：
+
+```bash
+pnpm --filter @nana/monitor check
+```
+
+## 项目结构
 
 ```text
-src/
-  core/           # 应用与事件基础能力
-  features/       # 功能模块，例如直播监控
-  lib/            # 工具函数与辅助逻辑
-nana.config.yaml     # 项目统一配置
-ecosystem.config.cjs           # PM2 聚合配置
-apps/bot/ecosystem.config.cjs  # bot 的 PM2 配置
+apps/
+  bot/                 # 可运行的 NanaBot 应用
+    src/core/          # 应用生命周期、事件和 feature 注册
+    src/monitor/       # 直播监控 feature 及 NapCat/status sinks
+packages/
+  bilibili-api/        # Bilibili API 类型与接口
+  config/              # nana.config.yaml 读写
+  monitor/             # 直播监控 source、controller 和事件类型
+  storage/             # db/ 下的 YAML 文件存储
+  utils/               # 通用工具
+nana.config.yaml       # 直播监控配置
+db/                    # 运行时状态文件
+ecosystem.config.cjs   # PM2 入口配置
 ```
 
-## ⚙️ 运行脚本
+## PM2 管理
 
 ```bash
-pnpm build
 pnpm pm2:start
+pnpm pm2:restart
+pnpm pm2:stop
+pnpm pm2:delete
 ```
-
-## 📝 说明
-
-- 机器人启动后会优先连接 NapCat 服务。
-- 当直播间开播时，会向配置的群发送通知，并附带 @all 提醒。
-- 若监听异常，机器人会向管理员群发送告警提示。
-- 配置文件支持按主播分别管理通知群和自定义文案。
