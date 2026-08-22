@@ -5,9 +5,14 @@ import type { FeatureContext } from "../core";
 export function createNapcatMonitorSink(
   context: FeatureContext,
   notifyGroupIds: number[] = [],
+  notifyEnabled = true,
 ): MonitorSink {
   return {
     async handle(event: MonitorEvent) {
+      if (!notifyEnabled) {
+        return;
+      }
+
       switch (event.type) {
         case "live.started":
           await sendGroupText(context, notifyGroupIds, event.message, event.streamer);

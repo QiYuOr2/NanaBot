@@ -4,6 +4,7 @@ up:
 
     live: true
     liveMonitorConfig:
+      enableNotify: true
       notifyGroups:
         - 1101365727
         - 511731882

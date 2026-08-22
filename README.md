@@ -57,6 +57,7 @@ up:
     liveRoomId: 4629447
     uname: 饭总
     liveMonitorConfig:
+      enableNotify: true
       notifyGroups: [123456789]
       messageTemplate:
         start: "饭总播了 http://live.bilibili.com/4629447"
@@ -66,6 +67,7 @@ up:
 
 - `liveRoomId`：Bilibili 直播间 ID
 - `uname`：主播名称
+- `liveMonitorConfig.enableNotify`：是否发送直播和监控通知，默认为 `true`
 - `liveMonitorConfig.notifyGroups`：接收通知的 QQ 群号列表
 - `liveMonitorConfig.messageTemplate.start`：开播通知文案
 - `messages.liveEnd`：下播通知文案

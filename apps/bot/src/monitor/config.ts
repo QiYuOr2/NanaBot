@@ -9,6 +9,7 @@ export interface MonitorMessageConfig {
 export interface MonitorStreamerConfig {
   roomId: number;
   streamer: string;
+  notifyEnabled: boolean;
   notifyGroups: number[];
   messages: MonitorMessageConfig;
 }
@@ -20,6 +21,7 @@ export interface MonitorConfig {
 const UpMonitorConfigSchema = z.object({
   live: z.boolean(),
   liveMonitorConfig: z.object({
+    enableNotify: z.boolean().default(true),
     notifyGroups: z.array(z.number().int()),
     messageTemplate: z.object({
       start: z.string(),
@@ -48,6 +50,7 @@ function toMonitorStreamerConfig(config: UpMonitorConfig): MonitorStreamerConfig
   return {
     roomId: config.liveRoomId,
     streamer: config.uname,
+    notifyEnabled: config.liveMonitorConfig.enableNotify,
     notifyGroups: config.liveMonitorConfig.notifyGroups,
     messages: {
       liveStart: config.liveMonitorConfig.messageTemplate.start,

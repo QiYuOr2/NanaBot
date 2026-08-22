@@ -2,6 +2,7 @@ import { createBliveMonitorSource, createMonitor, type MonitorFeatureOptions } f
 import { dateFormat } from "@nana/utils";
 import { defineFeature, type FeatureContext } from "../core";
 import { createNapcatMonitorSink } from "./napcatSink";
+import { createLiveStatusSink } from "./statusSink";
 
 export type { MonitorFeatureOptions } from "@nana/monitor";
 
@@ -11,7 +12,10 @@ export const monitorFeature = defineFeature<MonitorFeatureOptions>({
     const monitor = createMonitor({
       ...options,
       source: createBliveMonitorSource(),
-      sinks: [createNapcatMonitorSink(context, options.notifyGroupIds)],
+      sinks: [
+        createLiveStatusSink(),
+        createNapcatMonitorSink(context, options.notifyGroupIds, options.notifyEnabled),
+      ],
       logger: {
         log(message) {
           console.log(`[${dateFormat(Date.now())}] ${message}`);

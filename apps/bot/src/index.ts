@@ -3,6 +3,8 @@ import { readOptionalNumberEnv } from "@nana/utils";
 import { createApp } from "./core";
 import { loadMonitorConfig, monitorFeature } from "./monitor";
 
+console.log(`[app] NC_ACCESS_TOKEN: ${process.env.NC_ACCESS_TOKEN}`);
+
 const app = createApp({
   websocket: {
     baseUrl: process.env.NC_WS_URL ?? "ws://127.0.0.1:1111",
@@ -28,6 +30,7 @@ for (const streamerConfig of monitorConfig.streamers) {
   app.use(monitorFeature, {
     roomId: streamerConfig.roomId,
     streamer: streamerConfig.streamer,
+    notifyEnabled: streamerConfig.notifyEnabled,
     notifyGroupIds: streamerConfig.notifyGroups,
     messages: streamerConfig.messages,
   });

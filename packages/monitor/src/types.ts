@@ -6,6 +6,7 @@ export interface MonitorMessageConfig {
 export interface MonitorFeatureOptions {
   roomId: number;
   streamer: string;
+  notifyEnabled?: boolean;
   notifyGroupIds?: number[];
   messages?: Partial<MonitorMessageConfig>;
 }
