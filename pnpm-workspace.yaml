@@ -3,17 +3,21 @@ packages:
   - packages/*
   - tools/*
 
-catalogMode: prefer
-
 catalog:
-  "@types/node": ^24.13.3
+  '@types/node': ^24.13.3
+  js-yaml: ^5.3.0
   typescript: ^7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@0.2.8
   vite-plus: 0.2.8
+  zod: ^4.4.3
+
+catalogMode: prefer
+
 overrides:
-  vite: "catalog:"
+  vite: 'catalog:'
+
 peerDependencyRules:
   allowAny:
     - vite
   allowedVersions:
-    vite: "*"
+    vite: '*'

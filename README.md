@@ -41,6 +41,7 @@ NC_DEBUG=1
 ```
 
 说明：
+
 - `NC_WS_URL`：NapCat 的 WebSocket 地址
 - `NC_ACCESS_TOKEN`：如有需要可填写访问令牌
 - `ADM_GROUP`：管理员群号，用于发送机器人状态通知
@@ -48,28 +49,25 @@ NC_DEBUG=1
 
 ### 3. 配置直播监控
 
-编辑根目录下的 `monitor.config.json`：
+编辑项目根目录下的 `nana.config.yaml`，在 `up` 数组中配置直播间：
 
-```json
-{
-  "streamers": [
-    {
-      "roomId": 4629447,
-      "streamer": "饭总",
-      "notifyGroups": [123456789],
-      "messages": {
-        "liveStart": "饭总播了 http://live.bilibili.com/4629447"
-      }
-    }
-  ]
-}
+```yaml
+up:
+  - live: true
+    liveRoomId: 4629447
+    uname: 饭总
+    liveMonitorConfig:
+      notifyGroups: [123456789]
+      messageTemplate:
+        start: "饭总播了 http://live.bilibili.com/4629447"
 ```
 
 字段说明：
-- `roomId`：Bilibili 直播间 ID
-- `streamer`：主播名称
-- `notifyGroups`：接收通知的 QQ 群号列表
-- `messages.liveStart`：开播通知文案
+
+- `liveRoomId`：Bilibili 直播间 ID
+- `uname`：主播名称
+- `liveMonitorConfig.notifyGroups`：接收通知的 QQ 群号列表
+- `liveMonitorConfig.messageTemplate.start`：开播通知文案
 - `messages.liveEnd`：下播通知文案
 
 ### 4. 构建项目
@@ -99,7 +97,7 @@ src/
   core/           # 应用与事件基础能力
   features/       # 功能模块，例如直播监控
   lib/            # 工具函数与辅助逻辑
-monitor.config.json  # 直播监控配置
+nana.config.yaml     # 项目统一配置
 ecosystem.config.js  # PM2 配置
 ```
 
@@ -116,4 +114,3 @@ pnpm pm2:start
 - 当直播间开播时，会向配置的群发送通知，并附带 @all 提醒。
 - 若监听异常，机器人会向管理员群发送告警提示。
 - 配置文件支持按主播分别管理通知群和自定义文案。
-

@@ -1,12 +1,13 @@
-import type { EventHandleMap, EventKey } from "node-napcat-ts";
+import type { NCWebsocket, EventHandleMap, EventKey, SendMessageSegment } from "node-napcat-ts";
 import type { Cleanup, MaybePromise } from "./event";
-import type { Messenger } from "./messenger";
 
 export interface FeatureContext {
+  ws: NCWebsocket;
   adminGroupId?: number;
-  messenger: Messenger;
   on<T extends EventKey>(event: T, handler: EventHandleMap[T]): () => void;
   onCleanup(cleanup: Cleanup): void;
+  sendAdminText(text: string): Promise<void>;
+  sendAdminMsg(messages: SendMessageSegment[]): Promise<void>;
 }
 
 export interface FeatureDefinition<TOptions> {

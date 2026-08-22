@@ -1,0 +1,19 @@
+{
+  "streamers": [
+    {
+      "roomId": 4629447,
+      "streamer": "饭总",
+      "notifyGroups": [
+        1101365727,
+        511731882,
+        1045653883,
+        1092028491,
+        633120010,
+        721662821
+      ],
+      "messages": {
+        "liveStart": "饭总播了 http://live.bilibili.com/4629447 "
+      }
+    }
+  ]
+}

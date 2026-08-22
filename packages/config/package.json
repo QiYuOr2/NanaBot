@@ -1,5 +1,5 @@
 {
-  "name": "@nanabot/core",
+  "name": "@nana/config",
   "version": "0.0.0",
   "description": "A starter for creating a TypeScript package.",
   "homepage": "https://github.com/author/library#readme",
@@ -36,5 +36,8 @@
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "dependencies": {
+    "js-yaml": "catalog:"
   }
 }

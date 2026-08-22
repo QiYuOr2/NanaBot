@@ -1,13 +1,18 @@
-import { NCWebsocket, type SendMessageSegment, type EventHandleMap, type EventKey, type NCWebsocketOptions } from "node-napcat-ts";
+import {
+  NCWebsocket,
+  type SendMessageSegment,
+  Structs,
+  type EventHandleMap,
+  type EventKey,
+  type NCWebsocketOptions,
+} from "node-napcat-ts";
 import { createCleanupManager, type Cleanup } from "./event";
 import type { FeatureContext, FeatureDefinition } from "./feature";
-import { createDefaultMessengerFactory, type MessengerFactory } from "./messenger";
 import { readOptionalNumberEnv } from "../lib/utils";
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;
   adminGroupId?: number;
-  messengerFactory?: MessengerFactory;
 }
 
 export interface StopOptions {
@@ -31,33 +36,21 @@ type AppState = "idle" | "starting" | "started" | "stopping" | "stopped";
 const SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 
 export function createApp(options: CreateAppOptions): App {
-  const isOpenDebug = readOptionalNumberEnv('NC_DEBUG') === 1
-  isOpenDebug && console.log(`[NanaBot] 调试模式`)
+  const isOpenDebug = readOptionalNumberEnv("NC_DEBUG") === 1;
+  // oxlint-disable-next-line no-unused-expressions
+  isOpenDebug && console.log(`[NanaBot] 调试模式`);
 
-  const napcat = new NCWebsocket(
-    options.websocket,
-    isOpenDebug
-  );
-  console.log(`[NanaBot] ${(options.websocket as any)['baseUrl']}`)
+  const napcat = new NCWebsocket(options.websocket, isOpenDebug);
+  console.log(`[NanaBot] ${(options.websocket as any)["baseUrl"]}`);
 
   const cleanupManager = createCleanupManager();
   const pluginTasks: Promise<void>[] = [];
   let state: AppState = "idle";
   let stopTask: Promise<void> | undefined;
 
-  const messengerFactory = options.messengerFactory ?? createDefaultMessengerFactory();
-  const messenger = messengerFactory.createMessenger({
-    adminGroupId: options.adminGroupId,
-    napcat: {
-      async sendGroupMsg(payload) {
-        await napcat.send_group_msg(payload);
-      },
-    },
-  });
-
   const featureContext: FeatureContext = {
+    ws: napcat,
     adminGroupId: options.adminGroupId,
-    messenger,
     on(event, handler) {
       const unsubscribe = napcat.subscribe(event, handler);
       cleanupManager.add(() => {
@@ -67,6 +60,26 @@ export function createApp(options: CreateAppOptions): App {
     },
     onCleanup(cleanup) {
       cleanupManager.add(cleanup);
+    },
+    async sendAdminText(text) {
+      if (!options.adminGroupId) {
+        return;
+      }
+
+      await napcat.send_group_msg({
+        group_id: options.adminGroupId,
+        message: [Structs.text(text)],
+      });
+    },
+    async sendAdminMsg(messages) {
+      if (!options.adminGroupId) {
+        return;
+      }
+
+      await napcat.send_group_msg({
+        group_id: options.adminGroupId,
+        message: messages,
+      });
     },
   };
 
@@ -93,13 +106,13 @@ export function createApp(options: CreateAppOptions): App {
       featureContext.onCleanup(cleanup);
     },
     async sendAdminText(text) {
-      await featureContext.messenger.sendAdminText(text);
+      await featureContext.sendAdminText(text);
     },
     async sendAdminMsg(messages) {
-      await featureContext.messenger.sendAdminMsg(messages);
+      await featureContext.sendAdminMsg(messages);
     },
     async start() {
-      console.log(`[NanaBot] start() state === ${state}`)
+      console.log(`[NanaBot] start() state === ${state}`);
       if (state === "started") {
         return;
       }
@@ -110,11 +123,11 @@ export function createApp(options: CreateAppOptions): App {
 
       state = "starting";
       await Promise.all(pluginTasks);
-      console.log(`[NanaBot] 插件注册数量：${pluginTasks.length}`)
+      console.log(`[NanaBot] 插件注册数量：${pluginTasks.length}`);
       registerSignalHandlers(app, cleanupManager);
       await napcat.connect();
       state = "started";
-      console.log(`[NanaBot] Connected state === ${state}`)
+      console.log(`[NanaBot] Connected state === ${state}`);
     },
     async stop(stopOptions) {
       if (state === "stopped") {

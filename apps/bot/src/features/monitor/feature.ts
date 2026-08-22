@@ -25,7 +25,10 @@ export const monitorFeature = defineFeature<MonitorFeatureOptions>({
   },
 });
 
-function createMonitorListener(context: FeatureContext, options: MonitorFeatureOptions): MessageListener {
+function createMonitorListener(
+  context: FeatureContext,
+  options: MonitorFeatureOptions,
+): MessageListener {
   return startListen(options.roomId, {
     onLiveStart: (message) => {
       const hasLiveTime = Boolean(message.raw["live_time"]);
@@ -34,50 +37,50 @@ function createMonitorListener(context: FeatureContext, options: MonitorFeatureO
         : `${options.streamer} 推流 LOG`;
 
       if (message.raw["live_time"]) {
-        sendGroupText(context, options, text)
-          .catch((error) => {
-            console.error(
-              `[直播监控] 向群发送 "${options.streamer}" 开播通知失败`,
-              error,
-            );
-          });
+        sendGroupText(context, options, text).catch((error) => {
+          console.error(`[直播监控] 向群发送 "${options.streamer}" 开播通知失败`, error);
+        });
       }
 
       console.log(`[${dateFormat(message.timestamp)}] ${text}`);
     },
-    onIncomeDanmu(message) {
-      if (message.body.content === 'qiyuor2') {
-        context.messenger.sendAdminMsg([
-          Structs.text('直播间连接测试'),
-          Structs.at('all')
-        ])
+    async onIncomeDanmu(message) {
+      if (message.body.content === "qiyuor2") {
+        await context.sendAdminMsg([Structs.text("直播间连接测试"), Structs.at("all")]);
       }
     },
     onLiveEnd: (message) => {
-      const text = renderMessage(options.messages?.liveEnd ?? `${options.streamer} 下播了`, options);
+      const text = renderMessage(
+        options.messages?.liveEnd ?? `${options.streamer} 下播了`,
+        options,
+      );
       console.log(`[${dateFormat(message.timestamp)}] ${text}`);
     },
-    onOpen: () => {
+    onOpen: async () => {
       if (options.notifyGroupIds?.length) {
-        context.messenger.sendAdminMsg([
+        await context.sendAdminMsg([
           Structs.text(`对应直播间 ${options.roomId}\n`),
-          Structs.text(`已配置 ${options.notifyGroupIds.join(',')}\n`),
-          Structs.text(`AdminID ${context.adminGroupId}`)
-        ])
+          Structs.text(`已配置 ${options.notifyGroupIds.join(",")}\n`),
+          Structs.text(`AdminID ${context.adminGroupId}`),
+        ]);
       }
       console.log(`[直播监控] 已连接直播间 ${options.roomId}`);
     },
     onClose: () => {
       console.log(`[直播监控] 直播间 ${options.roomId} 连接已关闭`);
     },
-    onError: (error) => {
-      context.messenger.sendAdminText('发现了一个问题，请上线检查')
+    onError: async (error) => {
+      await context.sendAdminText("发现了一个问题，请上线检查");
       console.error(`[直播监控] 直播间 ${options.roomId} 监听异常`, error);
     },
   });
 }
 
-async function sendGroupText(context: FeatureContext, options: MonitorFeatureOptions, text: string) {
+async function sendGroupText(
+  context: FeatureContext,
+  options: MonitorFeatureOptions,
+  text: string,
+) {
   const groupIds = options.notifyGroupIds ?? [];
 
   if (groupIds.length === 0) {
@@ -85,7 +88,18 @@ async function sendGroupText(context: FeatureContext, options: MonitorFeatureOpt
   }
 
   for (const groupId of groupIds) {
-    await context.messenger.sendGroupMsg(groupId, [Structs.text(text), Structs.at('all')]);
+    try {
+      await context.ws.send_group_msg({
+        group_id: groupId,
+        message: [Structs.text(text), Structs.at("all")],
+      });
+    } catch (error) {
+      console.error(`[直播监控] 向群 ${groupId} 发送 "${options.streamer}" 开播通知失败`, error);
+      await context.sendAdminMsg([
+        Structs.text(`向群 ${groupId} 发送 "${options.streamer}" 开播通知失败`),
+        Structs.text(`错误信息: ${error}`),
+      ]);
+    }
   }
 }
 

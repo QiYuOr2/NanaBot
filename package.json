@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bot:build": "vp run @nanabot/bot#build"
+    "bot:build": "vp run @nana/bot#build"
   },
   "devDependencies": {
     "vite": "catalog:",
