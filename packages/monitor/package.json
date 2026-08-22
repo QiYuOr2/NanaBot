@@ -16,6 +16,9 @@
     "test": "vp test",
     "check": "vp check"
   },
+  "dependencies": {
+    "blive-message-listener": "^0.5.5"
+  },
   "devDependencies": {
     "typescript": "catalog:",
     "vite": "catalog:",

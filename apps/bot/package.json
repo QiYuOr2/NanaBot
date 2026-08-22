@@ -17,8 +17,6 @@
     "@nana/config": "workspace:*",
     "@nana/monitor": "workspace:*",
     "@nana/utils": "workspace:*",
-    "blive-message-listener": "^0.5.5",
-    "dayjs": "^1.11.20",
     "dotenv": "^17.4.2",
     "node-napcat-ts": "^0.4.25",
     "zod": "catalog:"

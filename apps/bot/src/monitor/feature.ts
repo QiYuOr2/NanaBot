@@ -1,7 +1,6 @@
-import { createMonitor, type MonitorFeatureOptions } from "@nana/monitor";
+import { createBliveMonitorSource, createMonitor, type MonitorFeatureOptions } from "@nana/monitor";
 import { dateFormat } from "@nana/utils";
-import { defineFeature, type FeatureContext } from "../../core/index";
-import { createBliveMonitorSource } from "./bliveSource";
+import { defineFeature, type FeatureContext } from "../core";
 import { createNapcatMonitorSink } from "./napcatSink";
 
 export type { MonitorFeatureOptions } from "@nana/monitor";

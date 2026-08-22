@@ -98,7 +98,8 @@ src/
   features/       # 功能模块，例如直播监控
   lib/            # 工具函数与辅助逻辑
 nana.config.yaml     # 项目统一配置
-ecosystem.config.js  # PM2 配置
+ecosystem.config.cjs           # PM2 聚合配置
+apps/bot/ecosystem.config.cjs  # bot 的 PM2 配置
 ```
 
 ## ⚙️ 运行脚本

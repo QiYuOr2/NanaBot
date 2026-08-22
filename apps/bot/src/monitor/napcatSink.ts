@@ -1,6 +1,6 @@
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
 import { Structs } from "node-napcat-ts";
-import type { FeatureContext } from "../../core/index";
+import type { FeatureContext } from "../core";
 
 export function createNapcatMonitorSink(
   context: FeatureContext,
