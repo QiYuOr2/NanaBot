@@ -8,7 +8,7 @@ import {
 } from "node-napcat-ts";
 import { createCleanupManager, type Cleanup } from "./event";
 import type { FeatureContext, FeatureDefinition } from "./feature";
-import { readOptionalNumberEnv } from "../lib/utils";
+import { readOptionalNumberEnv } from "@nana/utils";
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;

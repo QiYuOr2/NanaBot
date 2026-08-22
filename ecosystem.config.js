@@ -5,7 +5,7 @@ module.exports = {
     {
       name: "nanabot",
       cwd: __dirname,
-      script: path.join(__dirname, "dist/index.mjs"),
+      script: path.join(__dirname, "apps/bot/dist/index.mjs"),
       interpreter: "node",
       instances: 1,
       exec_mode: "fork",

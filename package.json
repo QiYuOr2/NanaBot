@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bot:build": "vp run @nana/bot#build"
+    "bot:build": "vp run @nana/bot#build",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:delete": "pm2 delete ecosystem.config.js"
   },
   "devDependencies": {
     "vite": "catalog:",

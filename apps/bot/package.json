@@ -5,11 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "build": "tsc && vp build",
-    "pm2:start": "pm2 start ecosystem.config.js",
-    "pm2:restart": "pm2 restart ecosystem.config.js",
-    "pm2:stop": "pm2 stop ecosystem.config.js",
-    "pm2:delete": "pm2 delete ecosystem.config.js"
+    "build": "tsc && vp build"
   },
   "devDependencies": {
     "@types/node": "catalog:",
@@ -19,6 +15,8 @@
   },
   "dependencies": {
     "@nana/config": "workspace:*",
+    "@nana/monitor": "workspace:*",
+    "@nana/utils": "workspace:*",
     "blive-message-listener": "^0.5.5",
     "dayjs": "^1.11.20",
     "dotenv": "^17.4.2",

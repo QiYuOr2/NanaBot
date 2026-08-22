@@ -1,7 +1,7 @@
 import "dotenv/config";
+import { readOptionalNumberEnv } from "@nana/utils";
 import { createApp } from "./core";
 import { loadMonitorConfig, monitorFeature } from "./features/monitor";
-import { readOptionalNumberEnv } from "./lib/utils";
 
 const app = createApp({
   websocket: {

@@ -1,110 +1,29 @@
-import { startListen, type MessageListener } from "blive-message-listener";
-import { Structs } from "node-napcat-ts";
+import { createMonitor, type MonitorFeatureOptions } from "@nana/monitor";
+import { dateFormat } from "@nana/utils";
 import { defineFeature, type FeatureContext } from "../../core/index";
-import { dateFormat } from "../../lib/date";
+import { createBliveMonitorSource } from "./bliveSource";
+import { createNapcatMonitorSink } from "./napcatSink";
 
-export interface MonitorFeatureOptions {
-  roomId: number;
-  streamer: string;
-  notifyGroupIds?: number[];
-  messages?: {
-    liveStart?: string;
-    replayStart?: string;
-    liveEnd?: string;
-  };
-}
+export type { MonitorFeatureOptions } from "@nana/monitor";
 
 export const monitorFeature = defineFeature<MonitorFeatureOptions>({
   name: "直播监控",
-  setup(context, options) {
-    const listener = createMonitorListener(context, options);
+  setup(context: FeatureContext, options) {
+    const monitor = createMonitor({
+      ...options,
+      source: createBliveMonitorSource(),
+      sinks: [createNapcatMonitorSink(context, options.notifyGroupIds)],
+      logger: {
+        log(message) {
+          console.log(`[${dateFormat(Date.now())}] ${message}`);
+        },
+        error(message, error) {
+          console.error(message, error);
+        },
+      },
+    });
+    monitor.start();
 
-    return () => {
-      listener.close();
-    };
+    return () => monitor.stop();
   },
 });
-
-function createMonitorListener(
-  context: FeatureContext,
-  options: MonitorFeatureOptions,
-): MessageListener {
-  return startListen(options.roomId, {
-    onLiveStart: (message) => {
-      const hasLiveTime = Boolean(message.raw["live_time"]);
-      const text = hasLiveTime
-        ? renderMessage(options.messages?.liveStart ?? `${options.streamer} 开始直播`, options)
-        : `${options.streamer} 推流 LOG`;
-
-      if (message.raw["live_time"]) {
-        sendGroupText(context, options, text).catch((error) => {
-          console.error(`[直播监控] 向群发送 "${options.streamer}" 开播通知失败`, error);
-        });
-      }
-
-      console.log(`[${dateFormat(message.timestamp)}] ${text}`);
-    },
-    async onIncomeDanmu(message) {
-      if (message.body.content === "qiyuor2") {
-        await context.sendAdminMsg([Structs.text("直播间连接测试"), Structs.at("all")]);
-      }
-    },
-    onLiveEnd: (message) => {
-      const text = renderMessage(
-        options.messages?.liveEnd ?? `${options.streamer} 下播了`,
-        options,
-      );
-      console.log(`[${dateFormat(message.timestamp)}] ${text}`);
-    },
-    onOpen: async () => {
-      if (options.notifyGroupIds?.length) {
-        await context.sendAdminMsg([
-          Structs.text(`对应直播间 ${options.roomId}\n`),
-          Structs.text(`已配置 ${options.notifyGroupIds.join(",")}\n`),
-          Structs.text(`AdminID ${context.adminGroupId}`),
-        ]);
-      }
-      console.log(`[直播监控] 已连接直播间 ${options.roomId}`);
-    },
-    onClose: () => {
-      console.log(`[直播监控] 直播间 ${options.roomId} 连接已关闭`);
-    },
-    onError: async (error) => {
-      await context.sendAdminText("发现了一个问题，请上线检查");
-      console.error(`[直播监控] 直播间 ${options.roomId} 监听异常`, error);
-    },
-  });
-}
-
-async function sendGroupText(
-  context: FeatureContext,
-  options: MonitorFeatureOptions,
-  text: string,
-) {
-  const groupIds = options.notifyGroupIds ?? [];
-
-  if (groupIds.length === 0) {
-    return;
-  }
-
-  for (const groupId of groupIds) {
-    try {
-      await context.ws.send_group_msg({
-        group_id: groupId,
-        message: [Structs.text(text), Structs.at("all")],
-      });
-    } catch (error) {
-      console.error(`[直播监控] 向群 ${groupId} 发送 "${options.streamer}" 开播通知失败`, error);
-      await context.sendAdminMsg([
-        Structs.text(`向群 ${groupId} 发送 "${options.streamer}" 开播通知失败`),
-        Structs.text(`错误信息: ${error}`),
-      ]);
-    }
-  }
-}
-
-function renderMessage(template: string, options: MonitorFeatureOptions) {
-  return template
-    .replaceAll("{streamer}", options.streamer)
-    .replaceAll("{roomId}", String(options.roomId));
-}

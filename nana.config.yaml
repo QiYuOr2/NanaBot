@@ -12,7 +12,7 @@ up:
         - 633120010
         - 721662821
       messageTemplate:
-        start: "{uname}播了 http://live.bilibili.com/4629447 "
+        start: "{uname}播了 http://live.bilibili.com/{roomId} "
 
     uid: 145149047
     liveRoomId: 4629447
