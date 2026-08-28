@@ -28,6 +28,7 @@ NanaBot 是基于 NapCat WebSocket 的 TypeScript QQ 机器人，核心是监听
 ```text
 apps/
   bot/                 # 可运行的 QQ 机器人应用
+  site/                # 直播状态展示 Web 应用（Nuxt 4 + Vite+ + UnoCSS）
 packages/
   bilibili-api/        # Bilibili REST API 类型与请求封装
   config/              # 项目配置文件 nana.config.yaml 的定位与读写
@@ -42,9 +43,10 @@ packages/
 - `@nana/constants` —— 无依赖。集中存放 `NANA_CONFIG_FILE`（`nana.config.yaml`）、`DATABASE_DIRECTORY`（`db`）、`LIVE_STATUS_FILE`（`live-status.sqlite`）、`DEFAULT_NC_WS_URL`、`ENV_KEYS`、Bark 地址/图标。
 - `@nana/utils` —— 依赖 `@nana/constants` + `dayjs`。通用工具，重点是 `resolveProjectRoot()`（定位项目根目录）、`setDeepPath()`（对象深层赋值），另有 `barkURL`、`dateFormat`、`readOptionalNumberEnv`。源码按职责拆分（`bark.ts` / `date.ts` / `env.ts` / `project.ts` / `deep-path.ts`），`index.ts` 仅做导出桶。
 - `@nana/config` —— 依赖 `@nana/constants`、`@nana/utils`、`js-yaml`。读写根目录 `nana.config.yaml`，复用 utils 的 `resolveProjectRoot` / `setDeepPath`。
-- `@nana/storage` —— 依赖 `@nana/constants`、`@nana/utils`、`js-yaml`。持久化 `db/` 下运行时数据：YAML 存储（`readStore`/`writeStore`/`updateStore`）与 SQLite 直播状态（`writeLiveStatus`/`readLiveStatus`，落盘 `db/live-status.sqlite`）。源码拆为 `types.ts` / `paths.ts` / `yaml-store.ts` / `live-status.ts`，`index.ts` 为导出桶。
+- `@nana/storage` —— 依赖 `@nana/constants`、`@nana/utils`、`js-yaml`。持久化 `db/` 下运行时数据：YAML 存储（`readStore`/`writeStore`/`updateStore`）与 SQLite 直播状态（`writeLiveStatus`/`readLiveStatus`/`readAllLiveStatus`，落盘 `db/live-status.sqlite`）。源码拆为 `types.ts` / `paths.ts` / `yaml-store.ts` / `live-status.ts`，`index.ts` 为导出桶。
 - `@nana/monitor` —— 依赖 `blive-message-listener`。直播监控的 source/controller/event/sink 抽象。
 - `@nana/bot` —— 依赖 config/constants/monitor/storage/utils + `dotenv`、`node-napcat-ts`、`zod`。组装应用。
+- `@nana/site` —— 依赖 config/constants/storage/utils + `nuxt`、`vue`、`zod`、`h3`，样式用 `@unocss/nuxt` + `unocss`。Nuxt 4 Web 面板：`server/api/live-status.get.ts` 合并 `nana.config.yaml` 的主播列表与 `db/live-status.sqlite` 的直播状态，向 `GET /api/live-status` 提供数据。UI 遵循 Vercel 设计语言：设计令牌与组件类集中在 `presets/vercel.ts`（`presetVercel()`），默认样式用 `@unocss/reset/tailwind.css`，字体 Geist Sans/Mono（`@fontsource/geist-*`）。Nuxt 4 默认 `srcDir` 为 `app/`。
 
 `config` 与 `storage` 是平级关系，共同依赖 `@nana/utils`，彼此不互相依赖。
 
@@ -53,6 +55,7 @@ packages/
 - `nana.config.yaml`（仓库根）—— 直播监控配置，由 `@nana/config` 读取，同时作为项目根目录标记。
 - `apps/bot/.env`（不入库，参考 `apps/bot/.env.example`）—— 环境变量 `NC_WS_URL`、`NC_ACCESS_TOKEN`、`ADM_GROUP`、`NC_DEBUG`、`BARK_KEY`；变量名统一收口在 `@nana/constants`（`ENV_KEYS`）。
 - `db/live-status.sqlite` —— 运行时 SQLite，已被 gitignore。
+- `apps/site/ecosystem.config.cjs` —— site 的 PM2 配置，生产端口 `6364`（`PORT`），构建后运行 `.output/server/index.mjs`。
 
 ## 约定
 
@@ -66,6 +69,8 @@ packages/
 - `vp check` —— 格式化 + lint + 类型检查（包内或根目录）。
 - `vp test` —— 运行 Vitest。
 - `vp run @nana/bot#build` —— 构建 bot 应用（会先行 pack 其 workspace 依赖）。
+- `pnpm dev:site` —— 启动 site 开发服务器（等价 `vp run @nana/site#dev`，默认端口 3000）。
+- `pnpm build:site` —— 构建 site（产出 `.output/`，供 PM2/`node .output/server/index.mjs` 运行）。
 - `vp pack` —— 在某个 package 内构建该包的 dist。
 
 - 前端相关技能包（Vue/Nuxt/Pinia/UnoCSS 等）已安装在 `.agents/skills/`，后续建设前端时可直接使用。
