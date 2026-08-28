@@ -7,6 +7,7 @@ export interface MonitorMessageConfig {
 }
 
 export interface MonitorStreamerConfig {
+  uid: number;
   roomId: number;
   streamer: string;
   notifyEnabled: boolean;
@@ -48,6 +49,7 @@ export function loadMonitorConfig(): MonitorConfig {
 
 function toMonitorStreamerConfig(config: UpMonitorConfig): MonitorStreamerConfig {
   return {
+    uid: config.uid,
     roomId: config.liveRoomId,
     streamer: config.uname,
     notifyEnabled: config.liveMonitorConfig.enableNotify,

@@ -50,6 +50,20 @@ pnpm build:site      # 生产构建（输出到 .output/）
 pnpm dev
 ```
 
+## PM2 运行
+
+生产模式下用 PM2 启动（需要先构建 `pnpm build:site`，产出 `.output/`）：
+
+```bash
+pm2 start ecosystem.config.cjs     # 在 apps/site 内
+pm2 restart @nana/site
+pm2 logs @nana/site
+```
+
+站点以 `.output/server/index.mjs` 运行，服务端口为 `6364`，通过环境变量 `PORT` 配置
+（见 [ecosystem.config.cjs](./ecosystem.config.cjs)）。也可在仓库根用
+`pnpm pm2:start` 同时启动 bot 与 site。
+
 ## 依赖的 workspace 包
 
 `server/api/live-status.get.ts` 直接依赖：

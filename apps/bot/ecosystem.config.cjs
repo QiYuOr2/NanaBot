@@ -1,9 +1,12 @@
 const path = require("path");
 
+const name = "@nana/bot";
+const logBase = name.replace("/", "-");
+
 module.exports = {
   apps: [
     {
-      name: "@nana/bot",
+      name,
       cwd: __dirname,
       script: path.join(__dirname, "dist/index.mjs"),
       interpreter: "node",
@@ -20,8 +23,8 @@ module.exports = {
       env: {
         NODE_ENV: "production",
       },
-      error_file: path.join(__dirname, "pm2.err.log"),
-      out_file: path.join(__dirname, "pm2.out.log"),
+      error_file: path.join(__dirname, `pm2-${logBase}.err.log`),
+      out_file: path.join(__dirname, `pm2-${logBase}.out.log`),
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
   ],

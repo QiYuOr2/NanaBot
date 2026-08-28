@@ -1,6 +1,9 @@
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
+import type { SendMessageSegment } from "node-napcat-ts";
 import { Structs } from "node-napcat-ts";
 import type { FeatureContext } from "../core";
+
+const AT_ALL_TOKEN = "{@all}";
 
 export function createNapcatMonitorSink(
   context: FeatureContext,
@@ -18,7 +21,7 @@ export function createNapcatMonitorSink(
           await sendGroupText(context, notifyGroupIds, event.message, event.streamer);
           return;
         case "monitor.test":
-          await context.sendAdminMsg([Structs.text("直播间连接测试"), Structs.at("all")]);
+          await context.sendAdminMsg(toMessageSegments(`直播间连接测试 ${AT_ALL_TOKEN}`));
           return;
         case "connection.open":
           if (notifyGroupIds.length) {
@@ -50,7 +53,7 @@ async function sendGroupText(
     try {
       await context.ws.send_group_msg({
         group_id: groupId,
-        message: [Structs.text(text), Structs.at("all")],
+        message: toMessageSegments(text),
       });
     } catch (error) {
       console.error(`[直播监控] 向群 ${groupId} 发送 "${streamer}" 开播通知失败`, error);
@@ -60,4 +63,21 @@ async function sendGroupText(
       ]);
     }
   }
+}
+
+function toMessageSegments(text: string): SendMessageSegment[] {
+  if (!text.includes(AT_ALL_TOKEN)) {
+    return [Structs.text(text)];
+  }
+
+  return text.split(AT_ALL_TOKEN).flatMap((part, index, parts) => {
+    const segments: SendMessageSegment[] = [];
+    if (part) {
+      segments.push(Structs.text(part));
+    }
+    if (index < parts.length - 1) {
+      segments.push(Structs.at("all"));
+    }
+    return segments;
+  });
 }

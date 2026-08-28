@@ -8,6 +8,7 @@
     "test": "vp test"
   },
   "dependencies": {
+    "@nana/bilibili-api": "workspace:*",
     "@nana/config": "workspace:*",
     "@nana/constants": "workspace:*",
     "@nana/monitor": "workspace:*",
