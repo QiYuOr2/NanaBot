@@ -19,8 +19,8 @@ dist-ssr
 .output
 .output/
 
-# Runtime SQLite database
-db/live-status.sqlite
+# Runtime SQLite databases
+db/*.sqlite
 
 # dotenv environment variable files
 .env

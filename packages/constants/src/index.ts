@@ -14,6 +14,30 @@ export const DATABASE_DIRECTORY = "db";
 /** 直播状态的 SQLite 数据库文件名。 */
 export const LIVE_STATUS_FILE = "live-status.sqlite";
 
+/** 推送记录的 SQLite 数据库文件名。 */
+export const PUSH_LOG_FILE = "push-log.sqlite";
+
+/** 推送目的的事件名，用于标记一次推送的类型。 */
+export const PUSH_LOG_PURPOSES = [
+  "live.start",
+  "live.end",
+  "app.online",
+  "app.offline",
+  "notification",
+] as const;
+
+/** 推送目的的类型。 */
+export type PushLogPurpose = (typeof PUSH_LOG_PURPOSES)[number];
+
+/** 推送目的对应的中文展示名。 */
+export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
+  "live.start": "开播",
+  "live.end": "下播",
+  "app.online": "上线",
+  "app.offline": "下线",
+  notification: "通知",
+};
+
 /** NapCat WebSocket 的默认地址。 */
 export const DEFAULT_NC_WS_URL = "ws://127.0.0.1:1111";
 

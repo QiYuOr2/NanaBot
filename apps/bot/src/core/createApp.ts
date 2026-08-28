@@ -10,10 +10,14 @@ import { createCleanupManager, type Cleanup } from "./event";
 import type { FeatureContext, FeatureDefinition } from "./feature";
 import { readOptionalNumberEnv } from "@nana/utils";
 import { ENV_KEYS } from "@nana/constants";
+import type { StorageOptions } from "@nana/storage";
+import { NapcatPushClient, type GroupPushOptions, type PushPurposeInput } from "./napcat";
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;
   adminGroupId?: number;
+  /** 推送记录的存储配置（测试时可传 rootDir 隔离）。 */
+  storage?: StorageOptions;
 }
 
 export interface StopOptions {
@@ -26,8 +30,13 @@ export interface App {
   use<TOptions>(feature: FeatureDefinition<TOptions>, options: TOptions): App;
   on<T extends EventKey>(event: T, handler: EventHandleMap[T]): () => void;
   onCleanup(cleanup: Cleanup): void;
-  sendAdminText(text: string): Promise<void>;
-  sendAdminMsg(messages: SendMessageSegment[]): Promise<void>;
+  sendAdminText(text: string, purpose?: PushPurposeInput): Promise<void>;
+  sendAdminMsg(messages: SendMessageSegment[], purpose?: PushPurposeInput): Promise<void>;
+  sendGroupMsg(
+    groupId: number,
+    options: GroupPushOptions,
+    messages: SendMessageSegment[],
+  ): Promise<string>;
   start(): Promise<void>;
   stop(options?: StopOptions): Promise<void>;
 }
@@ -35,6 +44,8 @@ export interface App {
 type AppState = "idle" | "starting" | "started" | "stopping" | "stopped";
 
 const SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
+const DEFAULT_ADMIN_PURPOSE: PushPurposeInput = { purpose: "notification" };
+const BOT_NAME = "NanaBot";
 
 export function createApp(options: CreateAppOptions): App {
   const isOpenDebug = readOptionalNumberEnv(ENV_KEYS.NC_DEBUG) === 1;
@@ -43,6 +54,7 @@ export function createApp(options: CreateAppOptions): App {
 
   const napcat = new NCWebsocket(options.websocket, isOpenDebug);
   console.log(`[NanaBot] ${(options.websocket as any)["baseUrl"]}`);
+  const pushClient = new NapcatPushClient(napcat, options.storage);
 
   const cleanupManager = createCleanupManager();
   const pluginTasks: Promise<void>[] = [];
@@ -62,25 +74,30 @@ export function createApp(options: CreateAppOptions): App {
     onCleanup(cleanup) {
       cleanupManager.add(cleanup);
     },
-    async sendAdminText(text) {
+    async sendAdminText(text, purpose = DEFAULT_ADMIN_PURPOSE) {
       if (!options.adminGroupId) {
         return;
       }
 
-      await napcat.send_group_msg({
-        group_id: options.adminGroupId,
-        message: [Structs.text(text)],
-      });
+      await pushClient.sendGroupMsg(
+        options.adminGroupId,
+        { ...purpose, content: text, subject: BOT_NAME },
+        [Structs.text(text)],
+      );
     },
-    async sendAdminMsg(messages) {
+    async sendAdminMsg(messages, purpose = DEFAULT_ADMIN_PURPOSE) {
       if (!options.adminGroupId) {
         return;
       }
 
-      await napcat.send_group_msg({
-        group_id: options.adminGroupId,
-        message: messages,
-      });
+      await pushClient.sendGroupMsg(
+        options.adminGroupId,
+        { ...purpose, subject: BOT_NAME },
+        messages,
+      );
+    },
+    async sendGroupMsg(groupId, groupOptions, messages) {
+      return pushClient.sendGroupMsg(groupId, groupOptions, messages);
     },
   };
 
@@ -106,11 +123,14 @@ export function createApp(options: CreateAppOptions): App {
     onCleanup(cleanup) {
       featureContext.onCleanup(cleanup);
     },
-    async sendAdminText(text) {
-      await featureContext.sendAdminText(text);
+    async sendAdminText(text, purpose) {
+      await featureContext.sendAdminText(text, purpose);
     },
-    async sendAdminMsg(messages) {
-      await featureContext.sendAdminMsg(messages);
+    async sendAdminMsg(messages, purpose) {
+      await featureContext.sendAdminMsg(messages, purpose);
+    },
+    async sendGroupMsg(groupId, options, messages) {
+      return featureContext.sendGroupMsg(groupId, options, messages);
     },
     async start() {
       console.log(`[NanaBot] start() state === ${state}`);
@@ -143,7 +163,7 @@ export function createApp(options: CreateAppOptions): App {
         state = "stopping";
 
         if (stopOptions?.announce) {
-          await safely(() => app.sendAdminText(stopOptions.announce!));
+          await safely(() => app.sendAdminText(stopOptions.announce!, { purpose: "app.offline" }));
         }
 
         await safely(() => cleanupManager.run());

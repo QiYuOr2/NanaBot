@@ -34,7 +34,7 @@ async function main(): Promise<void> {
   });
 
   app.on("socket.open", () => {
-    app.sendAdminText("我来了~").catch((error) => {
+    app.sendAdminText("我来了~", { purpose: "app.online" }).catch((error) => {
       console.error("[app] 发送机器人连接提示失败", error);
     });
   });

@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import type { LiveStatusResponse, StreamerStatus } from "~/types";
+import type { LiveStatusResponse, PushLogResponse, StreamerStatus } from "~/types";
 
 const { data, error, pending, refresh } = await useFetch<LiveStatusResponse>("/api/live-status");
+const {
+  data: pushData,
+  error: pushError,
+  refresh: refreshLogs,
+} = await useFetch<PushLogResponse>("/api/push-log");
 
 const query = ref("");
 const sortLive = ref(false);
@@ -24,6 +29,10 @@ const filtered = computed(() => {
 
 function toggleSort() {
   sortLive.value = !sortLive.value;
+}
+
+async function refreshAll() {
+  await Promise.all([refresh(), refreshLogs()]);
 }
 
 async function refreshStreamer(roomId: number) {
@@ -87,7 +96,7 @@ const generatedLabel = computed(() => {
             <AppIcon name="filter" />
           </button>
 
-          <button class="btn-primary h-8 text-[13px]" :disabled="pending" @click="() => refresh()">
+          <button class="btn-primary h-8 text-[13px]" :disabled="pending" @click="refreshAll">
             <span
               v-if="pending"
               class="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/30 border-t-white"
@@ -125,28 +134,39 @@ const generatedLabel = computed(() => {
           </section>
         </div>
 
-        <section class="mt-6">
-          <div class="mb-4 flex items-center justify-between">
-            <h2 class="text-[14px] font-medium tracking-tight text-ink">主播</h2>
-            <span class="text-[13px] text-ink-muted">{{ filtered.length }} 个</span>
-          </div>
-
-          <p v-if="error" class="card p-5 text-sm text-status-red">加载失败：{{ error.message }}</p>
-
-          <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <div v-for="streamer in filtered" :key="streamer.roomId">
-              <StreamerCard :status="streamer" @refresh="refreshStreamer" />
+        <div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <section class="min-w-0">
+            <div class="mb-4 flex items-center justify-between">
+              <h2 class="text-[14px] font-medium tracking-tight text-ink">主播</h2>
+              <span class="text-[13px] text-ink-muted">{{ filtered.length }} 个</span>
             </div>
-          </div>
 
-          <p v-if="!error && filtered.length === 0" class="mt-6 text-[13px] text-ink-muted">
-            {{
-              data?.streamers?.length
-                ? "没有匹配的主播。"
-                : "nana.config.yaml 中暂无开启监控的主播。"
-            }}
-          </p>
-        </section>
+            <p v-if="error" class="card p-5 text-sm text-status-red">
+              加载失败：{{ error.message }}
+            </p>
+
+            <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div v-for="streamer in filtered" :key="streamer.roomId">
+                <StreamerCard :status="streamer" @refresh="refreshStreamer" />
+              </div>
+            </div>
+
+            <p v-if="!error && filtered.length === 0" class="mt-6 text-[13px] text-ink-muted">
+              {{
+                data?.streamers?.length
+                  ? "没有匹配的主播。"
+                  : "nana.config.yaml 中暂无开启监控的主播。"
+              }}
+            </p>
+          </section>
+
+          <aside class="lg:sticky lg:top-16">
+            <p v-if="pushError" class="card p-5 text-sm text-status-red">
+              加载失败：{{ pushError.message }}
+            </p>
+            <PushLogCard v-else :items="pushData?.logs ?? []" />
+          </aside>
+        </div>
       </div>
     </div>
   </div>
