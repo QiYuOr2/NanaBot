@@ -39,6 +39,7 @@ const NanaMonitorConfigSchema = z.object({
   up: z.array(UpMonitorConfigSchema),
 });
 
+/** 从 `nana.config.yaml` 读取直播监控配置，只保留 `live: true` 的主播。 */
 export function loadMonitorConfig(): MonitorConfig {
   const config = NanaMonitorConfigSchema.parse(readConfig());
 

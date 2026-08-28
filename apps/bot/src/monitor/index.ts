@@ -1,3 +1,3 @@
-export { loadMonitorConfig, type MonitorConfig } from "./config";
+export { loadMonitorConfig, type MonitorConfig } from "./config.ts";
 export { monitorFeature, type MonitorFeatureOptions } from "./feature";
-export { syncLiveStatus, type SyncLiveStatusOptions } from "./statusSync";
+export { syncLiveStatus, type SyncLiveStatusOptions } from "./sync.ts";

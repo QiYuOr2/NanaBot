@@ -34,7 +34,7 @@ packages/
   config/              # nana.config.yaml 读写
   constants/           # 共享常量
   monitor/             # 直播监控 source/controller/event/sink 抽象
-  storage/             # db/ 下 YAML + SQLite 存储
+  storage/             # db/ 下 YAML + SQLite 存储（live-status / push-log）
   utils/               # 通用工具
 ```
 
@@ -44,12 +44,14 @@ packages/
 - 共享常量放 `@nana/constants`；通用逻辑（项目根定位、深层赋值等）放 `@nana/utils`，避免重复实现。
 - 测试放 `tests/`（bot 为 `test/`），用 `vite-plus/test`；storage 测试用临时 rootDir 隔离，不写真实项目数据。
 - 直播状态字段：`room_id, streamer, live, updated_at, title, area, viewer`；`@nana/storage` 打开旧库会自动补列。
+- 推送记录字段：`target_id, target, purpose, purpose_label, pushed_at, success, error, content, subject`。推送目的事件名与展示名收口在 `@nana/constants`（`PUSH_LOG_PURPOSES`、`PUSH_PURPOSE_LABELS`），`@nana/storage` 提供 `writePushLog` / `readPushLogs`。
+- bot 统一通过 `core/napcat.ts` 的 `NapcatPushClient` 发送群消息，并用 `get_group_info` 解析群昵称（失败回退 `群{id}`，带缓存）；成功与失败都会写一条推送记录，发送失败会抛出原始错误，由调用方决定是否再通知管理员。
 
 ## 运行时配置
 
 - 根目录 `nana.config.yaml`：直播监控配置，同时作为项目根目录标记（`@nana/config` 读取）。
 - `apps/bot/.env`（参考 `.env.example`）：`NC_WS_URL`、`NC_ACCESS_TOKEN`、`ADM_GROUP`、`NC_DEBUG`、`BARK_KEY`，变量名收口在 `@nana/constants` 的 `ENV_KEYS`。
-- `db/live-status.sqlite`：运行时 SQLite（已 gitignore）。
+- `db/*.sqlite`：运行时 SQLite（`live-status.sqlite` / `push-log.sqlite`，已 gitignore）。
 - `apps/site/ecosystem.config.cjs`：site 的 PM2 配置，端口 `6364`（`PORT`），运行 `.output/server/index.mjs`。
 
 ## 常用命令（仓库根执行）

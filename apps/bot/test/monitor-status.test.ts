@@ -5,7 +5,7 @@ import { readLiveStatus } from "@nana/storage";
 import { DATABASE_DIRECTORY, LIVE_STATUS_FILE, NANA_CONFIG_FILE } from "@nana/constants";
 import type { LiveStatusInfo } from "@nana/bilibili-api";
 import { expect, test } from "vite-plus/test";
-import { createLiveStatusSink } from "../src/monitor/statusSink.ts";
+import { createLiveStatusSink } from "../src/monitor/sinks/liveStatus.ts";
 
 function createRootDir(): string {
   const rootDir = mkdtempSync(join(tmpdir(), "nana-bot-status-"));

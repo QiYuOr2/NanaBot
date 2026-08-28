@@ -1,10 +1,11 @@
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
 import type { SendMessageSegment } from "node-napcat-ts";
 import { Structs } from "node-napcat-ts";
-import type { FeatureContext } from "../core";
+import type { FeatureContext } from "../../core";
 
 const AT_ALL_TOKEN = "{@all}";
 
+/** 把直播监控事件转换成 QQ 群 / 管理员的 NapCat 通知，并记录推送结果。 */
 export function createNapcatMonitorSink(
   context: FeatureContext,
   notifyGroupIds: number[] = [],

@@ -6,7 +6,7 @@ import { DATABASE_DIRECTORY, NANA_CONFIG_FILE } from "@nana/constants";
 import type { LiveStatusInfo } from "@nana/bilibili-api";
 import { expect, test } from "vite-plus/test";
 import type { MonitorStreamerConfig } from "../src/monitor/config.ts";
-import { syncLiveStatus } from "../src/monitor/statusSync.ts";
+import { syncLiveStatus } from "../src/monitor/sync.ts";
 
 function createRootDir(): string {
   const rootDir = mkdtempSync(join(tmpdir(), "nana-bot-sync-"));

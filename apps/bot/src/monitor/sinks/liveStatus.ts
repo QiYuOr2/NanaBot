@@ -1,8 +1,8 @@
 import { live } from "@nana/bilibili-api";
-import { writeLiveStatus, type LiveStatus, type StorageOptions } from "@nana/storage";
+import { writeLiveStatus, type StorageOptions } from "@nana/storage";
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
 import type { LiveStatusInfo } from "@nana/bilibili-api";
-import { toLiveStatusFields } from "./liveInfo";
+import { buildLiveStatus } from "../live.ts";
 
 export interface LiveStatusSinkOptions extends StorageOptions {
   /** B 站用户 ID，用于按 UID 查询直播详情。 */
@@ -13,6 +13,7 @@ export interface LiveStatusSinkOptions extends StorageOptions {
   fetch?: typeof globalThis.fetch;
 }
 
+/** 监听开播 / 下播事件，把直播状态持久化到 SQLite。 */
 export function createLiveStatusSink(options: LiveStatusSinkOptions = {}): MonitorSink {
   return {
     async handle(event: MonitorEvent) {
@@ -20,25 +21,25 @@ export function createLiveStatusSink(options: LiveStatusSinkOptions = {}): Monit
         return;
       }
 
-      const status: LiveStatus = {
-        streamer: event.streamer,
-        live: event.type === "live.started",
-        updatedAt: event.timestamp.toISOString(),
-      };
-
+      let info: LiveStatusInfo | undefined;
       if (options.uid) {
         try {
-          const info = await fetchLiveStatusInfo(options.uid, options);
-          const fields = toLiveStatusFields(info);
-          status.title = fields.title;
-          status.area = fields.area;
-          status.viewer = fields.viewer;
+          info = await fetchLiveStatusInfo(options.uid, options);
         } catch (error) {
           console.error(`[直播监控] 拉取直播间 ${event.roomId} 详情失败`, error);
         }
       }
 
-      writeLiveStatus(event.roomId, status, options);
+      writeLiveStatus(
+        event.roomId,
+        buildLiveStatus({
+          streamer: event.streamer,
+          live: event.type === "live.started",
+          updatedAt: event.timestamp.toISOString(),
+          info,
+        }),
+        options,
+      );
     },
   };
 }

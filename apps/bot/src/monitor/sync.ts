@@ -1,7 +1,7 @@
 import { live } from "@nana/bilibili-api";
 import { writeLiveStatus, type StorageOptions } from "@nana/storage";
-import type { MonitorStreamerConfig } from "./config";
-import { isLiveStatus, toLiveStatusFields } from "./liveInfo";
+import type { MonitorStreamerConfig } from "./config.ts";
+import { buildLiveStatus, isLiveStatus } from "./live.ts";
 
 export interface SyncLiveStatusOptions extends StorageOptions {
   /** 覆盖 B 站直播 API 的默认域名。 */
@@ -42,12 +42,12 @@ export async function syncLiveStatus(
 
     writeLiveStatus(
       streamer.roomId,
-      {
+      buildLiveStatus({
         streamer: streamer.streamer,
         live: isLiveStatus(info),
-        ...toLiveStatusFields(info),
         updatedAt: syncedAt,
-      },
+        info,
+      }),
       options,
     );
 
