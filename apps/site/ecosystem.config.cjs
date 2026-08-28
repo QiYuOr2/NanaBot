@@ -22,7 +22,7 @@ module.exports = {
       max_memory_restart: "512M",
       env: {
         NODE_ENV: "production",
-        PORT: "6364",
+        PORT: "3000",
         HOST: "0.0.0.0",
       },
       error_file: path.join(__dirname, `pm2-${logBase}.err.log`),
