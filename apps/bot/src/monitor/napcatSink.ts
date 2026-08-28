@@ -59,7 +59,7 @@ async function sendGroupText(
       console.error(`[直播监控] 向群 ${groupId} 发送 "${streamer}" 开播通知失败`, error);
       await context.sendAdminMsg([
         Structs.text(`向群 ${groupId} 发送 "${streamer}" 开播通知失败`),
-        Structs.text(`错误信息: ${error instanceof Error ? error.message : String(error)}`),
+        Structs.text(`错误信息: ${error instanceof Error ? error.message : JSON.stringify(error)}`),
       ]);
     }
   }
