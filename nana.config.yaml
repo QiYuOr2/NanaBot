@@ -7,11 +7,11 @@ up:
       enableNotify: true
       notifyGroups:
         - 1101365727
-        # - 511731882
-        # - 1045653883
-        # - 1092028491
-        # - 633120010
-        # - 721662821
+        - 511731882
+        - 1045653883
+        - 1092028491
+        - 633120010
+        - 721662821
       messageTemplate:
         start: "{uname}播了 http://live.bilibili.com/{roomId} {@all}"
 
