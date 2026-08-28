@@ -31,6 +31,20 @@ function mapLiveStatusRow(row: Record<string, unknown>): LiveStatus {
   };
 }
 
+export interface LiveStatusRecord extends LiveStatus {
+  /** 直播间号（字符串形式，与 SQLite 主键一致）。 */
+  roomId: string;
+}
+
+function mapLiveStatusRecord(row: Record<string, unknown>): LiveStatusRecord {
+  return {
+    roomId: String(row.room_id),
+    streamer: String(row.streamer),
+    live: Number(row.live) === 1,
+    updatedAt: String(row.updated_at),
+  };
+}
+
 export function writeLiveStatus(
   roomId: number,
   status: LiveStatus,
@@ -67,6 +81,25 @@ export function readLiveStatus(roomId: number, options?: StorageOptions): LiveSt
       .get(String(roomId));
 
     return row ? mapLiveStatusRow(row) : undefined;
+  } finally {
+    database.close();
+  }
+}
+
+/** 读取全部主播的直播状态，按更新时间倒序。 */
+export function readAllLiveStatus(options?: StorageOptions): LiveStatusRecord[] {
+  const database = openLiveStatusDatabase(options);
+
+  try {
+    const rows = database
+      .prepare(`
+        SELECT room_id, streamer, live, updated_at
+        FROM live_status
+        ORDER BY updated_at DESC
+      `)
+      .all() as Record<string, unknown>[];
+
+    return rows.map(mapLiveStatusRecord);
   } finally {
     database.close();
   }

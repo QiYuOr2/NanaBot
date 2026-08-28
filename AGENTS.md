@@ -68,4 +68,4 @@ packages/
 - `vp run @nana/bot#build` —— 构建 bot 应用（会先行 pack 其 workspace 依赖）。
 - `vp pack` —— 在某个 package 内构建该包的 dist。
 
-- 前端相关技能包（Vue/Nuxt/Pinia/UnoCSS 等）已安装在 `.agents/skills/`，后续若按 `docs/status-page-plan.md` 建设状态前端时可直接使用。
+- 前端相关技能包（Vue/Nuxt/Pinia/UnoCSS 等）已安装在 `.agents/skills/`，后续建设前端时可直接使用。

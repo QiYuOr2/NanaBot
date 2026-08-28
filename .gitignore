@@ -13,6 +13,12 @@ dist
 dist-ssr
 *.local
 
+# Nuxt generated output
+.nuxt
+.nuxt/
+.output
+.output/
+
 # Runtime SQLite database
 db/live-status.sqlite
 

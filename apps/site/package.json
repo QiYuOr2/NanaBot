@@ -1,0 +1,35 @@
+{
+  "name": "@nana/site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NanaBot 直播状态展示 Web 应用（Nuxt + UnoCSS）。",
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "postinstall": "nuxt prepare",
+    "check": "vp check"
+  },
+  "dependencies": {
+    "@fontsource/geist-mono": "^5.3.0",
+    "@fontsource/geist-sans": "^5.3.0",
+    "@nana/config": "workspace:*",
+    "@nana/storage": "workspace:*",
+    "@unocss/reset": "^66.0.0",
+    "h3": "^1.15.0",
+    "nuxt": "^4.0.0",
+    "vue": "^3.5.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@unocss/nuxt": "^66.0.0",
+    "typescript": "catalog:",
+    "unocss": "^66.0.0",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
