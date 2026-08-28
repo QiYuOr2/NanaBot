@@ -41,9 +41,7 @@ const generatedLabel = computed(() => {
     <AppSidebar />
 
     <div class="flex min-w-0 flex-1 flex-col">
-      <header
-        class="sticky top-0 z-10 flex h-12 items-center gap-4 bg-surface/90 px-6 shadow-header backdrop-blur"
-      >
+      <header class="sticky top-0 z-10 flex h-12 items-center gap-4 bg-surface/90 px-6 shadow-header backdrop-blur">
         <nav class="flex shrink-0 items-center gap-2 text-[13px]">
           <a class="text-ink-muted hover:text-ink" href="#">NanaBot</a>
           <span class="text-ink-muted">/</span>
@@ -56,26 +54,18 @@ const generatedLabel = computed(() => {
 
         <div class="ml-auto flex items-center gap-2">
           <div class="relative hidden sm:block">
-            <AppIcon
-              name="search"
-              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-ink-muted"
-            />
+            <AppIcon name="search"
+              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-ink-muted" />
             <input v-model="query" class="input-search w-56" placeholder="搜索主播" />
           </div>
 
-          <button
-            class="btn-icon"
-            :title="sortLive ? '按直播状态排序' : '排序'"
-            @click="toggleSort"
-          >
+          <button class="btn-icon" :title="sortLive ? '按直播状态排序' : '排序'" @click="toggleSort">
             <AppIcon name="filter" />
           </button>
 
-          <button class="btn-primary h-8 text-[13px]" :disabled="pending" @click="refresh">
-            <span
-              v-if="pending"
-              class="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/30 border-t-white"
-            />
+          <button class="btn-primary h-8 text-[13px]" :disabled="pending" @click="() => refresh()">
+            <span v-if="pending"
+              class="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/30 border-t-white" />
             {{ pending ? "刷新中..." : "刷新" }}
           </button>
         </div>
@@ -87,37 +77,27 @@ const generatedLabel = computed(() => {
             <section class="card">
               <header class="flex items-center justify-between border-b border-ink/5 px-4 py-3">
                 <h3 class="text-[13px] font-medium text-ink">最近状态</h3>
-                <button
-                  class="btn-ghost h-7 px-2.5 text-[12px]"
-                  :disabled="pending"
-                  @click="refresh"
-                >
+                <button class="btn-ghost h-7 px-2.5 text-[12px]" :disabled="pending" @click="() => refresh()">
                   更新
                 </button>
               </header>
 
               <ul class="px-4">
-                <li
-                  class="flex items-center justify-between border-b border-ink/5 py-3 last:border-0"
-                >
+                <li class="flex items-center justify-between border-b border-ink/5 py-3 last:border-0">
                   <span class="flex items-center gap-2 text-[13px] text-ink-secondary">
                     <span class="dot bg-accent" />
                     监控主播
                   </span>
                   <span class="font-mono text-[13px] text-ink">{{ data?.total ?? 0 }}</span>
                 </li>
-                <li
-                  class="flex items-center justify-between border-b border-ink/5 py-3 last:border-0"
-                >
+                <li class="flex items-center justify-between border-b border-ink/5 py-3 last:border-0">
                   <span class="flex items-center gap-2 text-[13px] text-ink-secondary">
                     <span class="dot bg-live" />
                     直播中
                   </span>
                   <span class="font-mono text-[13px] text-ink">{{ data?.liveCount ?? 0 }}</span>
                 </li>
-                <li
-                  class="flex items-center justify-between border-b border-ink/5 py-3 last:border-0"
-                >
+                <li class="flex items-center justify-between border-b border-ink/5 py-3 last:border-0">
                   <span class="flex items-center gap-2 text-[13px] text-ink-secondary">
                     <span class="dot bg-ink-muted" />
                     未开播
