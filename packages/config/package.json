@@ -31,6 +31,8 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
+    "@nana/constants": "workspace:*",
+    "@nana/utils": "workspace:*",
     "js-yaml": "catalog:"
   },
   "devDependencies": {

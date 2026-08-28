@@ -17,6 +17,7 @@
     "check": "vp check"
   },
   "dependencies": {
+    "@nana/constants": "workspace:*",
     "dayjs": "^1.11.20"
   },
   "devDependencies": {

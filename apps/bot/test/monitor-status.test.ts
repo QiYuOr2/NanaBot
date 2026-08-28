@@ -1,14 +1,15 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readLiveStatus } from "@nana/storage";
+import { DATABASE_DIRECTORY, LIVE_STATUS_FILE, NANA_CONFIG_FILE } from "@nana/constants";
 import { expect, test } from "vite-plus/test";
-import { readStore } from "@nana/storage";
 import { createLiveStatusSink } from "../src/monitor/statusSink.ts";
 
 function createRootDir(): string {
   const rootDir = mkdtempSync(join(tmpdir(), "nana-bot-status-"));
-  writeFileSync(join(rootDir, "nana.config.yaml"), "", "utf8");
-  mkdirSync(join(rootDir, "db"));
+  writeFileSync(join(rootDir, NANA_CONFIG_FILE), "", "utf8");
+  mkdirSync(join(rootDir, DATABASE_DIRECTORY));
   return rootDir;
 }
 
@@ -31,9 +32,12 @@ test("直播状态变化会写入对应直播间的状态和更新时间", async
     streamer: "Other",
   });
 
-  expect(readStore("live-status.yaml", { rootDir })).toEqual({
-    "123": { streamer: "Nana", live: true, updatedAt: startedAt.toISOString() },
+  expect(readLiveStatus(123, { rootDir })).toEqual({
+    streamer: "Nana",
+    live: true,
+    updatedAt: startedAt.toISOString(),
   });
+  expect(readLiveStatus(456, { rootDir })).toBeUndefined();
 
   await sink.handle({
     type: "live.ended",
@@ -43,7 +47,12 @@ test("直播状态变化会写入对应直播间的状态和更新时间", async
     timestamp: endedAt,
   });
 
-  expect(readStore("live-status.yaml", { rootDir })).toEqual({
-    "123": { streamer: "Nana", live: false, updatedAt: endedAt.toISOString() },
+  expect(readLiveStatus(123, { rootDir })).toEqual({
+    streamer: "Nana",
+    live: false,
+    updatedAt: endedAt.toISOString(),
   });
+
+  expect(existsSync(join(rootDir, DATABASE_DIRECTORY, LIVE_STATUS_FILE))).toBe(true);
+  expect(existsSync(join(rootDir, DATABASE_DIRECTORY, "live-status.yaml"))).toBe(false);
 });

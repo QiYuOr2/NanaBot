@@ -9,6 +9,7 @@ import {
 import { createCleanupManager, type Cleanup } from "./event";
 import type { FeatureContext, FeatureDefinition } from "./feature";
 import { readOptionalNumberEnv } from "@nana/utils";
+import { ENV_KEYS } from "@nana/constants";
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;
@@ -36,7 +37,7 @@ type AppState = "idle" | "starting" | "started" | "stopping" | "stopped";
 const SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 
 export function createApp(options: CreateAppOptions): App {
-  const isOpenDebug = readOptionalNumberEnv("NC_DEBUG") === 1;
+  const isOpenDebug = readOptionalNumberEnv(ENV_KEYS.NC_DEBUG) === 1;
   // oxlint-disable-next-line no-unused-expressions
   isOpenDebug && console.log(`[NanaBot] 调试模式`);
 

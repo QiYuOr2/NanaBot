@@ -10,7 +10,7 @@ NanaBot 是一个基于 NapCat WebSocket 的 TypeScript 机器人。当前应用
 - 启动和退出时向管理员群发送状态消息
 - 监听多个 Bilibili 直播间的开播、下播状态
 - 为每个主播配置通知群和开播文案
-- 将直播状态持久化到 `db/live-status.yaml`
+- 将直播状态持久化到 SQLite 数据库 `db/live-status.sqlite`
 - 使用 PM2 长期运行机器人
 
 ## 环境要求
@@ -133,12 +133,13 @@ apps/
     src/monitor/       # 直播监控 feature 及 NapCat/status sinks
 packages/
   bilibili-api/        # Bilibili API 类型与接口
+  constants/           # 各子项目共享的公共常量
   config/              # nana.config.yaml 读写
   monitor/             # 直播监控 source、controller 和事件类型
-  storage/             # db/ 下的 YAML 文件存储
+  storage/             # db/ 下的 YAML 与 SQLite 存储
   utils/               # 通用工具
 nana.config.yaml       # 直播监控配置
-db/                    # 运行时状态文件
+db/                    # 运行时数据目录（live-status.sqlite）
 ecosystem.config.cjs   # PM2 入口配置
 ```
 

@@ -8,9 +8,13 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.pnpm-store/
 dist
 dist-ssr
 *.local
+
+# Runtime SQLite database
+db/live-status.sqlite
 
 # dotenv environment variable files
 .env
@@ -34,3 +38,6 @@ dist-ssr
 !.vscode/
 !.vscode/settings.json
 !.vscode/extensions.json
+
+
+.agents

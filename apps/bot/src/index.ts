@@ -1,21 +1,22 @@
 import "dotenv/config";
 import { readOptionalNumberEnv } from "@nana/utils";
+import { DEFAULT_NC_WS_URL, ENV_KEYS } from "@nana/constants";
 import { createApp } from "./core";
 import { loadMonitorConfig, monitorFeature } from "./monitor";
 
-console.log(`[app] NC_ACCESS_TOKEN: ${process.env.NC_ACCESS_TOKEN}`);
+console.log(`[app] ${ENV_KEYS.NC_ACCESS_TOKEN}: ${process.env[ENV_KEYS.NC_ACCESS_TOKEN]}`);
 
 const app = createApp({
   websocket: {
-    baseUrl: process.env.NC_WS_URL ?? "ws://127.0.0.1:1111",
-    accessToken: process.env.NC_ACCESS_TOKEN,
+    baseUrl: process.env[ENV_KEYS.NC_WS_URL] ?? DEFAULT_NC_WS_URL,
+    accessToken: process.env[ENV_KEYS.NC_ACCESS_TOKEN],
     reconnection: {
       enable: true,
       attempts: 10,
       delay: 5000,
     },
   },
-  adminGroupId: readOptionalNumberEnv("ADM_GROUP"),
+  adminGroupId: readOptionalNumberEnv(ENV_KEYS.ADM_GROUP),
 });
 
 app.on("socket.open", () => {

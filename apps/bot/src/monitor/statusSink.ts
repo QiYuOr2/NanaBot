@@ -1,11 +1,7 @@
-import { updateStore, type StorageOptions } from "@nana/storage";
+import { writeLiveStatus, type LiveStatus, type StorageOptions } from "@nana/storage";
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
 
-export interface LiveStatus {
-  streamer: string;
-  live: boolean;
-  updatedAt: string;
-}
+export type { LiveStatus } from "@nana/storage";
 
 export function createLiveStatusSink(options?: StorageOptions): MonitorSink {
   return {
@@ -20,7 +16,7 @@ export function createLiveStatusSink(options?: StorageOptions): MonitorSink {
         updatedAt: event.timestamp.toISOString(),
       };
 
-      updateStore("live-status.yaml", [String(event.roomId)], status, options);
+      writeLiveStatus(event.roomId, status, options);
     },
   };
 }

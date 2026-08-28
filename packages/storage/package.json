@@ -2,7 +2,7 @@
   "name": "@nana/storage",
   "version": "0.0.0",
   "private": true,
-  "description": "Simple file storage for the NanaBot project database.",
+  "description": "File and SQLite storage for the NanaBot project database.",
   "files": [
     "dist"
   ],
@@ -18,6 +18,8 @@
     "check": "vp check"
   },
   "dependencies": {
+    "@nana/constants": "workspace:*",
+    "@nana/utils": "workspace:*",
     "js-yaml": "catalog:"
   },
   "devDependencies": {

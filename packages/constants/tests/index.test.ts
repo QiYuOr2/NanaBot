@@ -1,0 +1,33 @@
+import { expect, test } from "vite-plus/test";
+import {
+  BARK_BASE_URL,
+  BARK_ICON_URL,
+  DATABASE_DIRECTORY,
+  DEFAULT_NC_WS_URL,
+  ENV_KEYS,
+  LIVE_STATUS_FILE,
+  NANA_CONFIG_FILE,
+} from "../src/index.ts";
+
+test("项目文件与目录常量与目录结构一致", () => {
+  expect(NANA_CONFIG_FILE).toBe("nana.config.yaml");
+  expect(DATABASE_DIRECTORY).toBe("db");
+  expect(LIVE_STATUS_FILE).toBe("live-status.sqlite");
+});
+
+test("默认网络地址", () => {
+  expect(DEFAULT_NC_WS_URL).toBe("ws://127.0.0.1:1111");
+});
+
+test("Bark 常量", () => {
+  expect(BARK_BASE_URL).toBe("https://api.day.app/");
+  expect(BARK_ICON_URL).toBe("https://unavatar.io/github/qiyuor2");
+});
+
+test("环境变量名统一", () => {
+  expect(ENV_KEYS.ADM_GROUP).toBe("ADM_GROUP");
+  expect(ENV_KEYS.BARK_KEY).toBe("BARK_KEY");
+  expect(ENV_KEYS.NC_WS_URL).toBe("NC_WS_URL");
+  expect(ENV_KEYS.NC_ACCESS_TOKEN).toBe("NC_ACCESS_TOKEN");
+  expect(ENV_KEYS.NC_DEBUG).toBe("NC_DEBUG");
+});

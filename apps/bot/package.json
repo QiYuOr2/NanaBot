@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@nana/config": "workspace:*",
+    "@nana/constants": "workspace:*",
     "@nana/monitor": "workspace:*",
     "@nana/storage": "workspace:*",
     "@nana/utils": "workspace:*",
