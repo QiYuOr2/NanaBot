@@ -10,7 +10,7 @@
 - 多 B 站直播间开播 / 下播监控
 - 开播、下播、连接状态 QQ 群通知（NapCat）
 - 直播状态持久化到 SQLite（`db/live-status.sqlite`）
-- Web 面板展示主播实时直播状态（`apps/site`）
+- Web 面板展示主播实时直播状态、标题、分区与人数，卡片可手动刷新（`apps/site`）
 
 ## 目录结构
 
@@ -86,20 +86,20 @@ up:
         start: "{uname}播了 http://live.bilibili.com/{roomId} {@all}"
 ```
 
-| 字段 | 说明 |
-| --- | --- |
-| `live` | 是否监控该主播 |
-| `uid` / `liveRoomId` / `uname` | B 站用户 ID / 直播间 ID / 主播名 |
-| `liveMonitorConfig.enableNotify` | 是否发送 QQ 群通知 |
-| `liveMonitorConfig.notifyGroups` | 通知群号 |
+| 字段                                      | 说明                                           |
+| ----------------------------------------- | ---------------------------------------------- |
+| `live`                                    | 是否监控该主播                                 |
+| `uid` / `liveRoomId` / `uname`            | B 站用户 ID / 直播间 ID / 主播名               |
+| `liveMonitorConfig.enableNotify`          | 是否发送 QQ 群通知                             |
+| `liveMonitorConfig.notifyGroups`          | 通知群号                                       |
 | `liveMonitorConfig.messageTemplate.start` | 开播文案，支持 `{uname}`、`{roomId}`、`{@all}` |
 
 ## 常用脚本
 
-| 命令 | 说明 |
-| --- | --- |
-| `pnpm dev:site` | 启动 Web 开发服务器 |
-| `pnpm build:site` | 构建 Web 面板 |
-| `pnpm build:bot` | 构建 bot（含 workspace 依赖） |
-| `pnpm pm2:start` / `restart` / `stop` / `delete` | PM2 管理 bot + site |
-| `vp check` / `vp test` | 格式化、lint、类型检查 / 测试 |
+| 命令                                             | 说明                          |
+| ------------------------------------------------ | ----------------------------- |
+| `pnpm dev:site`                                  | 启动 Web 开发服务器           |
+| `pnpm build:site`                                | 构建 Web 面板                 |
+| `pnpm build:bot`                                 | 构建 bot（含 workspace 依赖） |
+| `pnpm pm2:start` / `restart` / `stop` / `delete` | PM2 管理 bot + site           |
+| `vp check` / `vp test`                           | 格式化、lint、类型检查 / 测试 |

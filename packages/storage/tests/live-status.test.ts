@@ -15,6 +15,9 @@ test("写入并读取 SQLite 直播状态", () => {
     streamer: "Nana",
     live: true,
     updatedAt: startedAt,
+    title: null,
+    area: null,
+    viewer: null,
   });
   expect(existsSync(join(rootDir, DATABASE_DIRECTORY, LIVE_STATUS_FILE))).toBe(true);
 
@@ -25,6 +28,36 @@ test("写入并读取 SQLite 直播状态", () => {
     streamer: "Nana",
     live: false,
     updatedAt: endedAt,
+    title: null,
+    area: null,
+    viewer: null,
+  });
+});
+
+test("写入并读取直播标题、分区与人数", () => {
+  const rootDir = createRootDir();
+  const updatedAt = "2026-08-22T10:00:00.000Z";
+
+  writeLiveStatus(
+    123,
+    {
+      streamer: "Nana",
+      live: true,
+      updatedAt,
+      title: "今晚直播原神",
+      area: "游戏/原神",
+      viewer: 1234,
+    },
+    { rootDir },
+  );
+
+  expect(readLiveStatus(123, { rootDir })).toEqual({
+    streamer: "Nana",
+    live: true,
+    updatedAt,
+    title: "今晚直播原神",
+    area: "游戏/原神",
+    viewer: 1234,
   });
 });
 
@@ -44,8 +77,24 @@ describe("readAllLiveStatus", () => {
     );
 
     expect(readAllLiveStatus({ rootDir })).toEqual([
-      { roomId: "10086", streamer: "另一主播", live: false, updatedAt: "2026-08-22T12:00:00.000Z" },
-      { roomId: "4629447", streamer: "饭总", live: true, updatedAt: "2026-08-22T10:00:00.000Z" },
+      {
+        roomId: "10086",
+        streamer: "另一主播",
+        live: false,
+        updatedAt: "2026-08-22T12:00:00.000Z",
+        title: null,
+        area: null,
+        viewer: null,
+      },
+      {
+        roomId: "4629447",
+        streamer: "饭总",
+        live: true,
+        updatedAt: "2026-08-22T10:00:00.000Z",
+        title: null,
+        area: null,
+        viewer: null,
+      },
     ]);
   });
 

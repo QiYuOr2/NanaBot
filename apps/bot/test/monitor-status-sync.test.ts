@@ -71,6 +71,9 @@ test("启动同步会把 B 站直播状态写入数据库", async () => {
     streamer: "示例主播",
     live: true,
     updatedAt: expect.any(String),
+    title: "正在直播",
+    area: "示例新版分区",
+    viewer: 789,
   });
 });
 

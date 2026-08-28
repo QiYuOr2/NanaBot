@@ -6,6 +6,8 @@ export interface MonitorMessageConfig {
 export interface MonitorFeatureOptions {
   roomId: number;
   streamer: string;
+  /** B 站用户 ID，用于按 UID 查询直播详情。 */
+  uid?: number;
   notifyEnabled?: boolean;
   notifyGroupIds?: number[];
   messages?: Partial<MonitorMessageConfig>;

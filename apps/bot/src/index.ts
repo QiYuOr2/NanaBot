@@ -12,7 +12,9 @@ loadEnv({ path: envFile });
 
 const accessToken = process.env[ENV_KEYS.NC_ACCESS_TOKEN];
 if (!accessToken) {
-  console.error(`[app] 缺少环境变量 ${ENV_KEYS.NC_ACCESS_TOKEN}。请确认 ${envFile} 存在且包含该变量（或在 pm2 env 中提供）。`);
+  console.error(
+    `[app] 缺少环境变量 ${ENV_KEYS.NC_ACCESS_TOKEN}。请确认 ${envFile} 存在且包含该变量（或在 pm2 env 中提供）。`,
+  );
   throw new Error(`缺少环境变量 ${ENV_KEYS.NC_ACCESS_TOKEN}`);
 }
 console.log(`[app] ${ENV_KEYS.NC_ACCESS_TOKEN}: ${accessToken}`);
@@ -43,6 +45,7 @@ async function main(): Promise<void> {
     app.use(monitorFeature, {
       roomId: streamerConfig.roomId,
       streamer: streamerConfig.streamer,
+      uid: streamerConfig.uid,
       notifyEnabled: streamerConfig.notifyEnabled,
       notifyGroupIds: streamerConfig.notifyGroups,
       messages: streamerConfig.messages,

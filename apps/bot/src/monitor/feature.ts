@@ -13,7 +13,7 @@ export const monitorFeature = defineFeature<MonitorFeatureOptions>({
       ...options,
       source: createBliveMonitorSource(),
       sinks: [
-        createLiveStatusSink(),
+        createLiveStatusSink({ uid: options.uid }),
         createNapcatMonitorSink(context, options.notifyGroupIds, options.notifyEnabled),
       ],
       logger: {
