@@ -1,10 +1,21 @@
-import "dotenv/config";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { config as loadEnv } from "dotenv";
 import { readOptionalNumberEnv } from "@nana/utils";
 import { DEFAULT_NC_WS_URL, ENV_KEYS } from "@nana/constants";
 import { createApp } from "./core";
 import { loadMonitorConfig, monitorFeature, syncLiveStatus } from "./monitor";
 
-console.log(`[app] ${ENV_KEYS.NC_ACCESS_TOKEN}: ${process.env[ENV_KEYS.NC_ACCESS_TOKEN]}`);
+// 相对入口文件（dist/index.mjs）定位 ../.env，避免依赖进程 cwd（例如 pm2 的 cwd 配置）。
+const envFile = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env");
+loadEnv({ path: envFile });
+
+const accessToken = process.env[ENV_KEYS.NC_ACCESS_TOKEN];
+if (!accessToken) {
+  console.error(`[app] 缺少环境变量 ${ENV_KEYS.NC_ACCESS_TOKEN}。请确认 ${envFile} 存在且包含该变量（或在 pm2 env 中提供）。`);
+  throw new Error(`缺少环境变量 ${ENV_KEYS.NC_ACCESS_TOKEN}`);
+}
+console.log(`[app] ${ENV_KEYS.NC_ACCESS_TOKEN}: ${accessToken}`);
 
 async function main(): Promise<void> {
   const app = createApp({
