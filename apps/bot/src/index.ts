@@ -63,7 +63,6 @@ async function main(): Promise<void> {
     app.use(offlineDetectorFeature, {
       notifier: notifiers,
       confirmCount: offlineConfig.confirmCount,
-      cooldownSeconds: offlineConfig.cooldownSeconds,
       notifyRecovery: offlineConfig.notifyRecovery,
     });
   } catch (error) {

@@ -4,8 +4,6 @@ export interface OfflineDetectorOptions {
   store: OfflineStateStore;
   /** 连续多少次判定离线才算真正的掉线，默认 3。 */
   confirmCount?: number;
-  /** 两次离线告警的最小间隔（ms），用于抑制抖动，默认 10 分钟。 */
-  cooldownMs?: number;
   /** 是否在恢复后发送通知，默认 true。 */
   notifyRecovery?: boolean;
   /** 时钟注入点，便于测试，默认 Date.now。 */
@@ -24,14 +22,12 @@ const DEFAULT_STATE: OfflineState = {
  * 机器人在线/离线状态机：
  * - 边沿触发：只在「在线→离线」「离线→在线」跳变时产生告警。
  * - 连续确认：心跳需连续 `confirmCount` 次离线才判定为真掉线。
- * - 冷却：抑制短时间内的频繁离线告警。
  * - 持久化：状态写入 store，重启后不会立刻重复告警、能正确计算恢复时长。
  */
 export class OfflineDetector {
   private state: OfflineState;
   private readonly store: OfflineStateStore;
   private readonly confirmCount: number;
-  private readonly cooldownMs: number;
   private readonly notifyRecovery: boolean;
   private readonly now: () => number;
 
@@ -39,7 +35,6 @@ export class OfflineDetector {
     this.state = options.store.read() ?? { ...DEFAULT_STATE };
     this.store = options.store;
     this.confirmCount = options.confirmCount ?? 3;
-    this.cooldownMs = options.cooldownMs ?? 600_000;
     this.notifyRecovery = options.notifyRecovery ?? true;
     this.now = options.now ?? (() => Date.now());
   }
@@ -81,6 +76,7 @@ export class OfflineDetector {
     state.online = true;
     state.offlineCount = 0;
     state.offlineSince = null;
+    state.lastOfflineAlertAt = null;
     state.lastOnlineAlertAt = this.iso(this.now());
     this.persist();
 
@@ -117,21 +113,9 @@ export class OfflineDetector {
     const state = this.state;
     state.online = false;
     state.offlineSince = state.offlineSince ?? this.iso(this.now());
-    const at = this.iso(this.now());
-    const previous = state.lastOfflineAlertAt;
-    const muted =
-      this.cooldownMs > 0 &&
-      previous != null &&
-      this.now() - Date.parse(previous) < this.cooldownMs;
-
-    if (!muted) {
-      state.lastOfflineAlertAt = at;
-    }
+    state.lastOfflineAlertAt = this.iso(this.now());
     this.persist();
 
-    if (muted) {
-      return undefined;
-    }
     return { kind: "offline", offlineSince: state.offlineSince, reason };
   }
 

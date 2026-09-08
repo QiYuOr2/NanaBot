@@ -8,7 +8,6 @@ import { createOfflineStateStore } from "./store.ts";
 export interface OfflineDetectorOptions {
   notifier: Notifier | Notifier[];
   confirmCount?: number;
-  cooldownSeconds?: number;
   notifyRecovery?: boolean;
 }
 
@@ -22,7 +21,6 @@ export const offlineDetectorFeature = defineFeature<OfflineDetectorOptions>({
     const detector = new OfflineDetector({
       store: createOfflineStateStore(),
       confirmCount,
-      cooldownMs: options.cooldownSeconds != null ? options.cooldownSeconds * 1000 : undefined,
       notifyRecovery: options.notifyRecovery,
     });
 

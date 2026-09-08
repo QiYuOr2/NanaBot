@@ -6,7 +6,6 @@ import type { EmailNotifierOptions } from "@nana/notify";
 export interface OfflineDetectorConfig {
   notifier: EmailNotifierOptions;
   confirmCount: number;
-  cooldownSeconds: number;
   notifyRecovery: boolean;
 }
 
@@ -25,7 +24,6 @@ const OfflineMonitorSchema = z.object({
   offlineDetector: z
     .object({
       confirmCount: z.number().int().positive().optional(),
-      cooldownSeconds: z.number().int().nonnegative().optional(),
       notifyRecovery: z.boolean().optional(),
     })
     .optional(),
@@ -42,7 +40,6 @@ export function loadOfflineDetectorConfig(): OfflineDetectorConfig {
       smtp: config.adminEmail.smtp,
     },
     confirmCount: config.offlineDetector?.confirmCount ?? 3,
-    cooldownSeconds: config.offlineDetector?.cooldownSeconds ?? 600,
     notifyRecovery: config.offlineDetector?.notifyRecovery ?? true,
   };
 }

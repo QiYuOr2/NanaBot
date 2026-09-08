@@ -101,43 +101,22 @@ test("socket 断开立即视为掉线，已离线时不重复告警", () => {
   expect(detector.reportConnectionLost("socket.close")).toBeUndefined();
 });
 
-test("冷却时间内重复掉线不告警，超过冷却后再告警", () => {
+test("恢复后再次掉线仍会告警，不被上次离线告警时间抑制", () => {
   const store = new MemoryStore();
   let now = 0;
-  const detector = new OfflineDetector({
-    store,
-    confirmCount: 3,
-    cooldownMs: 60_000,
-    now: () => now,
-  });
+  const detector = new OfflineDetector({ store, confirmCount: 3, now: () => now });
 
-  detector.reportHeartbeat(false);
+  // 第一次离线（模拟 socket.close）
+  expect(detector.reportConnectionLost("socket.close")).toMatchObject({ kind: "offline" });
+  // 恢复（模拟 socket.open）
   now = 5_000;
-  detector.reportHeartbeat(false);
+  expect(detector.reportConnectionRestored("socket.open")).toMatchObject({ kind: "recovered" });
+  // 短时间后再次离线（模拟退出 QQ）：即便距上次离线告警很近，也应正常告警
   now = 10_000;
-  expect(detector.reportHeartbeat(false)).toMatchObject({ kind: "offline" });
-
-  now = 40_000;
-  expect(detector.reportHeartbeat(true)).toMatchObject({ kind: "recovered" });
-
-  now = 45_000;
   detector.reportHeartbeat(false);
-  now = 50_000;
+  now = 15_000;
   detector.reportHeartbeat(false);
-  now = 55_000;
-  // 距上次实际发送的离线告警（10_000）未超过冷却（60_000），本次掉线被抑制
-  expect(detector.reportHeartbeat(false)).toBeUndefined();
-
-  // 先恢复上线，再触发一次新掉线
-  now = 60_000;
-  expect(detector.reportHeartbeat(true)).toMatchObject({ kind: "recovered" });
-
-  now = 70_000;
-  detector.reportHeartbeat(false);
-  now = 75_000;
-  detector.reportHeartbeat(false);
-  now = 80_000;
-  // 距上次离线告警（10_000）已超过冷却，允许再次告警
+  now = 20_000;
   expect(detector.reportHeartbeat(false)).toMatchObject({ kind: "offline" });
 });
 
