@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { NANA_CONFIG_FILE } from "@nana/constants";
-import { resolveProjectRoot, setDeepPath } from "../src/index.ts";
+import { formatDuration, resolveProjectRoot, setDeepPath } from "../src/index.ts";
 
 test("resolveProjectRoot 从子目录向上定位项目根目录", () => {
   const rootDir = mkdtempSync(join(tmpdir(), "nana-utils-"));
@@ -44,4 +44,12 @@ test("setDeepPath 支持数组路径", () => {
 
 test("setDeepPath 空路径抛出", () => {
   expect(() => setDeepPath({}, "", 1)).toThrow();
+});
+
+test("formatDuration 用 dayjs 格式化毫秒时长", () => {
+  expect(formatDuration(3_660_000)).toBe("1 小时 1 分钟");
+  expect(formatDuration(50_000)).toBe("50 秒");
+  expect(formatDuration(90_000_000)).toBe("25 小时");
+  expect(formatDuration(0)).toBe("0 秒");
+  expect(formatDuration(-5_000)).toBe("0 秒");
 });

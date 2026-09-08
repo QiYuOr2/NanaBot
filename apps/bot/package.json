@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "test": "vp test"
+    "test": "vp test",
+    "test:email": "node scripts/send-test-email.mjs"
   },
   "dependencies": {
     "@nana/bilibili-api": "workspace:*",
     "@nana/config": "workspace:*",
     "@nana/constants": "workspace:*",
     "@nana/monitor": "workspace:*",
+    "@nana/notify": "workspace:*",
+    "@nana/offline-detector": "workspace:*",
     "@nana/storage": "workspace:*",
     "@nana/utils": "workspace:*",
     "dotenv": "^17.4.2",

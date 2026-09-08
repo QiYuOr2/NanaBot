@@ -22,7 +22,7 @@ apps/
   bot/                 # QQ 机器人应用
   site/                # 直播状态 Web 面板（Nuxt 4 + Vite+ + UnoCSS）
 packages/
-  bilibili-api/        # Bilibili API
+  bilibili-api/        # Bilibili API https://github.com/pskdje/bilibili-API-collect
   config/              # nana.config.yaml 读写
   constants/           # 共享常量
   monitor/             # 直播监控抽象

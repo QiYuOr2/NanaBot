@@ -57,7 +57,7 @@ function createHandlers(
         });
       }
 
-      logger.log(`[${formatTimestamp(event.timestamp)}] ${text}`);
+      logger.log(`[${event.timestamp.toISOString()}] ${text}`);
     },
     onIncomeDanmu(event) {
       if (event.content === "qiyuor2") {
@@ -81,7 +81,7 @@ function createHandlers(
         message: text,
         timestamp: event.timestamp,
       });
-      logger.log(`[${formatTimestamp(event.timestamp)}] ${text}`);
+      logger.log(`[${event.timestamp.toISOString()}] ${text}`);
     },
     onOpen() {
       emit({ type: "connection.open", roomId: options.roomId, streamer: options.streamer });
@@ -107,10 +107,6 @@ function renderMessage(template: string, options: MonitorFeatureOptions): string
   return template
     .replaceAll("{uname}", options.streamer)
     .replaceAll("{roomId}", String(options.roomId));
-}
-
-function formatTimestamp(timestamp: Date): string {
-  return timestamp.toISOString();
 }
 
 const consoleLogger: MonitorLogger = {

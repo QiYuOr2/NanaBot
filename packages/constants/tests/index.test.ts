@@ -2,6 +2,7 @@ import { expect, test } from "vite-plus/test";
 import {
   BARK_BASE_URL,
   BARK_ICON_URL,
+  APP_STATE_FILE,
   DATABASE_DIRECTORY,
   DEFAULT_NC_WS_URL,
   ENV_KEYS,
@@ -13,6 +14,7 @@ test("项目文件与目录常量与目录结构一致", () => {
   expect(NANA_CONFIG_FILE).toBe("nana.config.yaml");
   expect(DATABASE_DIRECTORY).toBe("db");
   expect(LIVE_STATUS_FILE).toBe("live-status.sqlite");
+  expect(APP_STATE_FILE).toBe("app-state.sqlite");
 });
 
 test("默认网络地址", () => {

@@ -5,6 +5,8 @@ import { readOptionalNumberEnv } from "@nana/utils";
 import { DEFAULT_NC_WS_URL, ENV_KEYS } from "@nana/constants";
 import { createApp } from "./core";
 import { loadMonitorConfig, monitorFeature, syncLiveStatus } from "./monitor";
+import { loadOfflineDetectorConfig, offlineDetectorFeature } from "./offline";
+import { createBarkNotifier, createEmailNotifier } from "@nana/notify";
 
 // 相对入口文件（dist/index.mjs）定位 ../.env，避免依赖进程 cwd（例如 pm2 的 cwd 配置）。
 const envFile = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env");
@@ -50,6 +52,22 @@ async function main(): Promise<void> {
       notifyGroupIds: streamerConfig.notifyGroups,
       messages: streamerConfig.messages,
     });
+  }
+
+  try {
+    const offlineConfig = loadOfflineDetectorConfig();
+    const notifiers = [createEmailNotifier(offlineConfig.notifier)];
+    if (process.env[ENV_KEYS.BARK_KEY]) {
+      notifiers.push(createBarkNotifier());
+    }
+    app.use(offlineDetectorFeature, {
+      notifier: notifiers,
+      confirmCount: offlineConfig.confirmCount,
+      cooldownSeconds: offlineConfig.cooldownSeconds,
+      notifyRecovery: offlineConfig.notifyRecovery,
+    });
+  } catch (error) {
+    console.warn("[app] 未启用离线告警（缺少 adminEmail 配置）", error);
   }
 
   await app.start();

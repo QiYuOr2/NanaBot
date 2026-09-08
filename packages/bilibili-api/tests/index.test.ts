@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { BilibiliApiError, getLiveStatusByUids } from "../src/index.ts";
+import { BilibiliApiError, live } from "../src/index.ts";
 
 const liveStatus = {
   title: "正在直播",
@@ -44,7 +44,9 @@ test("按 UID 查询直播状态并构造重复的 uids[] 参数", async () => {
     },
   };
 
-  await expect(getLiveStatusByUids([456, 789], options)).resolves.toEqual({ "456": liveStatus });
+  await expect(live.getLiveStatusByUids([456, 789], options)).resolves.toEqual({
+    "456": liveStatus,
+  });
   expect(requestedMethod).toBe("GET");
   expect(requestedUrl).toBe(
     "https://example.com/room/v1/Room/get_status_info_by_uids?uids%5B%5D=456&uids%5B%5D=789",
@@ -54,15 +56,15 @@ test("按 UID 查询直播状态并构造重复的 uids[] 参数", async () => {
 test("拒绝空 UID 列表和无效 UID", async () => {
   const options = { fetch: async () => new Response() };
 
-  await expect(getLiveStatusByUids([], options)).rejects.toThrow("uids 不能为空");
-  await expect(getLiveStatusByUids([0], options)).rejects.toThrow("uid 必须是正整数");
+  await expect(live.getLiveStatusByUids([], options)).rejects.toThrow("uids 不能为空");
+  await expect(live.getLiveStatusByUids([0], options)).rejects.toThrow("uid 必须是正整数");
 });
 
 test("将 HTTP 错误和 B 站业务错误转换为 BilibiliApiError", async () => {
   const httpErrorOptions = {
     fetch: async () => new Response(null, { status: 503 }),
   };
-  await expect(getLiveStatusByUids([456], httpErrorOptions)).rejects.toBeInstanceOf(
+  await expect(live.getLiveStatusByUids([456], httpErrorOptions)).rejects.toBeInstanceOf(
     BilibiliApiError,
   );
 
@@ -72,7 +74,7 @@ test("将 HTTP 错误和 B 站业务错误转换为 BilibiliApiError", async () 
         headers: { "content-type": "application/json" },
       }),
   };
-  await expect(getLiveStatusByUids([456], apiErrorOptions)).rejects.toMatchObject({
+  await expect(live.getLiveStatusByUids([456], apiErrorOptions)).rejects.toMatchObject({
     name: "BilibiliApiError",
     code: -111,
     message: "csrf校验失败",

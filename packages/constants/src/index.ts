@@ -17,6 +17,9 @@ export const LIVE_STATUS_FILE = "live-status.sqlite";
 /** 推送记录的 SQLite 数据库文件名。 */
 export const PUSH_LOG_FILE = "push-log.sqlite";
 
+/** 应用自身状态（如机器人在线/离线）的 SQLite 数据库文件名。 */
+export const APP_STATE_FILE = "app-state.sqlite";
+
 /** 推送目的的事件名，用于标记一次推送的类型。 */
 export const PUSH_LOG_PURPOSES = [
   "live.start",
@@ -48,6 +51,8 @@ export const ENV_KEYS = {
   NC_WS_URL: "NC_WS_URL",
   NC_ACCESS_TOKEN: "NC_ACCESS_TOKEN",
   NC_DEBUG: "NC_DEBUG",
+  SERVER_EMAIL: "SERVER_EMAIL",
+  SERVER_EMAIL_PASSWORD: "SERVER_EMAIL_PASSWORD",
 } as const;
 
 /** Bark 推送服务地址。 */
