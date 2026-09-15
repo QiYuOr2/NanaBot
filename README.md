@@ -97,6 +97,15 @@ up:
 | `liveMonitorConfig.notifyGroups`          | 通知群号                                       |
 | `liveMonitorConfig.messageTemplate.start` | 开播文案，支持 `{uname}`、`{roomId}`、`{@all}` |
 
+## 变更记录
+
+功能改动的文档在 [docs/changes/](./docs/changes/README.md)，按「概览 → 明细」两级组织：
+
+- [概览](./docs/changes/README.md)：每次改动改了什么、为什么、影响范围、验证结果与未决事项；
+- 明细文档：一次改动一篇，记录背景、文件级变更、关键决策与取舍、兼容性与数据安全、验证方式。
+
+新增改动时复制 [docs/changes/TEMPLATE.md](./docs/changes/TEMPLATE.md)，编号递增，并在概览索引里补一行。
+
 ## 常用脚本
 
 | 命令                                             | 说明                          |

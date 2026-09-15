@@ -1,11 +1,33 @@
 <script setup lang="ts">
-const nav = [
-  { id: "overview", label: "概览", icon: "grid" },
+interface NavItem {
+  id: string;
+  label: string;
+  icon: string;
+  /** 已实现的页面路由；未实现的导航先保留占位链接。 */
+  to?: string;
+}
+
+const nav: NavItem[] = [
+  { id: "overview", label: "概览", icon: "grid", to: "/" },
   { id: "monitor", label: "直播监控", icon: "monitor" },
   { id: "alerts", label: "告警", icon: "bell" },
-  { id: "activity", label: "面板", icon: "activity" },
+  { id: "pushes", label: "推送活动", icon: "activity", to: "/pushes" },
   { id: "settings", label: "设置", icon: "settings" },
 ];
+
+const route = useRoute();
+
+const NAV_CLASS = "flex items-center gap-2 rounded px-2 py-[7px] text-[13px]";
+
+function isActive(item: NavItem): boolean {
+  return item.to !== undefined && route.path === item.to;
+}
+
+function navClass(item: NavItem): string {
+  return isActive(item)
+    ? `${NAV_CLASS} bg-line font-medium text-ink`
+    : `${NAV_CLASS} text-ink-secondary hover:bg-line hover:text-ink`;
+}
 </script>
 
 <template>
@@ -34,20 +56,16 @@ const nav = [
     </div>
 
     <nav class="flex-1 space-y-0.5 overflow-y-auto px-3 py-1">
-      <a
-        v-for="item in nav"
-        :key="item.id"
-        href="#"
-        class="flex items-center gap-2 rounded px-2 py-[7px] text-[13px]"
-        :class="
-          item.id === 'overview'
-            ? 'bg-line font-medium text-ink'
-            : 'text-ink-secondary hover:bg-line hover:text-ink'
-        "
-      >
-        <AppIcon :name="item.icon" class="size-4 shrink-0" />
-        {{ item.label }}
-      </a>
+      <template v-for="item in nav" :key="item.id">
+        <NuxtLink v-if="item.to" :to="item.to" :class="navClass(item)">
+          <AppIcon :name="item.icon" class="size-4 shrink-0" />
+          {{ item.label }}
+        </NuxtLink>
+        <a v-else href="#" :class="navClass(item)">
+          <AppIcon :name="item.icon" class="size-4 shrink-0" />
+          {{ item.label }}
+        </a>
+      </template>
     </nav>
 
     <div class="px-3 py-3">

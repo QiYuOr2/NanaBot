@@ -1,5 +1,3 @@
-import type { PushLogPurpose } from "@nana/storage";
-
 export interface StreamerStatus {
   streamer: string;
   roomId: number;
@@ -17,23 +15,17 @@ export interface LiveStatusResponse {
   liveCount: number;
 }
 
-export type { PushLogPurpose };
-
-export interface PushLogItem {
-  id: number;
-  /** 推送目标群 ID（字符串）。 */
-  targetId: string;
-  /** 推送目标可读名称（群昵称）。 */
-  target: string;
-  purpose: PushLogPurpose;
-  purposeLabel: string;
-  pushedAt: string;
-  success: boolean;
-  error: string | null;
-  content: string | null;
-  subject: string | null;
+/** 顶栏面包屑的一项；当前页不传 `to`。 */
+export interface HeaderTrailItem {
+  label: string;
+  /** 可点击跳转的目标路由。 */
+  to?: string;
 }
 
-export interface PushLogResponse {
-  logs: PushLogItem[];
-}
+export type { PushLogPurpose } from "@nana/storage";
+export type {
+  PushActivity,
+  PushActivityTarget,
+  PushLogItem,
+  PushLogResponse,
+} from "#shared/push-log";
