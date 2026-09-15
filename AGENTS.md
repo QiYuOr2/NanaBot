@@ -60,4 +60,5 @@ packages/
 - `vp check` —— 格式化 + lint + 类型检查；`vp test` —— 运行 Vitest。
 - `vp run @nana/bot#build` —— 构建 bot（含 workspace 依赖）。
 - `pnpm dev:site` —— site 开发服务器（默认 3000）；`pnpm build:site` —— 构建 site（`.output/`）。
+- `pnpm app <list|build|deploy|start|restart|stop|delete|logs> [应用名...|all]` —— 按应用名操作单个应用（应用从 `apps/*` 自动发现，新增应用不需要加脚本）：`pnpm app deploy <应用>` 构建并只重启该应用；`all` 指带 `ecosystem.config.cjs` 的可部署应用。
 - 前端技能包（Vue/Nuxt/UnoCSS 等）安装在 `.agents/skills/`。

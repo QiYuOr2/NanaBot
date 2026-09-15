@@ -63,6 +63,8 @@ node apps/bot/dist/index.mjs
 pnpm pm2:start   # 同时启动 bot 与 site
 ```
 
+只部署 bot 时用 `pnpm app deploy bot`（见[部署](#部署)）。
+
 ### 运行 Web 面板
 
 ```bash
@@ -70,6 +72,36 @@ pnpm dev:site                                            # 开发（http://local
 pnpm build:site                                          # 生产构建（.output/）
 pm2 start apps/site/ecosystem.config.cjs                 # 生产运行，端口 6364
 ```
+
+## 部署
+
+bot 与 site 是相互独立的 PM2 应用（`@nana/bot` / `@nana/site`），只改了其中一个时
+可以单独部署，不必动另一个。应用名从命令行传入，应用列表由 `apps/*` 自动发现，
+以后新增应用不需要再改脚本：
+
+```bash
+pnpm app list              # 列出可管理的应用（目录名 / 包名 / PM2 进程名）
+pnpm app deploy bot        # 构建 bot + 只重启 @nana/bot
+pnpm app deploy site       # 构建 site + 只重启 @nana/site
+pnpm app deploy all        # 两个都部署
+```
+
+应用名可写目录名（`bot`）、包名（`@nana/bot`）或路径（`apps/bot`）。不重新构建、
+只想重启或停止时：
+
+```bash
+pnpm app restart site      # pm2 restart apps/site/ecosystem.config.cjs
+pnpm app stop bot          # pm2 stop @nana/bot
+pnpm app logs bot          # pm2 logs @nana/bot
+pnpm app deploy bot --no-build   # 跳过构建，只做 PM2 重启
+```
+
+`all` 指 `apps/` 下所有带 `ecosystem.config.cjs` 的可部署应用；没有该文件的目录
+（例如不进 PM2 的工具）不会被 `all` 带上，需要时用应用名显式指定。
+
+两个应用的 PM2 配置各自独立（`apps/bot/ecosystem.config.cjs` /
+`apps/site/ecosystem.config.cjs`），根目录 `ecosystem.config.cjs` 只是把两者合并，
+供 `pnpm pm2:*` 一起管理；`pnpm app` 则直接用各应用自己的配置，两者效果一致。
 
 ## 配置
 
@@ -108,10 +140,13 @@ up:
 
 ## 常用脚本
 
-| 命令                                             | 说明                          |
-| ------------------------------------------------ | ----------------------------- |
-| `pnpm dev:site`                                  | 启动 Web 开发服务器           |
-| `pnpm build:site`                                | 构建 Web 面板                 |
-| `pnpm build:bot`                                 | 构建 bot（含 workspace 依赖） |
-| `pnpm pm2:start` / `restart` / `stop` / `delete` | PM2 管理 bot + site           |
-| `vp check` / `vp test`                           | 格式化、lint、类型检查 / 测试 |
+| 命令                                             | 说明                            |
+| ------------------------------------------------ | ------------------------------- |
+| `pnpm dev:site`                                  | 启动 Web 开发服务器             |
+| `pnpm build:site`                                | 构建 Web 面板                   |
+| `pnpm build:bot`                                 | 构建 bot（含 workspace 依赖）   |
+| `pnpm app list`                                  | 列出可管理的应用                |
+| `pnpm app deploy <应用...\|all>`                 | 构建 + 部署指定应用（默认 all） |
+| `pnpm app build\|start\|restart\|stop\|delete`   | 只做对应动作，`logs` 跟随日志   |
+| `pnpm pm2:start` / `restart` / `stop` / `delete` | PM2 管理全部应用（bot + site）  |
+| `vp check` / `vp test`                           | 格式化、lint、类型检查 / 测试   |

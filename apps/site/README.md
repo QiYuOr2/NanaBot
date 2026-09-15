@@ -97,7 +97,8 @@ pm2 logs @nana/site
 
 站点以 `.output/server/index.mjs` 运行，服务端口为 `6364`，通过环境变量 `PORT` 配置
 （见 [ecosystem.config.cjs](./ecosystem.config.cjs)）。也可在仓库根用
-`pnpm pm2:start` 同时启动 bot 与 site。
+`pnpm pm2:start` 同时启动 bot 与 site；只更新本站点时用 `pnpm app deploy site`（构建 +
+只重启 `@nana/site`），或 `pnpm app restart site` 跳过构建直接重启。
 
 ## 依赖的 workspace 包
 
