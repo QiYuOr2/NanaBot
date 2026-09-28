@@ -62,11 +62,13 @@ async function sendGroupText(
   const content = text.replaceAll(AT_ALL_TOKEN, "").trim();
 
   for (const groupId of groupIds) {
+    const isAdminGroup = groupId === context.adminGroupId;
+
     try {
       await context.sendGroupMsg(
         groupId,
         { purpose: "live.start", content, subject: streamer },
-        toMessageSegments(text),
+        toMessageSegments(isAdminGroup ? content : text),
       );
     } catch (error) {
       console.error(`[直播监控] 向群 ${groupId} 发送 "${streamer}" 开播通知失败`, error);
