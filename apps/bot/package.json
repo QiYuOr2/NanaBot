@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vp dev",
     "test": "vp test",
-    "test:email": "node scripts/send-test-email.mjs"
+    "test:email": "node scripts/send-test-email.mjs",
+    "probe:reconnect": "node scripts/probe-napcat-reconnect.ts"
   },
   "dependencies": {
     "@nana/bilibili-api": "workspace:*",

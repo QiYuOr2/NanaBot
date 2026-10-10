@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { readOptionalNumberEnv } from "@nana/utils";
 import { DEFAULT_NC_WS_URL, ENV_KEYS } from "@nana/constants";
-import { createApp } from "./core";
+import { createApp, RECONNECT_DELAY_MS, UNLIMITED_RECONNECT_ATTEMPTS } from "./core";
 import { loadMonitorConfig, monitorFeature, syncLiveStatus } from "./monitor";
 import { loadOfflineDetectorConfig, offlineDetectorFeature } from "./offline";
 import { createBarkNotifier, createEmailNotifier } from "@nana/notify";
@@ -28,8 +28,9 @@ async function main(): Promise<void> {
       accessToken: process.env[ENV_KEYS.NC_ACCESS_TOKEN],
       reconnection: {
         enable: true,
-        attempts: 10,
-        delay: 5000,
+        // 不给库设重连预算：预算耗尽后它会永久停止重连，而且此时 connect() 会挂起而不是报错。
+        attempts: UNLIMITED_RECONNECT_ATTEMPTS,
+        delay: RECONNECT_DELAY_MS,
       },
     },
     adminGroupId: readOptionalNumberEnv(ENV_KEYS.ADM_GROUP),

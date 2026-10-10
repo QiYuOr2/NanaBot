@@ -12,12 +12,20 @@ import { readOptionalNumberEnv } from "@nana/utils";
 import { ENV_KEYS } from "@nana/constants";
 import type { StorageOptions } from "@nana/storage";
 import { NapcatPushClient, type GroupPushOptions, type PushPurposeInput } from "./napcat";
+import {
+  CONNECT_TIMEOUT_MS,
+  ConnectionSupervisor,
+  settleWithin,
+  type ConnectionSupervisorOptions,
+} from "./connection";
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;
   adminGroupId?: number;
   /** 推送记录的存储配置（测试时可传 rootDir 隔离）。 */
   storage?: StorageOptions;
+  /** 连接看门狗的配置，缺省即启用默认值。 */
+  connection?: ConnectionSupervisorOptions;
 }
 
 export interface StopOptions {
@@ -26,6 +34,8 @@ export interface StopOptions {
 
 export interface App {
   ws: NCWebsocket;
+  /** 连接看门狗，可用 `isConnected` 观察当前连接状态。 */
+  connection: ConnectionSupervisor;
   adminGroupId?: number;
   use<TOptions>(feature: FeatureDefinition<TOptions>, options: TOptions): App;
   on<T extends EventKey>(event: T, handler: EventHandleMap[T]): () => void;
@@ -55,6 +65,7 @@ export function createApp(options: CreateAppOptions): App {
   const napcat = new NCWebsocket(options.websocket, isOpenDebug);
   console.log(`[NanaBot] ${(options.websocket as any)["baseUrl"]}`);
   const pushClient = new NapcatPushClient(napcat, options.storage);
+  const connection = new ConnectionSupervisor(napcat, options.connection);
 
   const cleanupManager = createCleanupManager();
   const pluginTasks: Promise<void>[] = [];
@@ -103,6 +114,7 @@ export function createApp(options: CreateAppOptions): App {
 
   const app: App = {
     ws: napcat,
+    connection,
     adminGroupId: options.adminGroupId,
     use(feature, featureOptions) {
       if (state !== "idle") {
@@ -146,7 +158,13 @@ export function createApp(options: CreateAppOptions): App {
       await Promise.all(pluginTasks);
       console.log(`[NanaBot] 插件注册数量：${pluginTasks.length}`);
       registerSignalHandlers(app, cleanupManager);
-      await napcat.connect();
+      // 先启动看门狗：首次连接若卡住（库的 connect() 会永不 settle），由它负责持续重连。
+      connection.start();
+      if (!(await settleWithin(napcat.connect(), CONNECT_TIMEOUT_MS))) {
+        console.warn(
+          `[NanaBot] 首次连接 NapCat 超过 ${CONNECT_TIMEOUT_MS}ms 未成功，改由连接看门狗持续重试。`,
+        );
+      }
       state = "started";
       console.log(`[NanaBot] Connected state === ${state}`);
     },
@@ -161,6 +179,8 @@ export function createApp(options: CreateAppOptions): App {
 
       stopTask = (async () => {
         state = "stopping";
+        // 先停看门狗，避免它和后面的主动断开抢连接。
+        connection.stop();
 
         if (stopOptions?.announce) {
           await safely(() => app.sendAdminText(stopOptions.announce!, { purpose: "app.offline" }));
