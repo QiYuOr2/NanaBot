@@ -29,5 +29,5 @@ export default defineEventHandler((event) => {
     activities.pop();
   }
 
-  return { logs, activities, truncated };
+  return { logs, activities, truncated, generatedAt: new Date().toISOString() };
 });

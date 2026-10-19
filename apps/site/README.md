@@ -41,13 +41,25 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
 [shared/push-activity.ts](./shared/push-activity.ts)）：
 
 - 同一次开播会向配置里的每个通知群各推一条记录，`pushedAt` 只相差毫秒，因此同一主播、
-  相邻间隔不超过 `PUSH_SESSION_GAP_MS`（默认 30 分钟）的连续记录属于同一次直播；
-- `subject` 为空的管理员推送（失败通知、上下线提示）无法归并，各自作为一条活动保留；
+  相邻间隔不超过 `PUSH_SESSION_GAP_MS`（默认 30 分钟）的连续开播 / 下播记录属于同一次直播；
+- 只有开播 / 下播（`aggregatablePurposes`）参与合并；`subject` 为空的管理员推送（失败通知、
+  上下线提示）以及词云等单目标推送各自作为一条活动保留；
 - 合并只影响展示：活动的 `items` 保留全部原始记录，接口也照常返回 `logs`，且不修改
   `db/push-log.sqlite` 的结构与数据。
 
+### 送达状态口径
+
+成败**按群**统计，而不是数原始记录（见 [shared/push-presentation.ts](./shared/push-presentation.ts)）：
+
+- 每个群的最终结果以它最近一次推送为准：`successCount + failureCount + pendingTargetCount
+=== targetCount`；失败后重试成功的群算成功，并通过 `retryCount` 标注「重试后送达」；
+- 失败的推送在 `PUSH_PENDING_WINDOW_MS`（60 秒）内展示为「待确认」，超过窗口仍是失败才展示
+  「未送达」，避免把慢回执 / 重复推送误报成失败；
+- 活动徽标、时间轴圆点、群明细徽标、面板摘要、`/pushes` 统计共用同一套文案与颜色（
+  `PUSH_STATUS_LABELS` / `PUSH_STATUS_CHIP_CLASS` / `PUSH_STATUS_DOT_CLASS`）。
+
 数据通过服务端接口 `GET /api/live-status` 与 `GET /api/push-log` 提供，SSR 时直接取数据再渲染。
-`GET /api/push-log` 返回 `{ logs, activities, truncated }`，可用 `?rawLimit=` 覆盖默认的原始记录
+`GET /api/push-log` 返回 `{ logs, activities, truncated, generatedAt }`，可用 `?rawLimit=` 覆盖默认的原始记录
 读取窗口（默认 500，上限 2000）；窗口被截断时最旧的一条活动可能不完整，会被丢弃。
 
 弹幕词云页的数据接口：
@@ -89,6 +101,7 @@ apps/site/
     danmu.ts
     push-activity.ts
     push-log.ts
+    push-presentation.ts
   tests/push-activity.test.ts
   presets/vercel.ts
   server/api/danmu/[id].get.ts

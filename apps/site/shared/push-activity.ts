@@ -1,4 +1,11 @@
-import type { PushActivity, PushActivityTarget, PushLogItem } from "./push-log.ts";
+import type {
+  PushActivity,
+  PushActivityFailure,
+  PushActivitySummary,
+  PushActivityTarget,
+  PushLogItem,
+  PushTargetStatus,
+} from "./push-log.ts";
 
 /** 面板页最多展示的推送活动条数。 */
 export const PUSH_ACTIVITY_PANEL_LIMIT = 5;
@@ -17,9 +24,33 @@ export const PUSH_ACTIVITY_RAW_LIMIT_MAX = 2000;
  */
 export const PUSH_SESSION_GAP_MS = 30 * 60 * 1000;
 
+/**
+ * 失败的推送在多久之内只标记为「待确认」而不是「失败」。
+ *
+ * 群里看到消息但推送记录显示失败时，多半是重复推送 / 回执慢；留一分钟观察窗口，
+ * 超过窗口仍未收到成功记录才判定为真的没送达。
+ */
+export const PUSH_PENDING_WINDOW_MS = 60 * 1000;
+
+/**
+ * 需要按场次合并、并做送达统计的推送目的。
+ *
+ * 直播开播 / 下播通知会同时推到多个群，才是「哪个群没收到」需要排查的场景；
+ * 机器人上线、离线、管理员通知、词云这类单目标推送的成败由它们自己承担，
+ * 既不代表某场直播失败，也不应该把相邻的失败记录一起算进汇总。
+ */
+export const aggregatablePurposes: ReadonlySet<PushActivity["purpose"]> = new Set([
+  "live.start",
+  "live.end",
+]);
+
 export interface BuildPushActivitiesOptions {
   /** 覆盖默认的「同一次直播」时间间隔阈值，便于测试或按需调整。 */
   sessionGapMs?: number;
+  /** 覆盖「失败 → 待确认」的观察窗口。 */
+  pendingWindowMs?: number;
+  /** 判定待确认状态用的当前时间，缺省为构建时刻。 */
+  now?: Date | string | number;
 }
 
 function toTime(iso: string): number {
@@ -35,24 +66,60 @@ function compareAsc(a: PushLogItem, b: PushLogItem): number {
   return diff;
 }
 
-/** 按目标群聚合，同一个群重复推送时保留最新一条。 */
-function collectTargets(items: PushLogItem[]): PushActivityTarget[] {
+function resolveNow(now: BuildPushActivitiesOptions["now"]): number {
+  if (now === undefined) {
+    return Date.now();
+  }
+  const time = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  return Number.isFinite(time) ? time : Date.now();
+}
+
+/** 渲染用的空串归一：`undefined` / 空串都当「没有主播名」。 */
+function normalizeSubject(subject: string | null | undefined): string | null {
+  const trimmed = subject?.trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * 按目标群聚合：同一个群保留最新一次推送，并用推送次数 / 失败次数区分
+ * 「重试后送达」（`attemptCount > 1 && success`）与「真的失败」。
+ */
+function collectTargets(
+  items: PushLogItem[],
+  pendingWindowMs: number,
+  now: number,
+): PushActivityTarget[] {
   const byTarget = new Map<string, PushActivityTarget>();
 
   for (const item of items) {
+    const previous = byTarget.get(item.targetId);
+    const attemptCount = (previous?.attemptCount ?? 0) + 1;
+    const failedAttemptCount = (previous?.failedAttemptCount ?? 0) + (item.success ? 0 : 1);
+
+    let status: PushTargetStatus = "delivered";
+    if (!item.success) {
+      const age = now - toTime(item.pushedAt);
+      // 时间无法解析时按「已过窗口」处理，宁可报失败也不要吞掉真实故障。
+      status = Number.isFinite(age) && age < pendingWindowMs ? "pending" : "failed";
+    }
+
     byTarget.set(item.targetId, {
       targetId: item.targetId,
       target: item.target,
       success: item.success,
       error: item.error,
       pushedAt: item.pushedAt,
+      attemptCount,
+      failedAttemptCount,
+      status,
     });
   }
 
   return [...byTarget.values()];
 }
 
-function toActivity(source: PushLogItem[]): PushActivity {
+/** 把一组原始记录收成一条展示活动；失败计数一律以「每个群的最终状态」为准。 */
+function toActivity(source: PushLogItem[], pendingWindowMs: number, now: number): PushActivity {
   const items = [...source].sort(compareAsc);
   const first = items[0];
   if (!first) {
@@ -62,46 +129,81 @@ function toActivity(source: PushLogItem[]): PushActivity {
   const latest = items.at(-1) ?? first;
   // 活动标题取开播记录的类型；无法归并的推送用自身的 purpose。
   const titled = items.find((item) => item.purpose === "live.start") ?? first;
-  const failureCount = items.filter((item) => !item.success).length;
+  const targets = collectTargets(items, pendingWindowMs, now);
+
+  // 成败一律按「每个群的最终状态」统计：重试后送达的群算成功，不会因为
+  // 历史里有失败记录就把整条活动标红。
+  let successCount = 0;
+  let failureCount = 0;
+  let pendingTargetCount = 0;
+  let retryCount = 0;
+
+  for (const target of targets) {
+    if (target.status === "delivered") {
+      successCount += 1;
+    } else if (target.status === "pending") {
+      pendingTargetCount += 1;
+    } else {
+      failureCount += 1;
+    }
+
+    if (target.attemptCount > 1) {
+      retryCount += 1;
+    }
+  }
 
   return {
-    id: `${first.subject ?? "—"}#${first.id}`,
-    subject: first.subject,
+    id: `${normalizeSubject(first.subject) ?? "admin"}#${first.id}`,
+    subject: normalizeSubject(first.subject),
     purpose: titled.purpose,
     purposeLabel: titled.purposeLabel,
     startedAt: first.pushedAt,
     latestAt: latest.pushedAt,
     content: items.findLast((item) => item.content)?.content ?? null,
-    targets: collectTargets(items),
-    successCount: items.length - failureCount,
+    targets,
+    targetCount: targets.length,
+    successCount,
     failureCount,
+    pendingTargetCount,
+    retryCount,
     items,
   };
+}
+
+function isAggregatable(log: PushLogItem): boolean {
+  return aggregatablePurposes.has(log.purpose) && normalizeSubject(log.subject) !== null;
 }
 
 /**
  * 把原始推送记录合并成展示用的推送活动。
  *
  * 推送记录里没有直播场次字段，因此按「主播名（`subject`）+ 相邻推送间隔」推断
- * 同一次直播：同一主播、间隔不超过 `sessionGapMs` 的连续记录属于同一场直播。
- * `subject` 为空的管理员推送（失败通知、上下线提示）无法归并，各自作为一条活动
- * 保留，避免合并时丢数据。合并只影响展示，`items` 里保留全部原始记录。
+ * 同一次直播：同一主播、间隔不超过 `sessionGapMs` 的连续开播 / 下播记录属于同一场直播。
+ *
+ * 只有 `aggregatablePurposes` 里、且带主播名的记录参与合并（见 `isAggregatable`）：
+ * - 管理员上下线、通知、词云推送可能和别的失败记录落进同一个时间窗口，
+ *   混进来就会把「我来了~」这类正常推送算成一条失败活动；它们各自成条展示。
+ * - `subject` 为空的记录也不参与合并，各自作为一条活动保留，避免合并时丢数据。
+ *
+ * 合并只影响展示，`items` 里保留全部原始记录。
  */
 export function buildPushActivities(
   logs: PushLogItem[],
   options: BuildPushActivitiesOptions = {},
 ): PushActivity[] {
   const sessionGapMs = options.sessionGapMs ?? PUSH_SESSION_GAP_MS;
+  const pendingWindowMs = options.pendingWindowMs ?? PUSH_PENDING_WINDOW_MS;
+  const now = resolveNow(options.now);
   const bySubject = new Map<string, PushLogItem[]>();
   const standalone: PushLogItem[] = [];
 
   for (const log of logs) {
-    const subject = log.subject?.trim();
-    if (!subject) {
+    if (!isAggregatable(log)) {
       standalone.push(log);
       continue;
     }
 
+    const subject = normalizeSubject(log.subject) as string;
     const items = bySubject.get(subject);
     if (items) {
       items.push(log);
@@ -125,7 +227,7 @@ export function buildPushActivities(
         time - previousTime > sessionGapMs;
 
       if (nextSession) {
-        activities.push(toActivity(session));
+        activities.push(toActivity(session, pendingWindowMs, now));
         session = [];
       }
 
@@ -134,11 +236,11 @@ export function buildPushActivities(
     }
 
     if (session.length > 0) {
-      activities.push(toActivity(session));
+      activities.push(toActivity(session, pendingWindowMs, now));
     }
   }
 
-  activities.push(...standalone.map((log) => toActivity([log])));
+  activities.push(...standalone.map((log) => toActivity([log], pendingWindowMs, now)));
 
   return activities.sort((a, b) => {
     const diff = toTime(b.latestAt) - toTime(a.latestAt);
@@ -147,4 +249,89 @@ export function buildPushActivities(
     }
     return diff;
   });
+}
+
+/** 活动的展示口径：全部送达 / 仍有群待确认 / 有群最终失败。 */
+export type PushActivityTone = "delivered" | "pending" | "failed";
+
+/**
+ * 一条活动的展示口径。
+ *
+ * 有群最终失败时永远不会显示成「已送达」；只有待确认（失败后还没过观察窗口）的群
+ * 单独标成 `pending`，避免「已送达」和「2 失败」同时出现这种自相矛盾的展示。
+ */
+export function getPushActivityTone(
+  activity: Pick<PushActivity, "failureCount" | "pendingTargetCount">,
+): PushActivityTone {
+  if (activity.failureCount > 0) {
+    return "failed";
+  }
+  return activity.pendingTargetCount > 0 ? "pending" : "delivered";
+}
+
+/** 汇总口径：失败按群去重，跨活动统计。 */
+export function summarizePushActivities(activities: readonly PushActivity[]): PushActivitySummary {
+  const failedTargets = new Set<string>();
+  const pendingTargets = new Set<string>();
+  let delivered = 0;
+  let failed = 0;
+  let pending = 0;
+
+  for (const activity of activities) {
+    if (activity.failureCount > 0) {
+      failed += 1;
+    } else if (activity.pendingTargetCount > 0) {
+      pending += 1;
+    } else {
+      delivered += 1;
+    }
+
+    for (const target of activity.targets) {
+      if (target.status === "failed") {
+        failedTargets.add(target.targetId);
+      } else if (target.status === "pending") {
+        pendingTargets.add(target.targetId);
+      }
+    }
+  }
+
+  return {
+    activityCount: activities.length,
+    deliveredActivityCount: delivered,
+    failedActivityCount: failed,
+    pendingActivityCount: pending,
+    failedTargetCount: failedTargets.size,
+    pendingTargetCount: pendingTargets.size,
+  };
+}
+
+/** 收集最终没送达的目标群，按最新推送时间倒序；同一群只保留最近一次失败。 */
+export function collectPushActivityFailures(
+  activities: readonly PushActivity[],
+): PushActivityFailure[] {
+  const failures: PushActivityFailure[] = [];
+
+  for (const activity of activities) {
+    for (const target of activity.targets) {
+      if (target.status === "delivered") {
+        continue;
+      }
+
+      failures.push({
+        activityId: activity.id,
+        subject: activity.subject,
+        purpose: activity.purpose,
+        purposeLabel: activity.purposeLabel,
+        activityAt: activity.latestAt,
+        targetId: target.targetId,
+        target: target.target,
+        error: target.error,
+        pushedAt: target.pushedAt,
+        status: target.status,
+        attemptCount: target.attemptCount,
+      });
+    }
+  }
+
+  return failures.sort((a, b) => toTime(b.pushedAt) - toTime(a.pushedAt));
 }

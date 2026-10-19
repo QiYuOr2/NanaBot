@@ -1,5 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import {
+  getActivityStatusView,
+  getTargetStatusView,
+  PUSH_STATUS_CHIP_CLASS,
+  PUSH_STATUS_DOT_CLASS,
+  summarizeTargets,
+} from "#shared/push-presentation";
 import type { PushActivity } from "~/types";
 
 const props = withDefaults(
@@ -8,10 +15,12 @@ const props = withDefaults(
     activity: PushActivity;
     /** 是否是时间轴的最后一条，用于隐藏连线。 */
     last?: boolean;
-    /** 是否展开该活动下的每条原始推送（群明细）。 */
+    /** 是否展开该活动下的每个目标群明细。 */
     showTargets?: boolean;
+    /** 是否需要关注的视觉强调（失败 / 待确认的活动）。 */
+    highlight?: boolean;
   }>(),
-  { last: false, showTargets: false },
+  { last: false, showTargets: false, highlight: false },
 );
 
 const AVATAR_COLORS = [
@@ -28,6 +37,7 @@ const PURPOSE_TAG: Record<string, string> = {
   "live.end": "bg-status-teal/10 text-status-teal",
   "app.online": "bg-status-blue/10 text-status-blue",
   "app.offline": "bg-status-cyan/10 text-status-cyan",
+  wordcloud: "bg-status-orange/10 text-status-orange",
   notification: "bg-status-orange/10 text-status-orange",
 };
 
@@ -45,37 +55,14 @@ const avatarColor = computed(() => {
 
 const avatarChar = computed(() => avatarKey.value.charAt(0) || "•");
 
-const title = computed(
-  () =>
-    props.activity.subject?.trim() || props.activity.content?.trim() || props.activity.purposeLabel,
-);
+const isBotActivity = computed(() => !props.activity.subject);
+/** 机器人推送没有主播名，标题直接说明是机器人；具体内容在下一行。 */
+const title = computed(() => props.activity.subject?.trim() || "机器人");
 
-/** 目标群摘要：单个群直接展示昵称，多个群展示数量与昵称列表。 */
-const targetSummary = computed(() => {
-  const targets = props.activity.targets;
-  if (targets.length === 1) {
-    return targets[0]?.target ?? "—";
-  }
-  return `${targets.length} 个群 · ${targets.map((item) => item.target).join("、")}`;
-});
-
-const statusLabel = computed(() => {
-  const { failureCount, successCount } = props.activity;
-  if (failureCount === 0) {
-    return "已送达";
-  }
-  if (successCount === 0) {
-    return "全部失败";
-  }
-  return `${failureCount} 失败`;
-});
-
-const statusTitle = computed(
-  () =>
-    props.activity.items
-      .filter((item) => !item.success)
-      .map((item) => `${item.target}: ${item.error ?? "未知错误"}`)
-      .join("\n") || "",
+const status = computed(() => getActivityStatusView(props.activity));
+const targetSummary = computed(() => summarizeTargets(props.activity));
+const targetViews = computed(() =>
+  props.activity.targets.map((target) => ({ target, view: getTargetStatusView(target) })),
 );
 
 function relativeTime(iso: string): string {
@@ -98,80 +85,122 @@ function relativeTime(iso: string): string {
   }
   return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(date);
 }
+
+/** 悬浮时展示精确时间。 */
+function absoluteTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString("zh-CN");
+}
 </script>
 
 <template>
-  <div class="flex gap-3">
-    <span
-      class="w-16 shrink-0 whitespace-nowrap pt-1 text-right text-[12px] tabular-nums text-ink-muted"
-    >
-      {{ relativeTime(activity.latestAt) }}
-    </span>
-
-    <div class="flex flex-col items-center">
-      <span
-        class="mt-1.5 size-2.5 shrink-0 rounded-full"
-        :class="activity.failureCount > 0 ? 'bg-status-red' : 'bg-live'"
-      />
-      <span v-if="!last" class="mt-1 w-px flex-1 bg-line" aria-hidden="true" />
-    </div>
-
-    <span
-      class="flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white"
-      :class="avatarColor"
-    >
-      {{ avatarChar }}
-    </span>
-
-    <div class="min-w-0 flex-1 pb-4">
-      <div class="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-ink">
-        <span
-          class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium"
-          :class="PURPOSE_TAG[activity.purpose] ?? PURPOSE_TAG.notification"
-        >
-          {{ activity.purposeLabel }}
-        </span>
-        <span class="min-w-0 truncate">{{ title }}</span>
-      </div>
-
-      <p
-        v-if="activity.subject && activity.content"
-        class="mt-1 truncate text-[12px] text-ink-secondary"
+  <div class="rounded-lg transition-colors" :class="highlight ? 'bg-recessed/70' : ''">
+    <div class="flex gap-3 px-2 py-1">
+      <time
+        class="w-16 shrink-0 whitespace-nowrap pt-1 text-right text-[12px] tabular-nums text-ink-muted"
+        :datetime="activity.latestAt"
+        :title="absoluteTime(activity.latestAt)"
       >
-        {{ activity.content }}
-      </p>
+        {{ relativeTime(activity.latestAt) }}
+      </time>
 
-      <div class="mt-1 flex min-w-0 items-center gap-1 text-[12px] text-ink-muted">
-        <span class="shrink-0">→</span>
-        <span class="min-w-0 truncate">{{ targetSummary }}</span>
+      <div class="flex flex-col items-center">
+        <span
+          class="mt-1.5 size-2.5 shrink-0 rounded-full"
+          :class="PUSH_STATUS_DOT_CLASS[status.tone]"
+          :aria-label="status.label"
+        />
+        <span v-if="!last" class="mt-1 w-px flex-1 bg-line" aria-hidden="true" />
       </div>
 
-      <ul v-if="showTargets" class="mt-2 space-y-1 border-l border-line pl-3">
-        <li
-          v-for="target in activity.targets"
-          :key="target.targetId"
-          class="flex min-w-0 items-center gap-2 text-[12px] text-ink-muted"
+      <span
+        class="flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white"
+        :class="avatarColor"
+        :aria-hidden="true"
+      >
+        {{ avatarChar }}
+      </span>
+
+      <div class="min-w-0 flex-1 pb-4">
+        <div
+          class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-snug text-ink"
         >
-          <span class="min-w-0 truncate">{{ target.target }}</span>
           <span
             class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium"
-            :class="target.success ? 'bg-live/10 text-live' : 'bg-status-red/10 text-status-red'"
-            :title="target.error ?? ''"
+            :class="PURPOSE_TAG[activity.purpose] ?? PURPOSE_TAG.notification"
           >
-            {{ target.success ? "已送达" : "失败" }}
+            {{ activity.purposeLabel }}
           </span>
-        </li>
-      </ul>
-    </div>
+          <span class="min-w-0 truncate font-medium">{{ title }}</span>
+        </div>
 
-    <span
-      class="shrink-0 self-start rounded px-1.5 py-0.5 text-[11px] font-medium"
-      :class="
-        activity.failureCount === 0 ? 'bg-live/10 text-live' : 'bg-status-red/10 text-status-red'
-      "
-      :title="statusTitle"
-    >
-      {{ statusLabel }}
-    </span>
+        <p
+          v-if="activity.content"
+          class="mt-1 line-clamp-2 text-[12px] leading-relaxed text-ink-secondary"
+        >
+          {{ activity.content }}
+        </p>
+
+        <div class="mt-1 flex min-w-0 items-center gap-1 text-[12px] text-ink-muted">
+          <span class="shrink-0" aria-hidden="true">→</span>
+          <span class="min-w-0 truncate">{{ targetSummary }}</span>
+          <span
+            v-if="activity.retryCount > 0"
+            class="shrink-0 rounded bg-recessed px-1.5 py-0.5 text-[11px]"
+            :title="`${activity.retryCount} 个群推送过多次`"
+          >
+            重试 {{ activity.retryCount }}
+          </span>
+          <!-- 不展开明细时，没重试的活动把送达状态放在这里，不必滑到最右才看得到。 -->
+          <span
+            v-if="!showTargets && activity.retryCount === 0"
+            class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium"
+            :class="PUSH_STATUS_CHIP_CLASS[status.tone]"
+            :title="status.title"
+          >
+            {{ status.label }}
+          </span>
+        </div>
+
+        <ul v-if="showTargets" class="mt-2 space-y-1.5 border-l border-line pl-3">
+          <li
+            v-for="{ target, view } in targetViews"
+            :key="target.targetId"
+            class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-ink-muted"
+          >
+            <span class="min-w-0 truncate">{{ target.target }}</span>
+            <span
+              class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium"
+              :class="PUSH_STATUS_CHIP_CLASS[view.tone]"
+              :title="view.detail"
+            >
+              {{ view.label }}
+            </span>
+            <span v-if="view.retried" class="min-w-0 flex-1 truncate text-[11px]">
+              {{ view.detail }}
+            </span>
+            <span v-else-if="view.tone !== 'success'" class="min-w-0 truncate text-[11px]">
+              {{ view.detail }}
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <span
+        v-if="showTargets || activity.retryCount > 0"
+        class="flex shrink-0 flex-col items-end gap-1 self-start"
+      >
+        <span
+          class="rounded px-1.5 py-0.5 text-[11px] font-medium"
+          :class="PUSH_STATUS_CHIP_CLASS[status.tone]"
+          :title="status.title"
+        >
+          {{ status.label }}
+        </span>
+        <span v-if="status.retried" class="text-[11px] text-ink-muted" :title="status.title">
+          重试后送达
+        </span>
+      </span>
+    </div>
   </div>
 </template>

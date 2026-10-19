@@ -25,9 +25,12 @@ export interface HeaderTrailItem {
 export type { PushLogPurpose } from "@nana/storage";
 export type {
   PushActivity,
+  PushActivityFailure,
+  PushActivitySummary,
   PushActivityTarget,
   PushLogItem,
   PushLogResponse,
+  PushTargetStatus,
 } from "#shared/push-log";
 export type {
   DanmuMessageDto,

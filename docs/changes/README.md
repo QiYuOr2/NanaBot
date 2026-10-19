@@ -13,6 +13,7 @@
 | [0002](./0002-push-activity-page.md)         | 推送活动独立页面 `/pushes`            | `apps/site`：新页面 + 列表项组件 + 侧边栏导航              | 已完成 |
 | [0003](./0003-layout-and-header.md)          | 页面外壳与顶栏抽取                    | `apps/site`：layout + `AppHeader` + 刷新按钮               | 已完成 |
 | [0004](./0004-napcat-connection-watchdog.md) | NapCat 连接看门狗（断线不再需要重启） | `apps/bot`：`core` 看门狗 + 入口重连配置 + 测试 + 诊断脚本 | 已完成 |
+| [0005](./0005-push-status-and-ui.md)         | 推送送达状态纠偏与推送 UI 优化        | `apps/site`：合并口径 + 展示辅助 + 面板 / 活动页           | 已完成 |
 
 新增改动时：复制 [TEMPLATE.md](./TEMPLATE.md) 为 `NNNN-<主题>.md`（编号递增），写完在上表补一行。
 
