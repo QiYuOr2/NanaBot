@@ -274,6 +274,12 @@ importers:
       '@nana/wordcloud':
         specifier: workspace:*
         version: link:../../packages/wordcloud
+      '@node-rs/jieba':
+        specifier: 'catalog:'
+        version: 2.0.4
+      '@resvg/resvg-js':
+        specifier: 'catalog:'
+        version: 2.6.2
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -320,6 +326,12 @@ importers:
       '@nana/wordcloud':
         specifier: workspace:*
         version: link:../../packages/wordcloud
+      '@node-rs/jieba':
+        specifier: 'catalog:'
+        version: 2.0.4
+      '@resvg/resvg-js':
+        specifier: 'catalog:'
+        version: 2.6.2
       '@unocss/reset':
         specifier: ^66.0.0
         version: 66.8.1

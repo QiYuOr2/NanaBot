@@ -19,6 +19,8 @@
     "@nana/storage": "workspace:*",
     "@nana/utils": "workspace:*",
     "@nana/wordcloud": "workspace:*",
+    "@node-rs/jieba": "catalog:",
+    "@resvg/resvg-js": "catalog:",
     "dotenv": "^17.4.2",
     "node-napcat-ts": "^0.4.25",
     "zod": "catalog:"
