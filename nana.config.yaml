@@ -23,3 +23,18 @@ adminEmail:
   address: 1902791450@qq.com
   cc:
     - qiyuor2@gmail.com
+
+# 整场弹幕记录与词云推送（下播后把本场词云发到管理员群，默认 ADM_GROUP）。
+# 全部字段可选，不写时使用默认值。
+wordcloud:
+  enabled: true
+  # 推送目标群，缺省用 ADM_GROUP
+  # notifyGroupId: 1101365727
+  # 词云展示词数与最短词长
+  topN: 60
+  minWordLength: 2
+  # 额外停用词 / 噪音词（主播名会自动过滤）
+  stopWords: []
+  noiseWords: []
+  # 下播兜底轮询间隔（毫秒），0 表示关闭
+  pollIntervalMs: 300000

@@ -3,11 +3,14 @@ import {
   BARK_BASE_URL,
   BARK_ICON_URL,
   APP_STATE_FILE,
+  DANMU_FILE,
   DATABASE_DIRECTORY,
   DEFAULT_NC_WS_URL,
   ENV_KEYS,
   LIVE_STATUS_FILE,
   NANA_CONFIG_FILE,
+  PUSH_LOG_PURPOSES,
+  PUSH_PURPOSE_LABELS,
 } from "../src/index.ts";
 
 test("项目文件与目录常量与目录结构一致", () => {
@@ -15,6 +18,7 @@ test("项目文件与目录常量与目录结构一致", () => {
   expect(DATABASE_DIRECTORY).toBe("db");
   expect(LIVE_STATUS_FILE).toBe("live-status.sqlite");
   expect(APP_STATE_FILE).toBe("app-state.sqlite");
+  expect(DANMU_FILE).toBe("danmu.sqlite");
 });
 
 test("默认网络地址", () => {
@@ -32,4 +36,13 @@ test("环境变量名统一", () => {
   expect(ENV_KEYS.NC_WS_URL).toBe("NC_WS_URL");
   expect(ENV_KEYS.NC_ACCESS_TOKEN).toBe("NC_ACCESS_TOKEN");
   expect(ENV_KEYS.NC_DEBUG).toBe("NC_DEBUG");
+});
+
+test("推送目的包含词云，且每个目的都有中文展示名", () => {
+  expect(PUSH_LOG_PURPOSES).toContain("wordcloud");
+  expect(PUSH_PURPOSE_LABELS.wordcloud).toBe("词云");
+
+  for (const purpose of PUSH_LOG_PURPOSES) {
+    expect(PUSH_PURPOSE_LABELS[purpose]).toBeTruthy();
+  }
 });

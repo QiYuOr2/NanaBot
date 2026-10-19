@@ -9,6 +9,8 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: resolve(__dirname, "src/index.ts"),
+      // 带 .node 原生绑定的包必须保持 external，由 Node 直接 require 加载。
+      external: ["@node-rs/jieba", "@node-rs/jieba/dict", "@resvg/resvg-js"],
       output: {
         entryFileNames: "index.mjs",
       },

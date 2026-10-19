@@ -1,3 +1,8 @@
 export { loadMonitorConfig, type MonitorConfig } from "./config.ts";
-export { monitorFeature, type MonitorFeatureOptions } from "./feature";
+export {
+  createMonitorFeature,
+  type MonitorFeatureRegistration,
+  type MonitorSinkFactory,
+} from "./feature";
+export type { MonitorFeatureOptions } from "./feature.ts";
 export { syncLiveStatus, type SyncLiveStatusOptions } from "./sync.ts";

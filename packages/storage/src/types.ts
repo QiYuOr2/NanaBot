@@ -42,3 +42,53 @@ export interface PushLog {
   /** 推送主体（如主播名），用于前端头像/文案展示。 */
   subject?: string | null;
 }
+
+/** 场次的结束原因：下播事件 / 轮询兜底 / 进程退出 / 开新场时清理的残留场次。 */
+export type DanmuSessionCloseReason = "live.ended" | "poll" | "shutdown" | "stale";
+
+/**
+ * 一场弹幕记录（对应 `danmu_session` 表的一行）。
+ *
+ * 时间均为 ISO 字符串，与库中 TEXT 列一一对应，便于直接透传给前端。
+ */
+export interface DanmuSession {
+  /** 场次自增 ID。 */
+  id: number;
+  /** 直播间号（字符串形式，与 SQLite 一致）。 */
+  roomId: string;
+  /** 主播名。 */
+  streamer: string;
+  /** 开播时间（ISO 字符串）。 */
+  startedAt: string;
+  /** 结束时间（ISO 字符串），进行中的场次为 null。 */
+  endedAt: string | null;
+  /** 结束原因，进行中的场次为 null。 */
+  closeReason: DanmuSessionCloseReason | null;
+  /** 本场已收录的弹幕条数。 */
+  msgCount: number;
+}
+
+/** 一条弹幕记录（对应 `danmu_message` 表的一行）。 */
+export interface DanmuMessage {
+  /** 弹幕自增 ID。 */
+  id: number;
+  /** 所属场次 ID。 */
+  sessionId: number;
+  /** 弹幕发送时间（ISO 字符串）。 */
+  sentAt: string;
+  /** 发送者 UID（字符串形式，与 SQLite 一致）。 */
+  userId: string;
+  /** 发送者昵称。 */
+  username: string;
+  /** 弹幕原文。 */
+  content: string;
+}
+
+/** 写入弹幕时由调用方提供的字段（id 与 sessionId 由存储层填充）。 */
+export type DanmuMessageInput = Omit<DanmuMessage, "id" | "sessionId">;
+
+/** 场次及其统计信息，供面板列表展示。 */
+export interface DanmuSessionWithStats extends DanmuSession {
+  /** 期间参与发言的人数（按 user_id 去重）。 */
+  participantCount: number;
+}

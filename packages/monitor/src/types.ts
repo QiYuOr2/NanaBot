@@ -15,7 +15,17 @@ export interface MonitorFeatureOptions {
 
 export interface MonitorSourceHandlers {
   onLiveStart(event: { timestamp: Date; hasLiveTime: boolean }): void | Promise<void>;
-  onIncomeDanmu(event: { timestamp: Date; content: string }): void | Promise<void>;
+  /**
+   * 收到一条普通弹幕。
+   * `userId` / `username` 来自 blive-message-listener 的 `user.uid` / `user.uname`，
+   * 主播侧用于词云统计等需要区分发送者的场景。
+   */
+  onIncomeDanmu(event: {
+    timestamp: Date;
+    content: string;
+    userId: number;
+    username: string;
+  }): void | Promise<void>;
   onLiveEnd(event: { timestamp: Date }): void | Promise<void>;
   onOpen(): void | Promise<void>;
   onClose(): void | Promise<void>;
@@ -49,6 +59,19 @@ export type MonitorEvent =
       type: "monitor.test";
       roomId: number;
       streamer: string;
+      timestamp: Date;
+    }
+  | {
+      /**
+       * 收到一条弹幕（blive 普通弹幕，sub_type=comment）。
+       * 内容为空时不发出该事件。
+       */
+      type: "danmu.received";
+      roomId: number;
+      streamer: string;
+      content: string;
+      userId: number;
+      username: string;
       timestamp: Date;
     }
   | {

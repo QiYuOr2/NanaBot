@@ -20,12 +20,16 @@ export const PUSH_LOG_FILE = "push-log.sqlite";
 /** 应用自身状态（如机器人在线/离线）的 SQLite 数据库文件名。 */
 export const APP_STATE_FILE = "app-state.sqlite";
 
+/** 弹幕场次与逐条弹幕的 SQLite 数据库文件名。 */
+export const DANMU_FILE = "danmu.sqlite";
+
 /** 推送目的的事件名，用于标记一次推送的类型。 */
 export const PUSH_LOG_PURPOSES = [
   "live.start",
   "live.end",
   "app.online",
   "app.offline",
+  "wordcloud",
   "notification",
 ] as const;
 
@@ -38,6 +42,7 @@ export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
   "live.end": "下播",
   "app.online": "上线",
   "app.offline": "下线",
+  wordcloud: "词云",
   notification: "通知",
 };
 

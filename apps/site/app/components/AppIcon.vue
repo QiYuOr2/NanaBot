@@ -56,6 +56,12 @@ defineProps<{ name: string }>();
       <line x1="8" y1="21" x2="16" y2="21" />
       <line x1="12" y1="17" x2="12" y2="21" />
     </template>
+    <template v-else-if="name === 'cloud'">
+      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z" />
+      <line x1="8" y1="14" x2="16" y2="14" />
+      <line x1="10.5" y1="11" x2="13.5" y2="11" />
+      <line x1="10" y1="17" x2="14" y2="17" />
+    </template>
     <template v-else-if="name === 'settings'">
       <circle cx="12" cy="12" r="3" />
       <path

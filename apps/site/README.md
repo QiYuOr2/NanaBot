@@ -20,6 +20,21 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
   「已送达 / 失败」状态；大屏时与主播卡片并排，移动端垂直堆叠。卡片右上角「查看全部」
   跳转到 `/pushes`，那里展示全部活动并展开每个群的送达明细。
 
+### 弹幕词云（`/danmu`）
+
+读取 `db/danmu.sqlite`（由 `@nana/storage` 维护的「场次 + 逐条弹幕」两表），左侧列出历史场次
+（开始时间、主播、时长、弹幕数、参与人数、Top 词摘要），点击任一场次后右侧展示：场次统计
+（时长、弹幕数、参与人数、每分钟弹幕数、弹幕王、最高频单条弹幕）、词云图、Top 词表与最近
+200 条弹幕（最新在前）。
+
+- 词云图由服务端用 `@nana/wordcloud` 的 `buildWordCloudSvg` + `renderWordCloudPng` 生成，
+  与推送到管理员群的图片使用同一套分词与渲染规则；PNG 渲染失败时自动降级为 SVG。
+- 分词规则与 bot 保持一致（见 `apps/bot/src/danmu/wordCloud.ts`）：主播名与
+  `nana.config.yaml` 的 `wordcloud.stopWords` / `wordcloud.noiseWords` 一起作为噪音词叠加，
+  `wordcloud.minWordLength` 控制最短词长，`wordcloud.fontPath` 指定渲染字体。
+- 性能：列表接口只为最近 10 场计算 Top 词，更早的场次 `topWords` 返回空数组；详情接口的
+  Top 词与统计复用 `summarizeSession`，弹幕只返回最近 200 条。
+
 ### 推送活动的合并规则
 
 推送记录里没有直播场次字段，合并依据是「主播名（`subject`）+ 相邻推送间隔」（见
@@ -35,6 +50,14 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
 `GET /api/push-log` 返回 `{ logs, activities, truncated }`，可用 `?rawLimit=` 覆盖默认的原始记录
 读取窗口（默认 500，上限 2000）；窗口被截断时最旧的一条活动可能不完整，会被丢弃。
 
+弹幕词云页的数据接口：
+
+| 接口                           | 说明                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `GET /api/danmu/sessions`      | `{ sessions, limit }`，按开播时间倒序；`?limit=` 覆盖条数（默认 20，上限 100）                               |
+| `GET /api/danmu/:id`           | 场次统计 + Top 词（前 30）+ 最近 200 条弹幕（倒序）；不存在返回 404                                          |
+| `GET /api/danmu/:id/wordcloud` | 直接返回 `image/png`（`Cache-Control: public, max-age=3600`）；`?format=svg` 返回 SVG 文本，渲染失败返回 500 |
+
 页面外壳（侧边栏 + 主列）在 `app/layouts/default.vue`，顶栏由 `components/AppHeader.vue` 提供：
 它只负责吸顶外壳与面包屑（`trail` 属性），各页面通过 `#status` 插槽补侧边状态、通过默认插槽
 传入自己的操作区（概览页是搜索 / 排序 / 刷新，推送活动页只有刷新）。刷新按钮的转圈与禁用
@@ -49,21 +72,32 @@ apps/site/
     layouts/default.vue
     pages/index.vue
     pages/pushes.vue
+    pages/danmu.vue
     components/AppHeader.vue
     components/AppRefreshButton.vue
     components/PushActivityItem.vue
     components/StreamerCard.vue
     components/PushLogCard.vue
+    components/DanmuSessionList.vue
+    components/DanmuWordCloud.vue
+    components/DanmuWordList.vue
+    components/DanmuMessageList.vue
     components/AppIcon.vue
     components/AppSidebar.vue
     types.ts
   shared/
+    danmu.ts
     push-activity.ts
     push-log.ts
   tests/push-activity.test.ts
   presets/vercel.ts
+  server/api/danmu/[id].get.ts
+  server/api/danmu/sessions.get.ts
+  server/api/danmu/[id]/wordcloud.get.ts
   server/api/live-status.get.ts
   server/api/push-log.get.ts
+  server/utils/danmu.ts
+  server/utils/streamers.ts
   nuxt.config.ts
   uno.config.ts
   package.json
@@ -104,8 +138,11 @@ pm2 logs @nana/site
 
 服务端接口直接依赖：
 
-- `@nana/config` —— 读取 `nana.config.yaml`
-- `@nana/storage` —— 读取 `db/live-status.sqlite` 与 `db/push-log.sqlite`
+- `@nana/config` —— 读取 `nana.config.yaml`（主播列表与 `wordcloud` 段）
+- `@nana/storage` —— 读取 `db/live-status.sqlite`、`db/push-log.sqlite` 与 `db/danmu.sqlite`
+- `@nana/wordcloud` —— 弹幕分词、场次统计与词云 SVG/PNG 渲染（只在 `server/` 引入，
+  含 `@node-rs/jieba` / `@resvg/resvg-js` 原生依赖，不会进入客户端 bundle）
+- `@nana/utils` —— `formatDuration` 等时间格式化
 
-这两个包需要先构建出 `dist/`（仓库内已构建）。若克隆后重新构建，可先执行
-`vp run @nana/config#build @nana/storage#build`。
+这些包需要先构建出 `dist/`（仓库内已构建）。若克隆后重新构建，可先执行
+`vp run @nana/config#build @nana/storage#build @nana/wordcloud#build`。

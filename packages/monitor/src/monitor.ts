@@ -60,6 +60,19 @@ function createHandlers(
       logger.log(`[${event.timestamp.toISOString()}] ${text}`);
     },
     onIncomeDanmu(event) {
+      // 空内容（部分弹幕只有表情或被过滤）不入事件流，避免下游写出空记录
+      if (event.content) {
+        emit({
+          type: "danmu.received",
+          roomId: options.roomId,
+          streamer: options.streamer,
+          content: event.content,
+          userId: event.userId,
+          username: event.username,
+          timestamp: event.timestamp,
+        });
+      }
+
       if (event.content === "qiyuor2") {
         emit({
           type: "monitor.test",

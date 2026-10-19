@@ -19,6 +19,8 @@
     "@nana/bilibili-api": "workspace:*",
     "@nana/config": "workspace:*",
     "@nana/storage": "workspace:*",
+    "@nana/utils": "workspace:*",
+    "@nana/wordcloud": "workspace:*",
     "@unocss/reset": "^66.0.0",
     "h3": "^1.15.0",
     "nuxt": "^4.0.0",

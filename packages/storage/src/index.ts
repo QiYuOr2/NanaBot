@@ -1,4 +1,9 @@
 export type {
+  DanmuMessage,
+  DanmuMessageInput,
+  DanmuSession,
+  DanmuSessionCloseReason,
+  DanmuSessionWithStats,
   LiveStatus,
   PushLog,
   PushLogPurpose,
@@ -8,6 +13,16 @@ export type {
 } from "./types.ts";
 export type { AppState } from "./app-state.ts";
 export { readAppState, writeAppState } from "./app-state.ts";
+export type { CloseDanmuSessionInput, OpenDanmuSessionInput } from "./danmu.ts";
+export {
+  appendDanmuMessages,
+  closeDanmuSession,
+  findActiveDanmuSession,
+  listDanmuSessions,
+  openDanmuSession,
+  readDanmuMessages,
+  readDanmuSession,
+} from "./danmu.ts";
 export { resolveDbPath } from "./paths.ts";
 export { readStore, updateStore, writeStore } from "./yaml-store.ts";
 export type { LiveStatusRecord } from "./live-status.ts";

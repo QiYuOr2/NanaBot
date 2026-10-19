@@ -29,3 +29,12 @@ export type {
   PushLogItem,
   PushLogResponse,
 } from "#shared/push-log";
+export type {
+  DanmuMessageDto,
+  DanmuSessionDetailResponse,
+  DanmuSessionStatsDto,
+  DanmuSessionSummaryDto,
+  DanmuSessionsResponse,
+  DanmuWordCloudFormat,
+  DanmuWordCountDto,
+} from "#shared/danmu";

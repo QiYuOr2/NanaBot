@@ -18,6 +18,7 @@
     "@nana/offline-detector": "workspace:*",
     "@nana/storage": "workspace:*",
     "@nana/utils": "workspace:*",
+    "@nana/wordcloud": "workspace:*",
     "dotenv": "^17.4.2",
     "node-napcat-ts": "^0.4.25",
     "zod": "catalog:"
