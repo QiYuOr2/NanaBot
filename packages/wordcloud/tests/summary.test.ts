@@ -89,6 +89,29 @@ describe("summarizeSession", () => {
     expect(summary.topChater).toEqual({ userId: "2", username: "小红", count: 3 });
   });
 
+  test("游客弹幕 uid 都是 0 时按昵称分别统计", () => {
+    // 未登录的直播连接里 B 站把所有发送者 uid 置 0，只保留（可能打码的）昵称。
+    const summary = buildSummary([
+      message("0", "小明", "第一句"),
+      message("0", "小红", "第二句"),
+      message("0", "小明", "第三句"),
+      message("0", "阿强", "第四句"),
+    ]);
+
+    expect(summary.participantCount).toBe(3);
+    expect(summary.topChater).toEqual({ userId: "0", username: "小明", count: 2 });
+  });
+
+  test("有真实 uid 的弹幕仍按用户合并，不因改昵称拆成两人", () => {
+    const summary = buildSummary([
+      message("7", "旧昵称", "第一句"),
+      message("7", "新昵称", "第二句"),
+    ]);
+
+    expect(summary.participantCount).toBe(1);
+    expect(summary.topChater).toEqual({ userId: "7", username: "新昵称", count: 2 });
+  });
+
   test("最高频单条弹幕按内容统计，不区分发言者", () => {
     const summary = buildSummary([
       message("1", "小明", "好耶"),

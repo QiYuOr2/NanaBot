@@ -274,6 +274,26 @@ describe("listDanmuSessions", () => {
     expect(limited[0].startedAt).toBe("2026-10-01T12:00:00.000Z");
   });
 
+  test("uid 为 0 的游客弹幕按昵称计参与人数", () => {
+    const rootDir = createRootDir();
+
+    const session = openDanmuSession(
+      { roomId: ROOM_ID, streamer: "饭总", startedAt: "2026-10-01T10:00:00.000Z" },
+      { rootDir },
+    );
+    appendDanmuMessages(
+      session.id,
+      [
+        message("一", "2026-10-01T10:00:01.000Z", "0", "小明"),
+        message("二", "2026-10-01T10:00:02.000Z", "0", "小红"),
+        message("三", "2026-10-01T10:00:03.000Z", "0", "小明"),
+      ],
+      { rootDir },
+    );
+
+    expect(listDanmuSessions({ rootDir })[0]).toMatchObject({ msgCount: 3, participantCount: 2 });
+  });
+
   test("空数据库返回空数组", () => {
     const rootDir = createRootDir();
     expect(listDanmuSessions({ rootDir })).toEqual([]);

@@ -27,23 +27,36 @@ function isContentlessDanmu(content: string): boolean {
 }
 
 /**
+ * 游客连接下 B 站把所有发送者的 uid 都置成 0，这种弹幕没有可区分的用户身份。
+ * 统计时按「用户 + 昵称」分开计数，避免整场弹幕被算成同一个人。
+ */
+function speakerKey(message: DanmuSessionInput["messages"][number]): string {
+  return message.userId === "0" ? `0\u0000${message.username}` : message.userId;
+}
+
+/**
  * 统计发言最多的人：按条数降序，条数相同时按首次发言的先后排序，
  * 再相同时按用户 ID 升序 —— 保证同一输入的结果完全确定。
  */
 function pickTopChater(
   messages: readonly DanmuSessionInput["messages"][number][],
 ): TopChater | null {
-  const stats = new Map<string, { username: string; count: number; firstIndex: number }>();
+  const stats = new Map<
+    string,
+    { userId: string; username: string; count: number; firstIndex: number }
+  >();
 
   messages.forEach((message, index) => {
-    const current = stats.get(message.userId);
+    const key = speakerKey(message);
+    const current = stats.get(key);
     if (current) {
       current.count += 1;
       // 昵称以最近一次出现的为准，兼容中途改昵称。
       current.username = message.username;
       return;
     }
-    stats.set(message.userId, {
+    stats.set(key, {
+      userId: message.userId,
       username: message.username,
       count: 1,
       firstIndex: index,
@@ -52,15 +65,15 @@ function pickTopChater(
 
   let best: TopChater | null = null;
   let bestStat: { count: number; firstIndex: number } | null = null;
-  for (const [userId, stat] of stats) {
+  for (const stat of stats.values()) {
     const better =
       bestStat === null ||
       stat.count > bestStat.count ||
       (stat.count === bestStat.count &&
         (stat.firstIndex < bestStat.firstIndex ||
-          (stat.firstIndex === bestStat.firstIndex && userId < (best?.userId ?? ""))));
+          (stat.firstIndex === bestStat.firstIndex && stat.userId < (best?.userId ?? ""))));
     if (better) {
-      best = { userId, username: stat.username, count: stat.count };
+      best = { userId: stat.userId, username: stat.username, count: stat.count };
       bestStat = { count: stat.count, firstIndex: stat.firstIndex };
     }
   }
@@ -129,7 +142,7 @@ export function summarizeSession(
   }));
   const participants = new Set<string>();
   for (const message of messages) {
-    participants.add(message.userId);
+    participants.add(speakerKey(message));
   }
 
   const topWordCount = Math.max(1, options.topWords ?? 10);

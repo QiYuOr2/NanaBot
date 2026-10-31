@@ -280,7 +280,9 @@ export function listDanmuSessions(options?: StorageOptions, limit = 20): DanmuSe
       .prepare(`
         SELECT
           s.id, s.room_id, s.streamer, s.started_at, s.ended_at, s.close_reason, s.msg_count,
-          (SELECT COUNT(DISTINCT m.user_id) FROM danmu_message m WHERE m.session_id = s.id)
+          (SELECT COUNT(DISTINCT
+             CASE WHEN m.user_id = '0' THEN m.user_id || char(0) || m.username ELSE m.user_id END
+           ) FROM danmu_message m WHERE m.session_id = s.id)
             AS participant_count
         FROM danmu_session s
         ORDER BY s.started_at DESC, s.id DESC
