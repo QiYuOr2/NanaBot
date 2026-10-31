@@ -53,7 +53,7 @@ const generatedLabel = computed(() => {
         <div class="min-w-0">
           <h1 class="text-[15px] font-medium tracking-tight text-ink">推送活动</h1>
           <p class="mt-0.5 text-[12px] text-ink-muted">
-            同一主播同一次直播的推送已合并，成败按「每个群最后一次送达结果」统计 ·
+            同一次直播，以及同一次任务里紧挨着发出的消息，已合并。成败按每个群的最终结果统计 ·
             {{ rawCount }} 条原始记录
           </p>
         </div>

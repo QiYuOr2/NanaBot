@@ -25,6 +25,15 @@ export const PUSH_ACTIVITY_RAW_LIMIT_MAX = 2000;
 export const PUSH_SESSION_GAP_MS = 30 * 60 * 1000;
 
 /**
+ * 同一次任务里连续发出的消息，相邻间隔不超过该值就并成一条活动。
+ *
+ * 启动时会紧挨着写两条「上线」：NapCat 连上后的「我来了~」，以及直播间长连接
+ * 打开后的回执。它们不是两件事，但中间可能隔着一次握手，所以窗口取 1 分钟，
+ * 而不是毫秒。超过这个间隔的下一次上线 / 通知仍各自成条。
+ */
+export const PUSH_BURST_GAP_MS = 60 * 1000;
+
+/**
  * 失败的推送在多久之内只标记为「待确认」而不是「失败」。
  *
  * 群里看到消息但推送记录显示失败时，多半是重复推送 / 回执慢；留一分钟观察窗口，
@@ -47,6 +56,8 @@ export const aggregatablePurposes: ReadonlySet<PushActivity["purpose"]> = new Se
 export interface BuildPushActivitiesOptions {
   /** 覆盖默认的「同一次直播」时间间隔阈值，便于测试或按需调整。 */
   sessionGapMs?: number;
+  /** 覆盖「同一次任务的连续消息」时间间隔阈值。 */
+  burstGapMs?: number;
   /** 覆盖「失败 → 待确认」的观察窗口。 */
   pendingWindowMs?: number;
   /** 判定待确认状态用的当前时间，缺省为构建时刻。 */
@@ -80,42 +91,98 @@ function normalizeSubject(subject: string | null | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+/** 单条记录的送达状态。时间无法解析时按「已过窗口」处理，宁可报失败也不要吞掉真实故障。 */
+function statusOf(item: PushLogItem, pendingWindowMs: number, now: number): PushTargetStatus {
+  if (item.success) {
+    return "delivered";
+  }
+
+  const age = now - toTime(item.pushedAt);
+  return Number.isFinite(age) && age < pendingWindowMs ? "pending" : "failed";
+}
+
+/** 同一次任务里的不同消息：有一条没送达，整群就不算送达。 */
+function preferStatus(current: PushTargetStatus, incoming: PushTargetStatus): PushTargetStatus {
+  const rank: Record<PushTargetStatus, number> = { delivered: 0, pending: 1, failed: 2 };
+  return rank[incoming] > rank[current] ? incoming : current;
+}
+
+interface TargetBucket {
+  /** 最近一条消息的文案。文案相同才算重试，不同则是同一次任务里的另一条消息。 */
+  content: string | null;
+  target: PushActivityTarget;
+}
+
 /**
- * 按目标群聚合：同一个群保留最新一次推送，并用推送次数 / 失败次数区分
- * 「重试后送达」（`attemptCount > 1 && success`）与「真的失败」。
+ * 按目标群聚合。
+ *
+ * 同一个群、同一文案的后一条是重试：保留最新结果，并用推送次数区分
+ * 「重试后送达」与「真的失败」。文案不同则是同一次任务里连着发出的另一条消息，
+ * 不记成重试；只要其中一条没送达，该群就不算送达。
  */
 function collectTargets(
   items: PushLogItem[],
   pendingWindowMs: number,
   now: number,
 ): PushActivityTarget[] {
-  const byTarget = new Map<string, PushActivityTarget>();
+  const byTarget = new Map<string, TargetBucket>();
 
   for (const item of items) {
+    const content = item.content ?? null;
+    const incoming = statusOf(item, pendingWindowMs, now);
     const previous = byTarget.get(item.targetId);
-    const attemptCount = (previous?.attemptCount ?? 0) + 1;
-    const failedAttemptCount = (previous?.failedAttemptCount ?? 0) + (item.success ? 0 : 1);
 
-    let status: PushTargetStatus = "delivered";
-    if (!item.success) {
-      const age = now - toTime(item.pushedAt);
-      // 时间无法解析时按「已过窗口」处理，宁可报失败也不要吞掉真实故障。
-      status = Number.isFinite(age) && age < pendingWindowMs ? "pending" : "failed";
+    if (!previous) {
+      byTarget.set(item.targetId, {
+        content,
+        target: {
+          targetId: item.targetId,
+          target: item.target,
+          success: item.success,
+          error: item.error,
+          pushedAt: item.pushedAt,
+          attemptCount: 1,
+          failedAttemptCount: item.success ? 0 : 1,
+          status: incoming,
+        },
+      });
+      continue;
     }
 
-    byTarget.set(item.targetId, {
-      targetId: item.targetId,
+    if (previous.content === content) {
+      previous.target = {
+        ...previous.target,
+        target: item.target,
+        success: item.success,
+        error: item.error,
+        pushedAt: item.pushedAt,
+        attemptCount: previous.target.attemptCount + 1,
+        failedAttemptCount: previous.target.failedAttemptCount + (item.success ? 0 : 1),
+        status: incoming,
+      };
+      continue;
+    }
+
+    const status = preferStatus(previous.target.status, incoming);
+    previous.content = content;
+    previous.target = {
+      ...previous.target,
       target: item.target,
-      success: item.success,
-      error: item.error,
+      success: status === "delivered",
+      error:
+        status === "delivered"
+          ? null
+          : incoming === "delivered"
+            ? previous.target.error
+            : item.error,
       pushedAt: item.pushedAt,
-      attemptCount,
-      failedAttemptCount,
+      attemptCount: 1,
+      failedAttemptCount: incoming === "delivered" ? 0 : 1,
       status,
-    });
+    };
   }
 
-  return [...byTarget.values()];
+  return [...byTarget.values()].map((bucket) => bucket.target);
 }
 
 /** 把一组原始记录收成一条展示活动；失败计数一律以「每个群的最终状态」为准。 */
@@ -159,7 +226,7 @@ function toActivity(source: PushLogItem[], pendingWindowMs: number, now: number)
     purposeLabel: titled.purposeLabel,
     startedAt: first.pushedAt,
     latestAt: latest.pushedAt,
-    content: items.findLast((item) => item.content)?.content ?? null,
+    content: activityContent(items),
     targets,
     targetCount: targets.length,
     successCount,
@@ -170,8 +237,67 @@ function toActivity(source: PushLogItem[], pendingWindowMs: number, now: number)
   };
 }
 
+/**
+ * 活动摘要。同一目的里不同文案按时间拼在一起（启动时的「我来了~」和连接回执）；
+ * 开播和下播文案不同，仍只留最新一条，避免一张「开播」卡片同时挂上下播文案。
+ */
+function activityContent(items: PushLogItem[]): string | null {
+  const first = items[0];
+  if (!first || !items.every((item) => item.purpose === first.purpose)) {
+    return items.findLast((item) => item.content)?.content ?? null;
+  }
+
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const item of items) {
+    const text = item.content?.trim();
+    if (!text || seen.has(text)) {
+      continue;
+    }
+    seen.add(text);
+    parts.push(text);
+  }
+
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
 function isAggregatable(log: PushLogItem): boolean {
   return aggregatablePurposes.has(log.purpose) && normalizeSubject(log.subject) !== null;
+}
+
+/** 按时间升序切段：相邻两条间隔超过 `gapMs` 就另起一段。 */
+function splitByGap(logs: PushLogItem[], gapMs: number): PushLogItem[][] {
+  const groups: PushLogItem[][] = [];
+  let current: PushLogItem[] = [];
+  let previousTime = Number.NaN;
+
+  for (const log of [...logs].sort(compareAsc)) {
+    const time = toTime(log.pushedAt);
+    const nextGroup =
+      current.length > 0 &&
+      Number.isFinite(previousTime) &&
+      Number.isFinite(time) &&
+      time - previousTime > gapMs;
+
+    if (nextGroup) {
+      groups.push(current);
+      current = [];
+    }
+
+    current.push(log);
+    previousTime = time;
+  }
+
+  if (current.length > 0) {
+    groups.push(current);
+  }
+
+  return groups;
+}
+
+/** 连续消息的归并键：同目的、同主体才可能是同一次任务。不同目的即使间隔几毫秒也不并。 */
+function burstKey(log: PushLogItem): string {
+  return `${log.purpose}\0${normalizeSubject(log.subject) ?? ""}`;
 }
 
 /**
@@ -180,10 +306,10 @@ function isAggregatable(log: PushLogItem): boolean {
  * 推送记录里没有直播场次字段，因此按「主播名（`subject`）+ 相邻推送间隔」推断
  * 同一次直播：同一主播、间隔不超过 `sessionGapMs` 的连续开播 / 下播记录属于同一场直播。
  *
- * 只有 `aggregatablePurposes` 里、且带主播名的记录参与合并（见 `isAggregatable`）：
- * - 管理员上下线、通知、词云推送可能和别的失败记录落进同一个时间窗口，
- *   混进来就会把「我来了~」这类正常推送算成一条失败活动；它们各自成条展示。
- * - `subject` 为空的记录也不参与合并，各自作为一条活动保留，避免合并时丢数据。
+ * 只有 `aggregatablePurposes` 里、且带主播名的记录参与场次合并（见 `isAggregatable`）。
+ * 其余记录不进场次，但同目的、同主体、间隔不超过 `burstGapMs` 的连续消息并成一条：
+ * 启动时的「我来了~」和直播间连接回执就是这样。不同目的（上线旁边的失败通知）
+ * 仍然分开，避免把正常上线算成一条失败活动。
  *
  * 合并只影响展示，`items` 里保留全部原始记录。
  */
@@ -192,6 +318,7 @@ export function buildPushActivities(
   options: BuildPushActivitiesOptions = {},
 ): PushActivity[] {
   const sessionGapMs = options.sessionGapMs ?? PUSH_SESSION_GAP_MS;
+  const burstGapMs = options.burstGapMs ?? PUSH_BURST_GAP_MS;
   const pendingWindowMs = options.pendingWindowMs ?? PUSH_PENDING_WINDOW_MS;
   const now = resolveNow(options.now);
   const bySubject = new Map<string, PushLogItem[]>();
@@ -215,32 +342,27 @@ export function buildPushActivities(
   const activities: PushActivity[] = [];
 
   for (const subjectLogs of bySubject.values()) {
-    let session: PushLogItem[] = [];
-    let previousTime = Number.NaN;
-
-    for (const log of [...subjectLogs].sort(compareAsc)) {
-      const time = toTime(log.pushedAt);
-      const nextSession =
-        session.length > 0 &&
-        Number.isFinite(previousTime) &&
-        Number.isFinite(time) &&
-        time - previousTime > sessionGapMs;
-
-      if (nextSession) {
-        activities.push(toActivity(session, pendingWindowMs, now));
-        session = [];
-      }
-
-      session.push(log);
-      previousTime = time;
-    }
-
-    if (session.length > 0) {
+    for (const session of splitByGap(subjectLogs, sessionGapMs)) {
       activities.push(toActivity(session, pendingWindowMs, now));
     }
   }
 
-  activities.push(...standalone.map((log) => toActivity([log], pendingWindowMs, now)));
+  const byBurst = new Map<string, PushLogItem[]>();
+  for (const log of standalone) {
+    const key = burstKey(log);
+    const items = byBurst.get(key);
+    if (items) {
+      items.push(log);
+    } else {
+      byBurst.set(key, [log]);
+    }
+  }
+
+  for (const burstLogs of byBurst.values()) {
+    for (const burst of splitByGap(burstLogs, burstGapMs)) {
+      activities.push(toActivity(burst, pendingWindowMs, now));
+    }
+  }
 
   return activities.sort((a, b) => {
     const diff = toTime(b.latestAt) - toTime(a.latestAt);

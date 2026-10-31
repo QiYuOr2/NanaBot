@@ -3,6 +3,7 @@ import {
   buildPushActivities,
   collectPushActivityFailures,
   summarizePushActivities,
+  PUSH_BURST_GAP_MS,
   PUSH_SESSION_GAP_MS,
 } from "../shared/push-activity.ts";
 import type { PushLogItem } from "../shared/push-log.ts";
@@ -300,6 +301,84 @@ test("服务重启重连时写入的上线活动不再误判为失败", () => {
   expect(onlineActivity).toMatchObject({ successCount: 1, failureCount: 0, targetCount: 1 });
   // 失败推送 / 失败通知本身仍单独成条并如实标记。
   expect(activities.filter((item) => item.failureCount > 0)).toHaveLength(2);
+});
+
+test("同一次任务里间隔很短的连续上线并成一条，且不算重试", () => {
+  const hello = createLog({
+    subject: "NanaBot",
+    purpose: "app.online",
+    purposeLabel: "上线",
+    content: "我来了~",
+    pushedAt: "2026-09-15T03:00:00.000Z",
+  });
+  const room = createLog({
+    subject: "NanaBot",
+    purpose: "app.online",
+    purposeLabel: "上线",
+    content: null,
+    pushedAt: "2026-09-15T03:00:02.000Z",
+  });
+
+  const activities = buildPushActivities([room, hello]);
+
+  expect(activities).toHaveLength(1);
+  expect(activities[0]).toMatchObject({
+    subject: "NanaBot",
+    purpose: "app.online",
+    purposeLabel: "上线",
+    content: "我来了~",
+    successCount: 1,
+    failureCount: 0,
+    retryCount: 0,
+    targetCount: 1,
+  });
+  expect(activities[0]?.items).toHaveLength(2);
+  expect(activities[0]?.targets[0]?.attemptCount).toBe(1);
+});
+
+test("同一次上线里的不同文案都留在摘要里", () => {
+  const activities = buildPushActivities([
+    createLog({
+      subject: "NanaBot",
+      purpose: "app.online",
+      purposeLabel: "上线",
+      content: "我来了~",
+      pushedAt: "2026-09-15T03:00:00.000Z",
+    }),
+    createLog({
+      subject: "NanaBot",
+      purpose: "app.online",
+      purposeLabel: "上线",
+      content: "对应直播间 4629447",
+      pushedAt: "2026-09-15T03:00:01.000Z",
+    }),
+  ]);
+
+  expect(activities).toHaveLength(1);
+  expect(activities[0]?.content).toBe("我来了~\n对应直播间 4629447");
+  expect(activities[0]?.retryCount).toBe(0);
+});
+
+test("间隔超过连续消息窗口的两次上线仍然分开", () => {
+  const start = Date.parse("2026-09-15T03:00:00.000Z");
+  const activities = buildPushActivities([
+    createLog({
+      subject: "NanaBot",
+      purpose: "app.online",
+      purposeLabel: "上线",
+      content: "我来了~",
+      pushedAt: new Date(start).toISOString(),
+    }),
+    createLog({
+      subject: "NanaBot",
+      purpose: "app.online",
+      purposeLabel: "上线",
+      content: "我来了~",
+      pushedAt: new Date(start + PUSH_BURST_GAP_MS + 1_000).toISOString(),
+    }),
+  ]);
+
+  expect(activities).toHaveLength(2);
 });
 
 test("没有主播名的管理员推送各自成条，不会被合并吞掉", () => {
