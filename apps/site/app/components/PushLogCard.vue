@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import {
-  getPushActivityTone,
-  PUSH_ACTIVITY_PANEL_LIMIT,
-  summarizePushActivities,
-  type PushActivityTone,
-} from "#shared/push-activity";
+import { PUSH_ACTIVITY_PANEL_LIMIT } from "#shared/push-activity";
 import type { PushActivity } from "~/types";
 
 const props = withDefaults(
@@ -18,85 +13,82 @@ const props = withDefaults(
   { limit: PUSH_ACTIVITY_PANEL_LIMIT },
 );
 
-const summary = computed(() => summarizePushActivities(props.items));
 const visibleItems = computed(() => props.items.slice(0, props.limit));
+const hiddenCount = computed(() => props.items.length - visibleItems.value.length);
 
-const TONE_BADGE: Record<PushActivityTone, string> = {
-  delivered: "bg-live/10 text-live",
-  pending: "bg-status-orange/10 text-status-orange",
-  failed: "bg-status-red/10 text-status-red",
-};
+function titleOf(item: PushActivity): string {
+  return item.subject?.trim() || "机器人";
+}
 
-/** 面板顶部的送达摘要：失败 / 待确认优先，全部正常时只显示「全部送达」。 */
-const badge = computed(() => {
-  const { failedTargetCount, pendingTargetCount, activityCount, failedActivityCount } =
-    summary.value;
-  if (failedTargetCount > 0) {
-    return {
-      tone: "failed" as PushActivityTone,
-      label: `${failedTargetCount} 个群未送达`,
-      title: `${failedActivityCount} 条活动里有群未送达（按群去重）`,
-    };
+function relativeTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
   }
-  if (pendingTargetCount > 0) {
-    return {
-      tone: "pending" as PushActivityTone,
-      label: `${pendingTargetCount} 个群待确认`,
-      title: "推送失败但还在确认窗口内，稍后刷新查看",
-    };
+
+  const diff = Date.now() - date.getTime();
+  if (diff < 60_000) {
+    return "刚刚";
   }
-  return {
-    tone: "delivered" as PushActivityTone,
-    label: activityCount > 0 ? "全部送达" : "暂无记录",
-    title: "最近的活动都已在所有目标群送达",
-  };
-});
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 60) {
+    return `${minutes} 分钟前`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours} 小时前`;
+  }
+  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(date);
+}
+
+function absoluteTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString("zh-CN");
+}
 </script>
 
 <template>
   <section class="card flex h-full flex-col p-4">
-    <div class="flex items-start justify-between gap-3">
-      <div class="min-w-0">
-        <h2 class="text-[14px] font-medium tracking-tight text-ink">最近推送活动</h2>
-        <p class="mt-0.5 text-[12px] text-ink-muted">同一场直播已合并 · 按群去重</p>
-      </div>
-      <div class="flex shrink-0 items-center gap-2">
-        <span
-          v-if="items.length > 0"
-          class="rounded px-1.5 py-0.5 text-[11px] font-medium"
-          :class="TONE_BADGE[badge.tone]"
-          :title="badge.title"
-        >
-          {{ badge.label }}
-        </span>
-        <NuxtLink
-          class="text-[13px] text-accent transition-colors hover:text-accent-dark"
-          to="/pushes"
-        >
-          查看全部
-        </NuxtLink>
-      </div>
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-[14px] font-medium tracking-tight text-ink">最近推送</h2>
+      <NuxtLink
+        class="text-[13px] text-accent transition-colors hover:text-accent-dark"
+        to="/pushes"
+      >
+        查看全部
+      </NuxtLink>
     </div>
 
     <p v-if="items.length === 0" class="mt-4 text-[13px] text-ink-muted">暂无推送记录。</p>
 
     <template v-else>
-      <ol class="mt-3">
-        <li v-for="(item, index) in visibleItems" :key="item.id" class="mt-1 first:mt-0">
-          <PushActivityItem
-            :activity="item"
-            :highlight="getPushActivityTone(item) !== 'delivered'"
-            :last="index === visibleItems.length - 1"
-          />
+      <ul class="mt-2">
+        <li
+          v-for="item in visibleItems"
+          :key="item.id"
+          class="flex items-baseline gap-2 border-t border-line py-2 first:border-t-0"
+        >
+          <span class="w-8 shrink-0 text-[12px] text-ink-muted">{{ item.purposeLabel }}</span>
+          <p class="min-w-0 flex-1 truncate text-[13px] leading-5 text-ink">
+            <span class="font-medium">{{ titleOf(item) }}</span>
+            <span v-if="item.content" class="text-ink-secondary"> {{ item.content }}</span>
+          </p>
+          <time
+            class="shrink-0 text-[12px] tabular-nums text-ink-muted"
+            :datetime="item.latestAt"
+            :title="absoluteTime(item.latestAt)"
+          >
+            {{ relativeTime(item.latestAt) }}
+          </time>
         </li>
-      </ol>
+      </ul>
 
       <NuxtLink
-        v-if="items.length > visibleItems.length"
+        v-if="hiddenCount > 0"
         class="mt-1 text-[12px] text-ink-muted transition-colors hover:text-ink"
         to="/pushes"
       >
-        还有 {{ items.length - visibleItems.length }} 条更早的活动
+        还有 {{ hiddenCount }} 条更早的推送
       </NuxtLink>
     </template>
   </section>
