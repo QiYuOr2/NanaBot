@@ -9,7 +9,7 @@ interface NavItem {
 
 const nav: NavItem[] = [
   { id: "overview", label: "概览", icon: "grid", to: "/" },
-  { id: "monitor", label: "直播监控", icon: "monitor" },
+  { id: "monitor", label: "直播监控", icon: "monitor", to: "/monitor" },
   { id: "danmu", label: "弹幕词云", icon: "cloud", to: "/danmu" },
   { id: "alerts", label: "告警", icon: "bell" },
   { id: "pushes", label: "推送活动", icon: "activity", to: "/pushes" },
