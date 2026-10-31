@@ -9,7 +9,10 @@ export const DEFAULT_WORDCLOUD_POLL_INTERVAL_MS = 5 * 60 * 1000;
 export interface WordCloudConfig {
   /** 是否启用整场弹幕记录与词云推送。 */
   enabled: boolean;
-  /** 词云推送目标群；缺省时使用 `ADM_GROUP`。 */
+  /**
+   * 词云推送目标群。缺省时回落到管理员群 `ADM_GROUP`；
+   * 发送只走发往管理员群的 `sendAdminMsg`，不会发到开播通知群。
+   */
   notifyGroupId?: number;
   /** 词云展示词数。 */
   topN: number;

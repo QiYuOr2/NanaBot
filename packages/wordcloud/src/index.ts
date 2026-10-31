@@ -7,6 +7,12 @@
 
 export { extractWords } from "./extract.ts";
 export {
+  FINANCE_DICT_WORDS,
+  INTERNET_DICT_WORDS,
+  LIVESTREAM_DICT_WORDS,
+  MODERN_DICT_WORDS,
+} from "./dict.ts";
+export {
   DEFAULT_CLOUD_BACKGROUND,
   DEFAULT_CLOUD_FONT_FAMILY,
   DEFAULT_CLOUD_HEIGHT,

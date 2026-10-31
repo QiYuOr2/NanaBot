@@ -1,20 +1,31 @@
 import { Jieba } from "@node-rs/jieba";
 import { dict } from "@node-rs/jieba/dict";
+import { encodeModernDict, MODERN_WORD_SET } from "./dict.ts";
 import { DEFAULT_NOISE_WORDS, DEFAULT_STOP_WORDS } from "./words.ts";
 import type { ExtractWordsOptions, WordCount } from "./types.ts";
 
 /**
  * 全局唯一的 jieba 实例。
  *
- * `@node-rs/jieba` v2 不再导出默认单例，需要自己用内置词典构建；词典加载有一定开销，
- * 因此按模块级懒加载，一次构建后整进程复用。
+ * `@node-rs/jieba` v2 不再导出默认单例，需要自己用内置词典构建，再叠上现代用户词典。
+ * 词典加载有一定开销，因此按模块级懒加载，一次构建后整进程复用。
  */
 let jieba: Jieba | undefined;
 
 function getJieba(): Jieba {
-  jieba ??= Jieba.withDict(dict);
+  if (!jieba) {
+    const instance = Jieba.withDict(dict);
+    instance.loadDict(encodeModernDict());
+    jieba = instance;
+  }
   return jieba;
 }
+
+/**
+ * B 站表情包占位，如 `[dog]`、`[笑哭]`、`【妙】`。
+ * 先从原文去掉，避免被切成 `dog` / `笑` / `哭` 这类词。
+ */
+const EMOTE_TOKEN = /[[【][^[\]【】\s]{1,16}[\]】]/gu;
 
 /** 纯标点 / 符号（Unicode P 类与 S 类，含常见全角标点）。 */
 const PUNCTUATION_PATTERN = /^[\p{P}\p{S}\s]+$/u;
@@ -54,6 +65,9 @@ function isFilteredWord(word: string, stopWords: Set<string>, noiseWords: Set<st
   if (word.length === 0) {
     return true;
   }
+  if (word.includes("[") || word.includes("]") || word.includes("【") || word.includes("】")) {
+    return true;
+  }
   if (PUNCTUATION_PATTERN.test(word) || NUMBER_PATTERN.test(word) || EMOJI_PATTERN.test(word)) {
     return true;
   }
@@ -70,8 +84,8 @@ function isFilteredWord(word: string, stopWords: Set<string>, noiseWords: Set<st
 /**
  * 把一批弹幕清洗成词频列表。
  *
- * - 分词用 jieba 的搜索引擎模式（`cutForSearch`），比精确模式给出更细的粒度，更适合短弹幕。
- * - 过滤：默认停用词 + 噪音词、长度小于 `minLength`（默认 2）、纯数字、纯标点/符号、纯 emoji。
+ * - 分词用精确模式，并叠了网络新词 / 直播用语用户词典。搜索模式会把整词再拆成碎片，词云会显得很碎。
+ * - 过滤：`[dog]` 这类表情包、默认停用词 + 噪音词、长度小于 `minLength`（默认 2）、纯数字、纯标点/符号、纯 emoji。
  * - 词经过 NFKC 归一化并统一小写，`哈哈` 与 `哈哈ｗ` 之类不会被拆成两个词。
  * - 结果先按 `count` 降序、再按 `word` 升序排列，保证同一输入的结果完全确定。
  *
@@ -110,12 +124,17 @@ export function extractWords(
       continue;
     }
 
-    // jieba 的 cutForSearch 会返回重叠的候选词，重复计数会把长词虚高，
-    // 因此同一行里同一个词只计一次。
+    // 同一行里同一个词只计一次，避免一句口播把同一个词刷高。
     const seenInLine = new Set<string>();
+    EMOTE_TOKEN.lastIndex = 0;
+    const prepared = content.normalize("NFKC").replace(EMOTE_TOKEN, " ");
 
-    for (const raw of getJieba().cutForSearch(content, true)) {
-      const word = normalizeWord(raw).replace(TAIL_PARTICLES, "");
+    for (const raw of getJieba().cut(prepared, true)) {
+      const normalized = normalizeWord(raw);
+      // 现代词表里的整词保留原样；其余词去掉句尾语气，让「好看了」并进「好看」。
+      const word = MODERN_WORD_SET.has(normalized)
+        ? normalized
+        : normalized.replace(TAIL_PARTICLES, "");
       if (isFilteredWord(word, stopWords, noiseWords)) {
         continue;
       }

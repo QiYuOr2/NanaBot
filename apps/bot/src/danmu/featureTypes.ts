@@ -10,7 +10,10 @@ export type LiveStatusChecker = (streamer: MonitorStreamerConfig) => Promise<boo
 export interface WordCloudFeatureOptions extends StorageOptions {
   /** 需要录制弹幕的主播（与直播监控配置一致）。 */
   streamers: MonitorStreamerConfig[];
-  /** 词云推送目标群，通常是 `ADM_GROUP`。 */
+  /**
+   * 词云推送目标群，来自 `wordcloud.notifyGroupId`，缺省为 `ADM_GROUP`。
+   * 有值才推送；真正发到哪个群由 `sendAdminMsg` 决定。
+   */
   notifyGroupId?: number;
   config: WordCloudConfig;
   /** B 站直播 API 的 fetch 注入点，便于测试。 */
@@ -22,12 +25,11 @@ export interface WordCloudFeatureOptions extends StorageOptions {
   /** 定时器是否 unref（默认 true，避免拖住进程退出）。 */
   unrefTimers?: boolean;
   /**
-   * 已挂到共享长连接上的录制器。
+   * 与 sink 工厂共用的录制器表。
    *
-   * 由 `createWordCloudMonitorSink` 创建，`wordCloudFeature` 只消费它们做轮询兜底与
-   * 停机收尾——弹幕事件本身来自 `monitorFeature` 的单条长连接。
+   * 录制器在监控启动时才写入。必须传同一个 `Map`，不能在 `app.use` 时把当时的内容拷成数组。
    */
-  recorders?: readonly DanmuRecorder[];
+  recorders?: Map<number, DanmuRecorder>;
 }
 
 export interface ResumeDanmuOptions extends WordCloudFeatureOptions {

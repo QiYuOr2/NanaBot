@@ -5,7 +5,9 @@ import { readDanmuMessages, readDanmuSession } from "@nana/storage";
 import type { StorageOptions } from "@nana/storage";
 import { DATABASE_DIRECTORY, NANA_CONFIG_FILE } from "@nana/constants";
 import { expect, test } from "vite-plus/test";
+import type { FeatureContext } from "../src/core/feature.ts";
 import type { WordCloudConfig } from "../src/danmu/config.ts";
+import { createWordCloudMonitorSink, wordCloudFeature } from "../src/danmu/feature.ts";
 import { DanmuRecorder, createDanmuSink } from "../src/danmu/recorder.ts";
 import type { AdminSender } from "../src/danmu/types.ts";
 
@@ -144,4 +146,85 @@ test("下播事件经由 sink 触发收尾", async () => {
   expect(recorder.active).toBe(false);
   expect(readDanmuSession(1, { rootDir })?.msgCount).toBe(1);
   expect(sent).toHaveLength(1);
+});
+
+test("监控启动后才挂上的录制器，停机时仍推送到管理员发送函数", async () => {
+  const rootDir = createRootDir();
+  const sent: SentMessage[] = [];
+  const recorders = new Map<number, DanmuRecorder>();
+  const sendAdminMsg: AdminSender = async (segments, purpose) => {
+    sent.push({
+      purpose,
+      text: segments
+        .map((segment) => (segment as { data?: { text?: string } }).data?.text ?? "")
+        .join(""),
+      imageCount: segments.filter((segment) => (segment as { type?: string }).type === "image")
+        .length,
+    });
+  };
+  const options = {
+    streamers: [
+      {
+        uid: 145149047,
+        roomId: 4629447,
+        streamer: "饭总",
+        notifyEnabled: true,
+        notifyGroups: [],
+        messages: { liveStart: "", liveEnd: "" },
+      },
+    ],
+    config,
+    notifyGroupId: 1101365727,
+    sendAdminMsg,
+    rootDir,
+    recorders,
+  };
+
+  const sinkFactory = createWordCloudMonitorSink(options, recorders);
+  const cleanup = await wordCloudFeature.setup({} as FeatureContext, options);
+  const sink = sinkFactory({ roomId: 4629447, streamer: "饭总" });
+  if (!sink) {
+    throw new Error("应为主播创建弹幕 sink");
+  }
+
+  await sink.handle({
+    type: "live.started",
+    roomId: 4629447,
+    streamer: "饭总",
+    message: "饭总播了",
+    timestamp: new Date("2026-08-22T10:00:00.000Z"),
+  });
+  await sink.handle({
+    type: "danmu.received",
+    roomId: 4629447,
+    streamer: "饭总",
+    content: "今晚吃什么",
+    userId: 1,
+    username: "观众甲",
+    timestamp: new Date("2026-08-22T10:01:00.000Z"),
+  });
+
+  expect(recorders.size).toBe(1);
+  if (typeof cleanup === "function") {
+    await cleanup();
+  }
+
+  expect(sent).toHaveLength(1);
+  expect(sent[0]?.purpose).toMatchObject({ purpose: "wordcloud", subject: "饭总" });
+});
+
+test("配置了管理群但没注入发送函数时，建 sink 直接失败", () => {
+  const rootDir = createRootDir();
+
+  expect(() =>
+    createWordCloudMonitorSink(
+      {
+        streamers: [],
+        config,
+        notifyGroupId: 1101365727,
+        rootDir,
+      },
+      new Map(),
+    ),
+  ).toThrow(/sendAdminMsg/);
 });

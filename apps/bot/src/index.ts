@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SendMessageSegment } from "node-napcat-ts";
 import { config as loadEnv } from "dotenv";
 import { readOptionalNumberEnv, resolveProjectRoot } from "@nana/utils";
 import { DEFAULT_NC_WS_URL, ENV_KEYS, NANA_CONFIG_FILE } from "@nana/constants";
@@ -16,6 +15,7 @@ import {
   loadWordCloudConfig,
   resumeDanmuSessions,
   wordCloudFeature,
+  type AdminSender,
 } from "./danmu";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
@@ -85,13 +85,21 @@ async function main(): Promise<void> {
   const wordCloudConfig = loadWordCloudConfig();
 
   // 每个主播只建一条 blive 长连接：开播通知与弹幕录制共用同一条连接的事件流。
+  // 录制器要等监控 setup 才创建，轮询/停机必须拿这张 Map 的引用，不能提前拷贝。
   const recorders = new Map<number, DanmuRecorder>();
+  // 词云只发管理员群：配置了 notifyGroupId 就用它，否则回落 ADM_GROUP。
+  // 不注入发送函数的话 sink 会用永远抛错的空函数，统计能做完但群里收不到。
+  const sendWordCloud: AdminSender = async (messages, purpose) => {
+    await app.sendAdminMsg(messages, purpose ?? { purpose: "wordcloud" });
+  };
   const wordCloudOptions = wordCloudConfig.enabled
     ? {
         streamers: monitorConfig.streamers,
         notifyGroupId: wordCloudConfig.notifyGroupId ?? adminGroupId,
         config: wordCloudConfig,
         rootDir: projectRoot,
+        sendAdminMsg: sendWordCloud,
+        recorders,
       }
     : undefined;
   const danmuSinkFactory = wordCloudOptions
@@ -116,7 +124,7 @@ async function main(): Promise<void> {
   }
 
   if (wordCloudOptions) {
-    app.use(wordCloudFeature, { ...wordCloudOptions, recorders: [...recorders.values()] });
+    app.use(wordCloudFeature, wordCloudOptions);
   }
 
   try {
@@ -143,22 +151,15 @@ async function main(): Promise<void> {
   }
 
   // 上一场直播若在机器人停机期间结束，等状态同步完成后再补收尾，避免误判为「仍在直播」。
-  // 遗留场次的词云仍然发管理员群，与实时推送使用同一目标。
+  // 遗留场次与实时推送用同一个目标群。
   if (wordCloudConfig.enabled) {
-    const sendToAdmin = async (
-      messages: SendMessageSegment[],
-      purpose?: Parameters<typeof app.sendAdminMsg>[1],
-    ) => {
-      await app.sendAdminMsg(messages, purpose ?? { purpose: "wordcloud" });
-    };
-
     await resumeDanmuSessions({
       streamers: monitorConfig.streamers,
       notifyGroupId: wordCloudConfig.notifyGroupId ?? adminGroupId,
       config: wordCloudConfig,
       rootDir: projectRoot,
       isLive: (streamer) => fetchIsLive(streamer),
-      sendAdminMsg: sendToAdmin,
+      sendAdminMsg: sendWordCloud,
     });
   }
 }

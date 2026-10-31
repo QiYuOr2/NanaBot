@@ -24,7 +24,7 @@ adminEmail:
   cc:
     - qiyuor2@gmail.com
 
-# 整场弹幕记录与词云推送（下播后把本场词云发到管理员群，默认 ADM_GROUP）。
+# 整场弹幕记录与词云推送。下播后只发管理员群，不发到开播通知群。
 # 全部字段可选，不写时使用默认值。
 wordcloud:
   enabled: true

@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vite-plus/test";
-import { DEFAULT_NOISE_WORDS, DEFAULT_STOP_WORDS, extractWords } from "../src/index.ts";
+import {
+  DEFAULT_NOISE_WORDS,
+  DEFAULT_STOP_WORDS,
+  FINANCE_DICT_WORDS,
+  INTERNET_DICT_WORDS,
+  LIVESTREAM_DICT_WORDS,
+  MODERN_DICT_WORDS,
+  extractWords,
+} from "../src/index.ts";
 
 describe("extractWords", () => {
   test("统计高频词并按出现次数降序排列", () => {
@@ -130,5 +138,57 @@ describe("extractWords", () => {
     expect(DEFAULT_NOISE_WORDS.length).toBeGreaterThan(40);
     expect(new Set(DEFAULT_STOP_WORDS).size).toBe(DEFAULT_STOP_WORDS.length);
     expect(new Set(DEFAULT_NOISE_WORDS).size).toBe(DEFAULT_NOISE_WORDS.length);
+    expect(INTERNET_DICT_WORDS.length).toBeGreaterThan(40);
+    expect(LIVESTREAM_DICT_WORDS.length).toBeGreaterThan(40);
+    expect(FINANCE_DICT_WORDS.length).toBeGreaterThan(40);
+    expect(new Set(MODERN_DICT_WORDS).size).toBe(MODERN_DICT_WORDS.length);
+  });
+
+  test("方括号表情包不进词云", () => {
+    const words = extractWords(["好看[dog][笑哭]【妙】", "[dog]", "［DOG］真好看"]);
+    const collected = words.map((item) => item.word);
+
+    expect(collected).toContain("好看");
+    expect(collected).not.toContain("dog");
+    expect(collected).not.toContain("笑");
+    expect(collected).not.toContain("哭");
+    expect(collected).not.toContain("笑哭");
+    expect(collected).not.toContain("妙");
+  });
+
+  test("网络新词和直播用语按整词统计", () => {
+    const words = extractWords([
+      "家人们谁懂啊绝绝子",
+      "显眼包班味好重",
+      "二次元三次元",
+      "蚌埠住了",
+    ]);
+    const collected = words.map((item) => item.word);
+
+    expect(collected).toEqual(
+      expect.arrayContaining([
+        "家人们",
+        "谁懂",
+        "绝绝子",
+        "显眼包",
+        "班味",
+        "二次元",
+        "三次元",
+        "蚌埠住了",
+      ]),
+    );
+    expect(collected).not.toContain("绝子");
+    expect(collected).not.toContain("包班味");
+  });
+
+  test("金融用语按整词统计", () => {
+    const words = extractWords(["北向资金抄底涨停板", "换手率市盈率", "可转债国债逆回购"]);
+    const collected = words.map((item) => item.word);
+
+    expect(collected).toEqual(
+      expect.arrayContaining(["北向资金", "抄底", "涨停板", "换手率", "市盈率", "可转债", "国债逆回购"]),
+    );
+    expect(collected).not.toContain("涨停");
+    expect(collected).not.toContain("逆回");
   });
 });

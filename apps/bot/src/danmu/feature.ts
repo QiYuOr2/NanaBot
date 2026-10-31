@@ -47,15 +47,11 @@ const logger = {
 export const wordCloudFeature = defineFeature<WordCloudFeatureOptions>({
   name: "弹幕词云",
   setup(_context: FeatureContext, options) {
-    const recorders = new Map<number, DanmuRecorder>();
+    // 与 sink 工厂共用同一张表。录制器在监控启动后才写入，轮询和停机必须看到后补上的项。
+    const recorders = options.recorders ?? new Map<number, DanmuRecorder>();
     const isLive: LiveStatusChecker =
       options.isLive ?? ((streamer) => fetchIsLive(streamer, options.fetch));
     const unrefTimers = options.unrefTimers ?? true;
-
-    // sink 由 monitorFeature 通过 createWordCloudMonitorSink 创建并注入到它自己的 recorder 表里。
-    for (const recorder of options.recorders ?? []) {
-      recorders.set(recorder.roomId, recorder);
-    }
 
     let pollTimer: ReturnType<typeof setInterval> | undefined;
     if (options.config.pollIntervalMs > 0) {
@@ -89,6 +85,12 @@ export function createWordCloudMonitorSink(
   options: WordCloudFeatureOptions,
   recorders: Map<number, DanmuRecorder>,
 ): (streamer: Pick<MonitorStreamerConfig, "roomId" | "streamer">) => MonitorSink | undefined {
+  if (options.notifyGroupId !== undefined && options.sendAdminMsg === undefined) {
+    throw new Error(
+      "词云已配置管理员群，但没有注入 sendAdminMsg。下播、轮询和停机都不会把词云发到管理群。",
+    );
+  }
+
   const sendAdminMsg = options.sendAdminMsg ?? unavailableSender;
 
   return (streamer) => {
@@ -193,7 +195,7 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
   }
 }
 
-/** 启动阶段还没有连接 NapCat，补发词云必然失败，交由轮询 / 下次连接负责。 */
+/** 调用方忘了注入发送函数。实时推送必须传入发往管理员群的 `sendAdminMsg`。 */
 async function unavailableSender(): Promise<void> {
-  throw new Error("启动阶段无法推送（NapCat 尚未连接）");
+  throw new Error("未注入词云发送函数，无法推送到管理群");
 }
