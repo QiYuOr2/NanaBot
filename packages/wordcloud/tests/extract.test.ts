@@ -181,12 +181,57 @@ describe("extractWords", () => {
     expect(collected).not.toContain("包班味");
   });
 
+  test("久留美、本年番剧和网络新词按整词统计", () => {
+    const words = extractWords([
+      "韭留美爆仓了",
+      "久留美萌智子山师芽吹",
+      "不烧心功夫小猫",
+      "我是浙江人",
+      "别杀我我是浙江人",
+      "葬送的芙莉莲",
+      "在超市后门吸烟的二人",
+      "正相反的你与我",
+      "星野爱久爱海",
+    ]);
+    const collected = words.map((item) => item.word);
+
+    expect(collected).toEqual(
+      expect.arrayContaining([
+        "韭留美",
+        "爆仓",
+        "久留美",
+        "萌智子",
+        "山师芽吹",
+        "不烧心",
+        "功夫小猫",
+        "我是浙江人",
+        "别杀我我是浙江人",
+        "葬送的芙莉莲",
+        "在超市后门吸烟的二人",
+        "正相反的你与我",
+        "星野爱久爱海",
+      ]),
+    );
+    expect(collected).not.toContain("留美");
+    expect(collected).not.toContain("烧心");
+    expect(collected).not.toContain("芙莉");
+    expect(collected).not.toContain("浙江人");
+  });
+
   test("金融用语按整词统计", () => {
     const words = extractWords(["北向资金抄底涨停板", "换手率市盈率", "可转债国债逆回购"]);
     const collected = words.map((item) => item.word);
 
     expect(collected).toEqual(
-      expect.arrayContaining(["北向资金", "抄底", "涨停板", "换手率", "市盈率", "可转债", "国债逆回购"]),
+      expect.arrayContaining([
+        "北向资金",
+        "抄底",
+        "涨停板",
+        "换手率",
+        "市盈率",
+        "可转债",
+        "国债逆回购",
+      ]),
     );
     expect(collected).not.toContain("涨停");
     expect(collected).not.toContain("逆回");
