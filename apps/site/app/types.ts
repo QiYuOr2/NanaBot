@@ -22,6 +22,7 @@ export interface HeaderTrailItem {
   to?: string;
 }
 
+export type { BotAlertItem, BotAlertsResponse, BotAlertState } from "#shared/alerts";
 export type { PushLogPurpose } from "@nana/storage";
 export type {
   PushActivity,

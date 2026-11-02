@@ -13,6 +13,8 @@ export type {
 } from "./types.ts";
 export type { AppState } from "./app-state.ts";
 export { readAppState, writeAppState } from "./app-state.ts";
+export type { OfflineAlertInput, OfflineAlertRecord } from "./offline-alert.ts";
+export { appendOfflineAlert, readOfflineAlerts } from "./offline-alert.ts";
 export type { CloseDanmuSessionInput, OpenDanmuSessionInput } from "./danmu.ts";
 export {
   appendDanmuMessages,

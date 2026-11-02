@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import type { Notifier } from "@nana/notify";
-import type { OfflineState, OfflineStateStore } from "@nana/offline-detector";
+import type { OfflineAlert, OfflineState, OfflineStateStore } from "@nana/offline-detector";
 import { offlineDetectorFeature } from "../src/offline/index.ts";
 
 type Handler = (context: never) => unknown;
@@ -8,12 +8,14 @@ type Handler = (context: never) => unknown;
 interface Harness {
   emit(event: string, payload?: unknown): Promise<void>;
   sent: string[];
+  recorded: string[];
   cleanup(): Promise<void>;
 }
 
 async function createHarness(recoveryFallbackMs = 30): Promise<Harness> {
   const handlers = new Map<string, Handler[]>();
   const sent: string[] = [];
+  const recorded: string[] = [];
   let state: OfflineState | undefined;
 
   const store: OfflineStateStore = {
@@ -45,7 +47,15 @@ async function createHarness(recoveryFallbackMs = 30): Promise<Harness> {
         return "";
       },
     } as never,
-    { notifier, confirmCount: 3, store, recoveryFallbackMs },
+    {
+      notifier,
+      confirmCount: 3,
+      store,
+      recoveryFallbackMs,
+      recordAlert: (alert: OfflineAlert) => {
+        recorded.push(alert.kind);
+      },
+    },
   )) as (() => Promise<void>) | undefined;
 
   return {
@@ -55,6 +65,7 @@ async function createHarness(recoveryFallbackMs = 30): Promise<Harness> {
       }
     },
     sent,
+    recorded,
     async cleanup() {
       await cleanup?.();
     },
@@ -99,6 +110,7 @@ test("QQ 真的回来了才发恢复邮件", async () => {
   await harness.emit("meta_event.heartbeat", ONLINE);
 
   expect(harness.sent).toEqual(["「NanaBot」离线通知", "「NanaBot」恢复通知"]);
+  expect(harness.recorded).toEqual(["offline", "recovered"]);
   await harness.cleanup();
 });
 
