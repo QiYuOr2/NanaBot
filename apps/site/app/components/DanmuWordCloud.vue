@@ -62,7 +62,7 @@ function onImageError() {
 
     <a
       v-else
-      class="block bg-[#16181d]"
+      class="block bg-canvas"
       :href="href"
       target="_blank"
       rel="noopener"

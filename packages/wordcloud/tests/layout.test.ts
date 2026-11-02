@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
-import { createRandom, fontSizeForRank, layoutWords, measureWordWidth } from "../src/layout.ts";
+import {
+  colorForRank,
+  createRandom,
+  fontSizeForRank,
+  layoutWords,
+  measureWordWidth,
+} from "../src/layout.ts";
 
 const WORDS = [
   { word: "原神", count: 30 },
@@ -45,6 +51,16 @@ describe("fontSizeForRank", () => {
 
   test("只有一个词时直接使用最大字号", () => {
     expect(fontSizeForRank(0, 1, { maxFontSize: 60 })).toBe(60);
+  });
+});
+
+describe("colorForRank", () => {
+  test("最高频是墨色，紧随的高频词用强调蓝，长尾变灰", () => {
+    expect(colorForRank(0, 60)).toBe("#171717");
+    expect(colorForRank(1, 60)).toBe("#005fcc");
+    expect(colorForRank(4, 60)).toBe("#005fcc");
+    expect(colorForRank(5, 60)).toBe("#3d3d3d");
+    expect(colorForRank(59, 60)).toBe("#5c5c5c");
   });
 });
 

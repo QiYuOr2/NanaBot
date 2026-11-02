@@ -99,7 +99,7 @@ export interface WordCloudRenderOptions {
   height?: number;
   /** 最多绘制多少个词，默认 60。 */
   maxWords?: number;
-  /** 背景色，默认深色 `#16181d`。 */
+  /** 背景色，默认浅色 `#fafafa`，与站点画布一致。 */
   background?: string;
   /** 最大字号（对应词频最高的词），默认 84。 */
   maxFontSize?: number;

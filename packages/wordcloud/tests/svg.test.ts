@@ -16,6 +16,7 @@ describe("buildWordCloudSvg", () => {
     expect(svg).toContain('width="1000"');
     expect(svg).toContain('height="620"');
     expect(svg).toContain('viewBox="0 0 1000 620"');
+    expect(svg).toContain('fill="#fafafa"');
     for (const item of WORDS) {
       expect(svg).toContain(`>${item.word}</text>`);
     }
@@ -79,6 +80,7 @@ describe("buildWordCloudSvg", () => {
     expect(svg).toContain('width="400"');
     expect(svg).toContain('height="200"');
     expect(svg).toContain(">本场词云</text>");
+    expect(svg).toContain('fill="#4d4d4d"');
   });
 });
 

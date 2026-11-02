@@ -9,8 +9,11 @@ export const DEFAULT_CLOUD_HEIGHT = 620;
 /** 默认最多绘制多少个词。 */
 export const DEFAULT_CLOUD_MAX_WORDS = 60;
 
-/** 默认背景色（深色）。 */
-export const DEFAULT_CLOUD_BACKGROUND = "#16181d";
+/** 默认背景色，与站点画布同色，避免词云变成一块黑底海报。 */
+export const DEFAULT_CLOUD_BACKGROUND = "#fafafa";
+
+/** 标题用次级墨色，在浅底上仍能和正文分开。 */
+export const DEFAULT_CLOUD_TITLE_COLOR = "#4d4d4d";
 
 /** 默认最大字号。 */
 export const DEFAULT_CLOUD_MAX_FONT_SIZE = 84;
@@ -34,16 +37,27 @@ export const DEFAULT_CLOUD_FONT_FAMILY: readonly string[] = [
 ];
 
 /**
- * 词云配色盘：文字在深色背景上需要有足够对比度，因此只取高明度色。
- * 按分层（字号档位）取色，让同一档位的词保持视觉一致。
+ * 词云配色，按词频从高到低：
+ * 最高频用墨色压住画面，紧接着的几个高频词用站点强调蓝，其余逐级变灰。
+ * 只保留一套明度接近的颜色，不再在深色底上轮换高饱和色。
  */
-export const WORDCLOUD_PALETTE: readonly string[] = [
-  "#79c0ff",
-  "#ffa657",
-  "#7ee787",
-  "#d2a8ff",
-  "#ffb3c1",
-];
+export const WORDCLOUD_PALETTE: readonly string[] = ["#171717", "#005fcc", "#3d3d3d", "#5c5c5c"];
+
+/** 按排名取色。同一档的词颜色相同，颜色只辅助字号，不单独制造彩虹。 */
+export function colorForRank(rank: number, total: number): string {
+  const [ink, accent, secondary, quiet] = WORDCLOUD_PALETTE;
+  if (total <= 1 || rank <= 0) {
+    return ink ?? "#171717";
+  }
+  const accentUntil = Math.min(4, Math.max(1, Math.floor(total / 8)));
+  if (rank <= accentUntil) {
+    return accent ?? "#005fcc";
+  }
+  if (rank <= Math.ceil(total * 0.4)) {
+    return secondary ?? "#3d3d3d";
+  }
+  return quiet ?? "#5c5c5c";
+}
 
 /** 一个已排布好的词（坐标为中心点）。 */
 export interface PlacedWord {
@@ -138,7 +152,7 @@ export function layoutWords(
     const fontSize = fontSizeForRank(index, selected.length, options);
     const rectHalfWidth = (measureWordWidth(item.word, fontSize) / 2) * 1.08;
     const rectHalfHeight = (fontSize / 2) * 1.16;
-    const color = WORDCLOUD_PALETTE[index % WORDCLOUD_PALETTE.length] ?? "#e6edf3";
+    const color = colorForRank(index, selected.length);
 
     for (let step = 0; step < 40_000; step += 1) {
       // 阿基米德螺旋：半径随角度线性增长，先密后疏地搜索空位。

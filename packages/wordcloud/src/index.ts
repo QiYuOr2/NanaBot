@@ -19,6 +19,7 @@ export {
   DEFAULT_CLOUD_MAX_WORDS,
   DEFAULT_CLOUD_WIDTH,
   WORDCLOUD_PALETTE,
+  colorForRank,
 } from "./layout.ts";
 export { EMPTY_SESSION_TEXT, renderSessionMessage } from "./message.ts";
 export { renderWordCloudPng } from "./png.ts";

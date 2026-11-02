@@ -2,6 +2,7 @@ import {
   DEFAULT_CLOUD_BACKGROUND,
   DEFAULT_CLOUD_FONT_FAMILY,
   DEFAULT_CLOUD_HEIGHT,
+  DEFAULT_CLOUD_TITLE_COLOR,
   DEFAULT_CLOUD_WIDTH,
   layoutWords,
 } from "./layout.ts";
@@ -42,7 +43,7 @@ function fontFamilyValue(families: readonly string[]): string {
  *
  * - 纯字符串拼接，不依赖 DOM / canvas / 字体，结果**完全确定**：
  *   同一输入 + 同一 `seed` 必然产出逐字节相同的字符串。
- * - 1000×620 深色画布，按词频排名分档字号，阿基米德螺旋布局 + 矩形碰撞检测，
+ * - 1000×620 浅色画布，按词频排名分档字号和颜色，阿基米德螺旋布局 + 矩形碰撞检测，
  *   词数超过 `maxWords` 时只画权重最高的那部分。
  * - 所有文本都经过 {@link escapeXml} 处理；即使弹幕里出现 `<script>` 也只会被当成普通文字。
  *
@@ -68,7 +69,7 @@ export function buildWordCloudSvg(
 
   if (title) {
     lines.push(
-      `<text x="${width / 2}" y="52" fill="#8b949e" font-size="22" font-family="${escapeXml(fontFamily)}" text-anchor="middle">${escapeXml(title)}</text>`,
+      `<text x="${width / 2}" y="52" fill="${DEFAULT_CLOUD_TITLE_COLOR}" font-size="22" font-family="${escapeXml(fontFamily)}" text-anchor="middle">${escapeXml(title)}</text>`,
     );
   }
 
