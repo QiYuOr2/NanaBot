@@ -59,6 +59,7 @@ test("启动同步会把 B 站直播状态写入数据库", async () => {
       notifyEnabled: true,
       notifyGroups: [],
       messages: { liveStart: "", liveEnd: "" },
+      wordCloud: { enabled: false, notifyGroups: [] },
     },
   ];
 
@@ -87,6 +88,7 @@ test("未开播状态（live_status=0）会写入 live=false", async () => {
       notifyEnabled: true,
       notifyGroups: [],
       messages: { liveStart: "", liveEnd: "" },
+      wordCloud: { enabled: false, notifyGroups: [] },
     },
   ];
 
@@ -108,6 +110,7 @@ test("接口未返回的 UID 不会写入数据库", async () => {
       notifyEnabled: true,
       notifyGroups: [],
       messages: { liveStart: "", liveEnd: "" },
+      wordCloud: { enabled: false, notifyGroups: [] },
     },
   ];
 

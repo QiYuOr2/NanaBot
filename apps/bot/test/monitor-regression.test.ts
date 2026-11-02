@@ -41,10 +41,10 @@ const streamer: MonitorStreamerConfig = {
   notifyEnabled: true,
   notifyGroups: [1101365727],
   messages: { liveStart: "{uname}播了 {@all}", liveEnd: "饭总下播了" },
+  wordCloud: { enabled: true, notifyGroups: [123] },
 };
 
 const config: WordCloudConfig = {
-  enabled: true,
   topN: 30,
   minWordLength: 2,
   stopWords: [],
@@ -98,8 +98,7 @@ async function setup(
         {
           streamers: [streamer],
           config,
-          notifyGroupId: 123,
-          sendAdminMsg: async () => {},
+          sendWordCloud: async () => {},
           rootDir,
         },
         recorders as never,

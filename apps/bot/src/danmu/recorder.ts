@@ -4,23 +4,23 @@ import type { DanmuSession, StorageOptions } from "@nana/storage";
 import type { WordCloudConfig } from "./config.ts";
 import { publishWordCloud } from "./publish.ts";
 import { DanmuStore, FLUSH_INTERVAL_MS } from "./store.ts";
-import type { AdminSender, DanmuCloseReason } from "./types.ts";
+import type { DanmuCloseReason, WordCloudSender } from "./types.ts";
 
 export interface DanmuRecorderOptions extends StorageOptions {
   roomId: number;
   streamer: string;
   config: WordCloudConfig;
-  /** 词云推送目标群；缺省时只落库不推送。 */
-  notifyGroupId?: number;
+  /** 该主播的词云推送目标群；空数组表示只落库不推送。 */
+  notifyGroupIds: number[];
   /** 是否在收尾时推送词云，停机收尾与轮询兜底复用同一实现。 */
   pushOnEnd?: boolean;
-  sendAdminMsg: AdminSender;
+  sendWordCloud: WordCloudSender;
   /** 时钟注入点，便于测试。 */
   now?: () => Date;
 }
 
 /**
- * 单场弹幕录制器：开播开录、下播收尾、生成词云并推送到管理员群。
+ * 单场弹幕录制器：开播开录、下播收尾、生成词云并推送到该主播配置的群。
  *
  * 弹幕走 {@link DanmuStore} 的批量队列落库；进程重启后若上一场还没结束，
  * 会接着同一场次记录，不把一场直播拆成多段。
@@ -131,8 +131,8 @@ export class DanmuRecorder {
         sessionId: session.id,
         streamer: this.options.streamer,
         config: this.options.config,
-        notifyGroupId: this.options.notifyGroupId,
-        sendAdminMsg: this.options.sendAdminMsg,
+        notifyGroupIds: this.options.notifyGroupIds,
+        sendWordCloud: this.options.sendWordCloud,
         closeReason,
         rootDir: this.options.rootDir,
       });

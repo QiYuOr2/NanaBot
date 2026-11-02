@@ -38,6 +38,7 @@ const streamer: MonitorStreamerConfig = {
   notifyEnabled: true,
   notifyGroups: [],
   messages: { liveStart: "", liveEnd: "" },
+  wordCloud: { enabled: false, notifyGroups: [] },
 };
 
 function createRootDir(): string {

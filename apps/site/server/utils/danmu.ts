@@ -26,10 +26,10 @@ import {
 } from "../../shared/danmu.ts";
 
 /**
- * `nana.config.yaml` 的 `wordcloud` 段（与 `apps/bot/src/danmu/config.ts` 同构）。
+ * `nana.config.yaml` 的全局 `wordcloud` 段（与 `apps/bot/src/danmu/config.ts` 同构）。
  *
- * 面板只读取与「分词 / 渲染」相关的字段，让面板与机器人推送使用完全一致的
- * 停用词、噪音词与字体；其余字段（是否启用、推送目标、轮询）只在 bot 侧使用。
+ * 面板只读取分词与渲染字段，和机器人推送使用同一套停用词、噪音词与字体。
+ * 是否录制、推到哪些群写在对应主播上，面板不读。
  */
 const WordCloudConfigFieldsSchema = z.object({
   topN: z.number().int().positive().default(DANMU_WORDCLOUD_MAX_WORDS),

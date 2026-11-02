@@ -6,14 +6,12 @@ export const DEFAULT_WORDCLOUD_TOP_N = 60;
 /** 下播兜底轮询的默认间隔（毫秒）。 */
 export const DEFAULT_WORDCLOUD_POLL_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * 全局词云的分词与渲染参数。
+ *
+ * 是否录制、推到哪些群不在这里，写在对应主播的 `wordcloud` 上。
+ */
 export interface WordCloudConfig {
-  /** 是否启用整场弹幕记录与词云推送。 */
-  enabled: boolean;
-  /**
-   * 词云推送目标群。缺省时回落到管理员群 `ADM_GROUP`；
-   * 发送只走发往管理员群的 `sendAdminMsg`，不会发到开播通知群。
-   */
-  notifyGroupId?: number;
   /** 词云展示词数。 */
   topN: number;
   /** 参与统计的最短词长。 */
@@ -29,8 +27,6 @@ export interface WordCloudConfig {
 }
 
 const WordCloudConfigFieldsSchema = z.object({
-  enabled: z.boolean().default(true),
-  notifyGroupId: z.number().int().positive().optional(),
   topN: z.number().int().positive().default(DEFAULT_WORDCLOUD_TOP_N),
   minWordLength: z.number().int().min(1).default(2),
   stopWords: z.array(z.string()).default([]),
@@ -43,7 +39,6 @@ type WordCloudConfigFields = z.infer<typeof WordCloudConfigFieldsSchema>;
 
 /** `wordcloud` 段整体缺失（老配置文件）时使用的默认值。 */
 const DEFAULT_WORDCLOUD_FIELDS: WordCloudConfigFields = {
-  enabled: true,
   topN: DEFAULT_WORDCLOUD_TOP_N,
   minWordLength: 2,
   stopWords: [],
@@ -55,13 +50,11 @@ const WordCloudConfigSchema = z.object({
   wordcloud: WordCloudConfigFieldsSchema.optional(),
 });
 
-/** 从 `nana.config.yaml` 的 `wordcloud` 段读取词云配置；该段缺失时使用默认值。 */
+/** 从 `nana.config.yaml` 的全局 `wordcloud` 段读取分词与渲染配置；该段缺失时使用默认值。 */
 export function loadWordCloudConfig(): WordCloudConfig {
   const config = WordCloudConfigSchema.parse(readConfig()).wordcloud ?? DEFAULT_WORDCLOUD_FIELDS;
 
   return {
-    enabled: config.enabled,
-    notifyGroupId: config.notifyGroupId,
     topN: config.topN,
     minWordLength: config.minWordLength,
     stopWords: config.stopWords,
@@ -71,7 +64,7 @@ export function loadWordCloudConfig(): WordCloudConfig {
   };
 }
 
-/** 把词云配置写回 `nana.config.yaml`，便于手工调整后持久化。 */
+/** 把词云的分词与渲染配置写回 `nana.config.yaml`。 */
 export function saveWordCloudConfig(config: WordCloudConfig): string {
   return updateConfig("wordcloud", config);
 }

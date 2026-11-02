@@ -38,7 +38,6 @@ const { createWordCloudMonitorSink } = await import("../src/danmu/index.ts");
 type RecorderMap = Parameters<typeof createWordCloudMonitorSink>[1];
 
 const config: WordCloudConfig = {
-  enabled: true,
   topN: 30,
   minWordLength: 2,
   stopWords: [],
@@ -54,6 +53,7 @@ function toStreamer(roomId: number, streamer: string, uid: number): MonitorStrea
     notifyEnabled: true,
     notifyGroups: [],
     messages: { liveStart: "", liveEnd: "" },
+    wordCloud: { enabled: true, notifyGroups: [] },
   };
 }
 
@@ -96,7 +96,7 @@ test("弹幕录制与开播监控共用同一条长连接", async () => {
   const recorders: RecorderMap = new Map();
 
   const sinkFactory = createWordCloudMonitorSink(
-    { streamers, config, notifyGroupId: 123, sendAdminMsg: async () => {}, rootDir },
+    { streamers, config, sendWordCloud: async () => {}, rootDir },
     recorders,
   );
   const feature = createMonitorFeature({ createSink: (streamer) => sinkFactory(streamer) });
@@ -137,8 +137,7 @@ test("多个主播各一条连接，不会每人两条", async () => {
     {
       streamers: multiStreamers,
       config,
-      notifyGroupId: 123,
-      sendAdminMsg: async () => {},
+      sendWordCloud: async () => {},
       rootDir,
     },
     recorders,

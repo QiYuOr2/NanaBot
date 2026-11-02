@@ -37,13 +37,13 @@ export async function renderWordCloudImage(
 }
 
 /**
- * 生成一场直播的词云摘要并推送到管理员群。
+ * 生成一场直播的词云摘要，并推送到该主播配置的群。
  *
- * 推送策略：文字 + 图片 →（图片渲染或发送失败）纯文字 →（文字也失败）只记日志。
- * 场次不存在或未配置推送群时不推送。
+ * 每个群各自：文字 + 图片 →（图片渲染或发送失败）纯文字 →（文字也失败）只记日志，不影响其他群。
+ * 场次不存在或该主播没有推送群时不推送。
  */
 export async function publishWordCloud(options: WordCloudPublishOptions): Promise<void> {
-  const { sessionId, streamer, config, notifyGroupId, sendAdminMsg } = options;
+  const { sessionId, streamer, config, notifyGroupIds, sendWordCloud } = options;
   const storage: StorageOptions = { rootDir: options.rootDir };
   const summary = buildWordCloudSummary(sessionId, streamer, config, storage);
   if (!summary) {
@@ -51,8 +51,8 @@ export async function publishWordCloud(options: WordCloudPublishOptions): Promis
     return;
   }
 
-  if (notifyGroupId === undefined) {
-    console.warn("[弹幕词云] 未配置推送群，跳过词云推送");
+  if (notifyGroupIds.length === 0) {
+    console.warn(`[弹幕词云] ${streamer} 未配置推送群，跳过词云推送`);
     return;
   }
 
@@ -66,21 +66,42 @@ export async function publishWordCloud(options: WordCloudPublishOptions): Promis
   };
 
   const imagePath = await renderWordCloudImage(summary.topWords, config);
+  try {
+    for (const groupId of notifyGroupIds) {
+      await deliverWordCloud(groupId, message.text, imagePath, purpose, sendWordCloud, sessionId);
+    }
+  } finally {
+    if (imagePath) {
+      removeQuietly(imagePath);
+    }
+  }
+}
+
+/** 发到一个群。图片发送失败时改发纯文字，文字也失败则只记日志。 */
+async function deliverWordCloud(
+  groupId: number,
+  text: string,
+  imagePath: string | undefined,
+  purpose: NonNullable<Parameters<WordCloudPublishOptions["sendWordCloud"]>[2]>,
+  sendWordCloud: WordCloudPublishOptions["sendWordCloud"],
+  sessionId: number,
+): Promise<void> {
   if (imagePath) {
     try {
-      await sendAdminMsg([Structs.text(message.text), Structs.image(imagePath)], purpose);
+      await sendWordCloud(groupId, [Structs.text(text), Structs.image(imagePath)], purpose);
       return;
     } catch (error) {
-      console.error(`[弹幕词云] 场次 #${sessionId} 发送词云图片失败，降级为纯文字`, error);
-    } finally {
-      removeQuietly(imagePath);
+      console.error(
+        `[弹幕词云] 场次 #${sessionId} 向群 ${groupId} 发送词云图片失败，降级为纯文字`,
+        error,
+      );
     }
   }
 
   try {
-    await sendAdminMsg([Structs.text(message.text)], purpose);
+    await sendWordCloud(groupId, [Structs.text(text)], purpose);
   } catch (error) {
-    console.error(`[弹幕词云] 场次 #${sessionId} 推送词云失败`, error);
+    console.error(`[弹幕词云] 场次 #${sessionId} 向群 ${groupId} 推送词云失败`, error);
   }
 }
 

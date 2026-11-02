@@ -122,12 +122,15 @@ renderSessionMessage(summary, options?): { subject, text }   // 兼容 @nana/not
 
 ### 3.4 `apps/bot/src/danmu`
 
-- `config.ts`：从 `nana.config.yaml` 的 `wordcloud` 段读取（zod，全可选）：
+- `config.ts`：全局 `wordcloud` 段只放分词与渲染（zod，全可选）。是否录制、推到哪些群写在对应主播上，不回落 `ADM_GROUP`：
 
 ```yaml
+up:
+  - uname: 饭总
+    wordcloud:
+      enabled: true
+      notifyGroups: [123456] # 该主播的词云群；空数组只录制不推送
 wordcloud:
-  enabled: true # 默认 true
-  notifyGroupId: 123456 # 缺省用 ADM_GROUP
   topN: 60 # 词云展示词数
   minWordLength: 2
   stopWords: []
@@ -153,7 +156,7 @@ wordcloud:
   - `danmu.received` → 入队。
   - `live.ended` → `closeDanmuSession` → 生成并推送。
   - 兜底：每 `pollIntervalMs` 用 `@nana/bilibili-api` 查 `live_status`，对「有活跃场次但已不在播」的直播间触发一次收尾；进程退出（`onCleanup`）时 finalize 未结束场次（`close_reason = "shutdown"`）并尽力推送。
-  - 推送：`sendAdminMsg([Structs.text(text), Structs.image(pngPath)])`，`purpose: "wordcloud"`；图片上传/发送失败退化为纯文字；两者都失败则只记日志。
+  - 推送：按该主播的 `notifyGroups` 逐群 `sendGroupMsg`，`purpose: "wordcloud"`；图片上传/发送失败退化为纯文字；两者都失败则只记日志，不影响其他群。
 
 ### 3.5 `@nana/constants`
 
@@ -202,7 +205,7 @@ wordcloud:
 | 词云包        | `packages/wordcloud/**`（分词、统计、SVG → PNG）                        | ✅   |
 | bot 录制/推送 | `apps/bot/src/danmu/**`、`apps/bot/src/index.ts`                        | ✅   |
 | Web 面板      | `apps/site/{server/api/danmu,shared/danmu.ts,app/pages/danmu.vue,...}`  | ✅   |
-| 配置          | `nana.config.yaml#wordcloud`                                            | ✅   |
+| 配置          | 主播 `up[].wordcloud` 通知 + 全局 `nana.config.yaml#wordcloud` 分词渲染 | ✅   |
 
 ### 已验证（真实依赖、真实构建）
 

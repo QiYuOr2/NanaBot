@@ -14,10 +14,10 @@ export { DEFAULT_MESSAGE_TOP_WORDS, publishWordCloud, renderWordCloudImage } fro
 export { createDanmuSink, DanmuRecorder, type DanmuRecorderOptions } from "./recorder.ts";
 export { DanmuStore, FLUSH_BATCH_SIZE, FLUSH_INTERVAL_MS } from "./store.ts";
 export {
-  toAdminSender,
-  type AdminSender,
+  toWordCloudSender,
   type DanmuCloseReason,
   type WordCloudPublishOptions,
+  type WordCloudSender,
 } from "./types.ts";
 export { buildWordCloudSummary, extractSessionWords, toWordOptions } from "./wordCloud.ts";
 

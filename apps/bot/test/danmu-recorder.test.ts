@@ -9,7 +9,7 @@ import type { FeatureContext } from "../src/core/feature.ts";
 import type { WordCloudConfig } from "../src/danmu/config.ts";
 import { createWordCloudMonitorSink, wordCloudFeature } from "../src/danmu/feature.ts";
 import { DanmuRecorder, createDanmuSink } from "../src/danmu/recorder.ts";
-import type { AdminSender } from "../src/danmu/types.ts";
+import type { WordCloudSender } from "../src/danmu/types.ts";
 
 /**
  * 录制器用例需要 @nana/wordcloud 的原生依赖（jieba / resvg）与已构建的 workspace 包；
@@ -17,7 +17,6 @@ import type { AdminSender } from "../src/danmu/types.ts";
  */
 
 const config: WordCloudConfig = {
-  enabled: true,
   topN: 20,
   minWordLength: 2,
   stopWords: [],
@@ -33,14 +32,16 @@ function createRootDir(): string {
 }
 
 interface SentMessage {
+  groupId: number;
   purpose: unknown;
   text: string;
   imageCount: number;
 }
 
 function createRecorder(storage: StorageOptions, sent: SentMessage[]): DanmuRecorder {
-  const sendAdminMsg: AdminSender = async (segments, purpose) => {
+  const sendWordCloud: WordCloudSender = async (groupId, segments, purpose) => {
     sent.push({
+      groupId,
       purpose,
       text: segments
         .map((segment) => (segment as { data?: { text?: string } }).data?.text ?? "")
@@ -54,8 +55,8 @@ function createRecorder(storage: StorageOptions, sent: SentMessage[]): DanmuReco
     roomId: 4629447,
     streamer: "饭总",
     config,
-    notifyGroupId: 1101365727,
-    sendAdminMsg,
+    notifyGroupIds: [1101365727],
+    sendWordCloud,
     ...storage,
   });
 }
@@ -83,6 +84,7 @@ test("开播开始记录、下播停止记录并推送词云", async () => {
     "直播好看，好看得很",
   ]);
   expect(sent).toHaveLength(1);
+  expect(sent[0].groupId).toBe(1101365727);
   expect(sent[0].purpose).toMatchObject({ purpose: "wordcloud", subject: "饭总" });
   expect(sent[0].text).toContain("主播: 饭总");
 });
@@ -148,12 +150,13 @@ test("下播事件经由 sink 触发收尾", async () => {
   expect(sent).toHaveLength(1);
 });
 
-test("监控启动后才挂上的录制器，停机时仍推送到管理员发送函数", async () => {
+test("监控启动后才挂上的录制器，停机时仍推送到该主播配置的群", async () => {
   const rootDir = createRootDir();
   const sent: SentMessage[] = [];
   const recorders = new Map<number, DanmuRecorder>();
-  const sendAdminMsg: AdminSender = async (segments, purpose) => {
+  const sendWordCloud: WordCloudSender = async (groupId, segments, purpose) => {
     sent.push({
+      groupId,
       purpose,
       text: segments
         .map((segment) => (segment as { data?: { text?: string } }).data?.text ?? "")
@@ -171,11 +174,11 @@ test("监控启动后才挂上的录制器，停机时仍推送到管理员发�
         notifyEnabled: true,
         notifyGroups: [],
         messages: { liveStart: "", liveEnd: "" },
+        wordCloud: { enabled: true, notifyGroups: [1101365727] },
       },
     ],
     config,
-    notifyGroupId: 1101365727,
-    sendAdminMsg,
+    sendWordCloud,
     rootDir,
     recorders,
   };
@@ -210,21 +213,56 @@ test("监控启动后才挂上的录制器，停机时仍推送到管理员发�
   }
 
   expect(sent).toHaveLength(1);
+  expect(sent[0]?.groupId).toBe(1101365727);
   expect(sent[0]?.purpose).toMatchObject({ purpose: "wordcloud", subject: "饭总" });
 });
 
-test("配置了管理群但没注入发送函数时，建 sink 直接失败", () => {
+test("未给该主播开启词云时不挂录制 sink", () => {
+  const rootDir = createRootDir();
+  const sinkFactory = createWordCloudMonitorSink(
+    {
+      streamers: [
+        {
+          uid: 145149047,
+          roomId: 4629447,
+          streamer: "饭总",
+          notifyEnabled: true,
+          notifyGroups: [],
+          messages: { liveStart: "", liveEnd: "" },
+          wordCloud: { enabled: false, notifyGroups: [1101365727] },
+        },
+      ],
+      config,
+      sendWordCloud: async () => {},
+      rootDir,
+    },
+    new Map(),
+  );
+
+  expect(sinkFactory({ roomId: 4629447, streamer: "饭总" })).toBeUndefined();
+});
+
+test("配置了推送群但没注入发送函数时，建 sink 直接失败", () => {
   const rootDir = createRootDir();
 
   expect(() =>
     createWordCloudMonitorSink(
       {
-        streamers: [],
+        streamers: [
+          {
+            uid: 145149047,
+            roomId: 4629447,
+            streamer: "饭总",
+            notifyEnabled: true,
+            notifyGroups: [],
+            messages: { liveStart: "", liveEnd: "" },
+            wordCloud: { enabled: true, notifyGroups: [1101365727] },
+          },
+        ],
         config,
-        notifyGroupId: 1101365727,
         rootDir,
       },
       new Map(),
     ),
-  ).toThrow(/sendAdminMsg/);
+  ).toThrow(/sendWordCloud/);
 });

@@ -12,6 +12,7 @@ import type {
 } from "./featureTypes.ts";
 import { publishWordCloud } from "./publish.ts";
 import { createDanmuSink, DanmuRecorder } from "./recorder.ts";
+import type { WordCloudSender } from "./types.ts";
 
 export type {
   LiveStatusChecker,
@@ -85,19 +86,13 @@ export function createWordCloudMonitorSink(
   options: WordCloudFeatureOptions,
   recorders: Map<number, DanmuRecorder>,
 ): (streamer: Pick<MonitorStreamerConfig, "roomId" | "streamer">) => MonitorSink | undefined {
-  if (options.notifyGroupId !== undefined && options.sendAdminMsg === undefined) {
-    throw new Error(
-      "词云已配置管理员群，但没有注入 sendAdminMsg。下播、轮询和停机都不会把词云发到管理群。",
-    );
-  }
-
-  const sendAdminMsg = options.sendAdminMsg ?? unavailableSender;
+  const sendWordCloud = requireWordCloudSender(options);
 
   return (streamer) => {
     // `monitorFeature` 传入的是 `MonitorFeatureOptions`，只带 roomId/streamer/uid；
     // 这里按 roomId 匹配配置里的主播，用配置里的完整信息建录制器。
     const configured = options.streamers.find((item) => item.roomId === streamer.roomId);
-    if (!configured) {
+    if (!configured?.wordCloud.enabled) {
       return undefined;
     }
 
@@ -105,8 +100,8 @@ export function createWordCloudMonitorSink(
       roomId: configured.roomId,
       streamer: configured.streamer,
       config: options.config,
-      notifyGroupId: options.notifyGroupId,
-      sendAdminMsg,
+      notifyGroupIds: configured.wordCloud.notifyGroups,
+      sendWordCloud,
       rootDir: options.rootDir,
     });
     recorders.set(configured.roomId, recorder);
@@ -149,10 +144,14 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
   const isLive: LiveStatusChecker =
     options.isLive ?? ((streamer) => fetchIsLive(streamer, options.fetch));
   const now = options.now ?? (() => new Date());
-  const sendAdminMsg = options.sendAdminMsg ?? unavailableSender;
+  const sendWordCloud = requireWordCloudSender(options);
   const endedAt = now().toISOString();
 
   for (const streamer of options.streamers) {
+    if (!streamer.wordCloud.enabled) {
+      continue;
+    }
+
     const session = findActiveDanmuSession(streamer.roomId, options);
     if (!session) {
       continue;
@@ -187,15 +186,32 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
       sessionId: session.id,
       streamer: streamer.streamer,
       config: options.config,
-      notifyGroupId: options.notifyGroupId,
-      sendAdminMsg,
+      notifyGroupIds: streamer.wordCloud.notifyGroups,
+      sendWordCloud,
       closeReason: "stale",
       rootDir: options.rootDir,
     });
   }
 }
 
-/** 调用方忘了注入发送函数。实时推送必须传入发往管理员群的 `sendAdminMsg`。 */
+/**
+ * 有主播配置了推送群时，必须注入发送函数。
+ * 否则下播、轮询和停机都算完词云，却发不到该主播的群。
+ */
+function requireWordCloudSender(options: WordCloudFeatureOptions): WordCloudSender {
+  const needsSender = options.streamers.some(
+    (streamer) => streamer.wordCloud.enabled && streamer.wordCloud.notifyGroups.length > 0,
+  );
+  if (needsSender && options.sendWordCloud === undefined) {
+    throw new Error(
+      "词云已配置推送群，但没有注入 sendWordCloud。下播、轮询和停机都不会把词云发到对应主播的群。",
+    );
+  }
+
+  return options.sendWordCloud ?? unavailableSender;
+}
+
+/** 调用方忘了注入发送函数。只有真的要发到群里时才会被调用。 */
 async function unavailableSender(): Promise<void> {
-  throw new Error("未注入词云发送函数，无法推送到管理群");
+  throw new Error("未注入词云发送函数，无法推送到主播配置的群");
 }
