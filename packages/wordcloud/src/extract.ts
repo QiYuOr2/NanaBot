@@ -81,10 +81,131 @@ function isFilteredWord(word: string, stopWords: Set<string>, noiseWords: Set<st
   return false;
 }
 
+/** 「利好 / 利空」本身没有所指，必须接上后面的对象；接不上就丢掉。 */
+const BOUND_PREFIX = /^(?:突发|真|最|最大)?(?:利好|利空)$/u;
+
+/**
+ * 「之刃」「之智」这类碎片必须接上前面的词。
+ * 「之前 / 之后」是时间虚词，不能粘进去。
+ */
+const BOUND_SUFFIX = /^之\p{Script=Han}{1,2}$/u;
+
+const ZHI_FUNCTION = new Set([
+  "之前",
+  "之后",
+  "之间",
+  "之下",
+  "之外",
+  "之一",
+  "之内",
+  "之中",
+  "之余",
+  "之多",
+  "之际",
+]);
+
+/** 出现在利好后面也不构成话题的趋向说法。 */
+const NON_TOPIC_FOLLOWERS = new Set(["来了", "来啦", "去了", "好了", "行了", "完了", "懂了"]);
+
+const SUFFIX_HEAD = /^[\p{Script=Han}a-z0-9]{1,8}$/u;
+
+function isDiscardedToken(token: string): boolean {
+  return (
+    token.length === 0 ||
+    PUNCTUATION_PATTERN.test(token) ||
+    NUMBER_PATTERN.test(token) ||
+    EMOJI_PATTERN.test(token)
+  );
+}
+
+function isBoundSuffix(token: string): boolean {
+  return BOUND_SUFFIX.test(token) && !ZHI_FUNCTION.has(token);
+}
+
+/** 去掉句尾语气；「股神来了」这种粘连再剥掉词表里已有词后面的「来 / 去」。 */
+function settleToken(token: string): string {
+  const normalized = normalizeWord(token);
+  if (!normalized || MODERN_WORD_SET.has(normalized)) {
+    return normalized;
+  }
+  const withoutTail = normalized.replace(TAIL_PARTICLES, "");
+  const stem = withoutTail.replace(/[来去]+$/u, "");
+  if (stem !== withoutTail && codePointLength(stem) >= 2 && MODERN_WORD_SET.has(stem)) {
+    return stem;
+  }
+  return withoutTail;
+}
+
+function isSuffixHead(token: string, stopWords: ReadonlySet<string>): boolean {
+  return SUFFIX_HEAD.test(token) && !stopWords.has(token) && !isDiscardedToken(token);
+}
+
+function isPrefixObject(
+  token: string,
+  stopWords: ReadonlySet<string>,
+  noiseWords: ReadonlySet<string>,
+): boolean {
+  if (BOUND_PREFIX.test(token) || isBoundSuffix(token)) {
+    return false;
+  }
+  if (stopWords.has(token) || noiseWords.has(token) || NON_TOPIC_FOLLOWERS.has(token)) {
+    return false;
+  }
+  return !isDiscardedToken(token) && codePointLength(token) >= 2;
+}
+
+/**
+ * 把切开的碎片粘回整词。
+ *
+ * - 「影 / 之刃」「巅峰 / 之智」接成「影之刃」「巅峰之智」；粘不上的「之刃」直接丢掉。
+ * - 「利好 / 机器人」「利好 / 商业航天」接成一个词；后面没有对象的「利好」丢掉。
+ */
+function composeTokens(
+  rawTokens: readonly string[],
+  stopWords: ReadonlySet<string>,
+  noiseWords: ReadonlySet<string>,
+): string[] {
+  const suffixed: string[] = [];
+  for (const raw of rawTokens) {
+    const token = settleToken(raw);
+    if (!token) {
+      continue;
+    }
+    const previous = suffixed.at(-1);
+    if (previous && isBoundSuffix(token) && isSuffixHead(previous, stopWords)) {
+      suffixed[suffixed.length - 1] = previous + token;
+      continue;
+    }
+    if (isBoundSuffix(token)) {
+      continue;
+    }
+    suffixed.push(token);
+  }
+
+  const composed: string[] = [];
+  for (let index = 0; index < suffixed.length; index += 1) {
+    const token = suffixed[index];
+    if (!token || !BOUND_PREFIX.test(token)) {
+      if (token) {
+        composed.push(token);
+      }
+      continue;
+    }
+
+    const next = suffixed[index + 1];
+    if (next && isPrefixObject(next, stopWords, noiseWords)) {
+      composed.push(token + next);
+      index += 1;
+    }
+  }
+  return composed;
+}
+
 /**
  * 把一批弹幕清洗成词频列表。
  *
  * - 分词用精确模式，并叠了网络新词 / 直播用语用户词典。搜索模式会把整词再拆成碎片，词云会显得很碎。
+ * - 「利好 + 对象」「前文 + 之刃」这类离开彼此就没有所指的词会粘成一个词；粘不上的碎片不进词云。
  * - 过滤：`[dog]` 这类表情包、默认停用词 + 噪音词、长度小于 `minLength`（默认 2）、纯数字、纯标点/符号、纯 emoji。
  * - 词经过 NFKC 归一化并统一小写，`哈哈` 与 `哈哈ｗ` 之类不会被拆成两个词。
  * - 结果先按 `count` 降序、再按 `word` 升序排列，保证同一输入的结果完全确定。
@@ -129,12 +250,7 @@ export function extractWords(
     EMOTE_TOKEN.lastIndex = 0;
     const prepared = content.normalize("NFKC").replace(EMOTE_TOKEN, " ");
 
-    for (const raw of getJieba().cut(prepared, true)) {
-      const normalized = normalizeWord(raw);
-      // 现代词表里的整词保留原样；其余词去掉句尾语气，让「好看了」并进「好看」。
-      const word = MODERN_WORD_SET.has(normalized)
-        ? normalized
-        : normalized.replace(TAIL_PARTICLES, "");
+    for (const word of composeTokens(getJieba().cut(prepared, true), stopWords, noiseWords)) {
       if (isFilteredWord(word, stopWords, noiseWords)) {
         continue;
       }

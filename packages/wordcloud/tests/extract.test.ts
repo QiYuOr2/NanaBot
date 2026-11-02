@@ -236,4 +236,47 @@ describe("extractWords", () => {
     expect(collected).not.toContain("涨停");
     expect(collected).not.toContain("逆回");
   });
+
+  test("口语虚词不进词云，没有对象的利好 / 切碎的之刃也不单独成词", () => {
+    const fillers = extractWords(["没有真是出来后面直接再见"]);
+    expect(fillers.map((item) => item.word)).toEqual([]);
+
+    const bare = extractWords(["利好就是利空", "之刃"]);
+    const bareWords = bare.map((item) => item.word);
+    expect(bareWords).not.toContain("利好");
+    expect(bareWords).not.toContain("利空");
+    expect(bareWords).not.toContain("之刃");
+
+    const phrases = extractWords([
+      "利好机器人",
+      "利好商业航天",
+      "利好紫金矿业",
+      "利好巅峰之智",
+      "下周播影之刃吧",
+      "影之刃零启动",
+      "股神来了",
+      "牛来",
+      "饭总说抄底",
+    ]);
+    const collected = phrases.map((item) => item.word);
+
+    expect(collected).toEqual(
+      expect.arrayContaining([
+        "利好机器人",
+        "利好商业航天",
+        "利好紫金矿业",
+        "利好巅峰之智",
+        "影之刃",
+        "影之刃零",
+        "股神",
+        "牛来",
+        "抄底",
+      ]),
+    );
+    expect(collected).not.toContain("利好");
+    expect(collected).not.toContain("之刃");
+    expect(collected).not.toContain("之智");
+    expect(collected).not.toContain("股神来");
+    expect(collected).not.toContain("饭");
+  });
 });
