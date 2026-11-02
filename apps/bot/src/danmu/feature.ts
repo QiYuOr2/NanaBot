@@ -17,6 +17,8 @@ import type { WordCloudSender } from "./types.ts";
 export type {
   LiveStatusChecker,
   ResumeDanmuOptions,
+  SessionClosedHandler,
+  SessionClosedInput,
   WordCloudFeatureOptions,
 } from "./featureTypes.ts";
 
@@ -103,6 +105,11 @@ export function createWordCloudMonitorSink(
       notifyGroupIds: configured.wordCloud.notifyGroups,
       sendWordCloud,
       rootDir: options.rootDir,
+      onClosed: options.onSessionClosed
+        ? (sessionId, closeReason) =>
+            options.onSessionClosed?.({ sessionId, streamer: configured, closeReason }) ??
+            Promise.resolve()
+        : undefined,
     });
     recorders.set(configured.roomId, recorder);
 
@@ -182,15 +189,29 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
     logger.log(
       `[弹幕词云] ${streamer.streamer} 已下播，补收尾遗留场次 #${session.id}（${endedAt}）`,
     );
-    await publishWordCloud({
-      sessionId: session.id,
-      streamer: streamer.streamer,
-      config: options.config,
-      notifyGroupIds: streamer.wordCloud.notifyGroups,
-      sendWordCloud,
-      closeReason: "stale",
-      rootDir: options.rootDir,
-    });
+    try {
+      await publishWordCloud({
+        sessionId: session.id,
+        streamer: streamer.streamer,
+        config: options.config,
+        notifyGroupIds: streamer.wordCloud.notifyGroups,
+        sendWordCloud,
+        closeReason: "stale",
+        rootDir: options.rootDir,
+      });
+    } catch (error) {
+      console.error(`[弹幕词云] ${streamer.streamer} 补发词云失败`, error);
+    }
+
+    try {
+      await options.onSessionClosed?.({
+        sessionId: session.id,
+        streamer,
+        closeReason: "stale",
+      });
+    } catch (error) {
+      console.error(`[弹幕词云] ${streamer.streamer} 补生成直播摘要失败`, error);
+    }
   }
 }
 

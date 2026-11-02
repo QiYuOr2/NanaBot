@@ -90,10 +90,24 @@ export interface DanmuSessionsResponse {
   limit: number;
 }
 
+/** 已保存的直播摘要。`text` 只在 `ok` 时有值，和发到群里的正文是同一段。 */
+export interface DanmuLiveSummaryDto {
+  status: "ok" | "empty" | "failed" | "pending" | null;
+  text: string | null;
+}
+
+/** `POST /api/danmu/:id/summary` 的响应。`message` 只在失败时给页面提示。 */
+export interface DanmuLiveSummaryResponse {
+  summary: DanmuLiveSummaryDto;
+  message?: string;
+}
+
 /** `GET /api/danmu/:id` 的响应。 */
 export interface DanmuSessionDetailResponse {
   session: DanmuSessionSummaryDto;
   stats: DanmuSessionStatsDto;
+  /** 本场摘要。还没生成时 `status` 为 null。 */
+  liveSummary: DanmuLiveSummaryDto;
   /** Top 词，最多 {@link DANMU_DETAIL_TOP_WORDS} 个。 */
   topWords: DanmuWordCountDto[];
   /** 最近若干条弹幕，按时间倒序（最新在前）。 */

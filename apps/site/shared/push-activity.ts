@@ -44,13 +44,14 @@ export const PUSH_PENDING_WINDOW_MS = 60 * 1000;
 /**
  * 需要按场次合并、并做送达统计的推送目的。
  *
- * 直播开播 / 下播通知会同时推到多个群，才是「哪个群没收到」需要排查的场景；
+ * 开播、下播和直播摘要都会同时推到多个群，才是「哪个群没收到」需要排查的场景；
  * 机器人上线、离线、管理员通知、词云这类单目标推送的成败由它们自己承担，
  * 既不代表某场直播失败，也不应该把相邻的失败记录一起算进汇总。
  */
 export const aggregatablePurposes: ReadonlySet<PushActivity["purpose"]> = new Set([
   "live.start",
   "live.end",
+  "live.summary",
 ]);
 
 export interface BuildPushActivitiesOptions {

@@ -13,6 +13,7 @@
     "@nana/bilibili-api": "workspace:*",
     "@nana/config": "workspace:*",
     "@nana/constants": "workspace:*",
+    "@nana/live-summary": "workspace:*",
     "@nana/monitor": "workspace:*",
     "@nana/notify": "workspace:*",
     "@nana/offline-detector": "workspace:*",

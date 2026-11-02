@@ -9,6 +9,8 @@ export {
   type LiveStatusChecker,
   type WordCloudFeatureOptions,
   type ResumeDanmuOptions,
+  type SessionClosedHandler,
+  type SessionClosedInput,
 } from "./feature.ts";
 export { DEFAULT_MESSAGE_TOP_WORDS, publishWordCloud, renderWordCloudImage } from "./publish.ts";
 export { createDanmuSink, DanmuRecorder, type DanmuRecorderOptions } from "./recorder.ts";

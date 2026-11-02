@@ -30,6 +30,7 @@ export const PUSH_LOG_PURPOSES = [
   "app.online",
   "app.offline",
   "wordcloud",
+  "live.summary",
   "notification",
 ] as const;
 
@@ -43,6 +44,7 @@ export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
   "app.online": "上线",
   "app.offline": "下线",
   wordcloud: "词云",
+  "live.summary": "直播摘要",
   notification: "通知",
 };
 
@@ -58,6 +60,8 @@ export const ENV_KEYS = {
   NC_DEBUG: "NC_DEBUG",
   SERVER_EMAIL: "SERVER_EMAIL",
   SERVER_EMAIL_PASSWORD: "SERVER_EMAIL_PASSWORD",
+  /** DeepSeek 直播摘要。机器人与站点补生成都读这个变量。 */
+  DEEPSEEK_API_KEY: "DEEPSEEK_API_KEY",
 } as const;
 
 /** Bark 推送服务地址。 */
@@ -65,3 +69,10 @@ export const BARK_BASE_URL = "https://api.day.app/";
 
 /** Bark 通知使用的应用图标地址。 */
 export const BARK_ICON_URL = "https://unavatar.io/github/qiyuor2";
+
+/**
+ * 直播摘要的固定说明。
+ *
+ * 群消息和词云页都带上这一句，标明正文是从弹幕推断的，不是直播内容本身。
+ */
+export const LIVE_SUMMARY_DISCLAIMER = "根据弹幕推断，不是直播内容本身";

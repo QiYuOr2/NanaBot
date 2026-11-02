@@ -3,12 +3,19 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { DANMU_FILE } from "@nana/constants";
 import type {
+  ClaimLiveSummaryResult,
+  CompleteLiveSummaryInput,
   DanmuMessage,
   DanmuMessageInput,
   DanmuSession,
   DanmuSessionCloseReason,
   DanmuSessionWithStats,
+  LiveSummaryRecord,
+  LiveSummarySource,
+  LiveSummaryStatus,
   StorageOptions,
+  StoredLiveSummary,
+  UnpushedLiveSummary,
 } from "./types.ts";
 import { resolveDbPath } from "./paths.ts";
 
@@ -76,6 +83,11 @@ function ensureDanmuSessionColumns(database: DatabaseSync): void {
     ended_at: "ended_at TEXT",
     close_reason: "close_reason TEXT",
     msg_count: "msg_count INTEGER NOT NULL DEFAULT 0",
+    live_summary: "live_summary TEXT",
+    live_summary_status: "live_summary_status TEXT",
+    live_summary_source: "live_summary_source TEXT",
+    live_summary_pushed: "live_summary_pushed INTEGER NOT NULL DEFAULT 0",
+    live_summary_claimed_at: "live_summary_claimed_at TEXT",
   };
 
   for (const [name, definition] of Object.entries(migration)) {
@@ -333,4 +345,238 @@ export function readDanmuMessages(sessionId: number, options?: StorageOptions): 
   } finally {
     database.close();
   }
+}
+
+/** 认领超过该时间仍停在 `pending` 的写入权可以被下一次调用接走。 */
+export const LIVE_SUMMARY_CLAIM_STALE_MS = 120_000;
+
+const KNOWN_SUMMARY_STATUSES = new Set<LiveSummaryStatus>(["pending", "ok", "empty", "failed"]);
+
+function parseLiveSummaryStatus(value: unknown): LiveSummaryStatus | null {
+  return typeof value === "string" && KNOWN_SUMMARY_STATUSES.has(value as LiveSummaryStatus)
+    ? (value as LiveSummaryStatus)
+    : null;
+}
+
+function parseLiveSummarySource(value: unknown): LiveSummarySource | null {
+  return value === "bot" || value === "site" ? value : null;
+}
+
+function mapLiveSummaryRow(row: Record<string, unknown>): StoredLiveSummary {
+  return {
+    status: parseLiveSummaryStatus(row.live_summary_status),
+    text: row.live_summary == null ? null : (row.live_summary as string),
+    source: parseLiveSummarySource(row.live_summary_source),
+    pushed: Number(row.live_summary_pushed) === 1,
+    ended: row.ended_at != null,
+  };
+}
+
+function toLiveSummaryRecord(summary: StoredLiveSummary): LiveSummaryRecord {
+  return {
+    status: summary.status,
+    text: summary.text,
+    source: summary.source,
+    pushed: summary.pushed,
+  };
+}
+
+/** 读取一场的直播摘要。场次不存在时返回 undefined。 */
+export function readLiveSummary(
+  sessionId: number,
+  options?: StorageOptions,
+): StoredLiveSummary | undefined {
+  const database = openDanmuDatabase(options);
+
+  try {
+    const row = database
+      .prepare(`
+        SELECT ended_at, live_summary, live_summary_status, live_summary_source, live_summary_pushed
+        FROM danmu_session
+        WHERE id = ?
+      `)
+      .get(sessionId) as Record<string, unknown> | undefined;
+
+    return row ? mapLiveSummaryRow(row) : undefined;
+  } finally {
+    database.close();
+  }
+}
+
+/**
+ * 认领一场摘要的写入权。
+ *
+ * 已有 `ok` / `empty` 时直接返回现有结果，不再生成。进行中的场次不能认领。
+ * 两个调用同时认领时只有一个得到 `claimed`。
+ */
+export function claimLiveSummary(
+  sessionId: number,
+  options?: StorageOptions & { now?: Date; staleMs?: number },
+): ClaimLiveSummaryResult {
+  const now = options?.now ?? new Date();
+  const claimedAt = now.toISOString();
+  const staleBefore = new Date(
+    now.getTime() - (options?.staleMs ?? LIVE_SUMMARY_CLAIM_STALE_MS),
+  ).toISOString();
+  const database = openDanmuDatabase(options);
+
+  try {
+    const current = readLiveSummaryRow(database, sessionId);
+    if (!current) {
+      return { kind: "missing" };
+    }
+    if (!current.ended) {
+      return { kind: "active" };
+    }
+    if (current.status === "ok" || current.status === "empty") {
+      return { kind: "existing", summary: toLiveSummaryRecord(current) };
+    }
+    if (
+      current.status === "pending" &&
+      current.claimedAt !== null &&
+      current.claimedAt >= staleBefore
+    ) {
+      return { kind: "busy" };
+    }
+
+    const result = database
+      .prepare(`
+        UPDATE danmu_session
+        SET live_summary_status = 'pending', live_summary_claimed_at = ?
+        WHERE id = ?
+          AND ended_at IS NOT NULL
+          AND (
+            live_summary_status IS NULL
+            OR live_summary_status = 'failed'
+            OR live_summary_status NOT IN ('pending', 'ok', 'empty', 'failed')
+            OR (
+              live_summary_status = 'pending'
+              AND (live_summary_claimed_at IS NULL OR live_summary_claimed_at < ?)
+            )
+          )
+      `)
+      .run(claimedAt, sessionId, staleBefore);
+
+    if (Number(result.changes) !== 1) {
+      const latest = readLiveSummaryRow(database, sessionId);
+      if (!latest) {
+        return { kind: "missing" };
+      }
+      if (!latest.ended) {
+        return { kind: "active" };
+      }
+      if (latest.status === "ok" || latest.status === "empty") {
+        return { kind: "existing", summary: toLiveSummaryRecord(latest) };
+      }
+      return { kind: "busy" };
+    }
+
+    return { kind: "claimed", claimedAt };
+  } finally {
+    database.close();
+  }
+}
+
+/**
+ * 用认领时的 `claimedAt` 写入最终摘要。
+ *
+ * 认领权已被别人接走时返回 false，调用方必须丢掉这次结果，避免覆盖后写入的正文。
+ */
+export function completeLiveSummary(
+  sessionId: number,
+  claimedAt: string,
+  input: CompleteLiveSummaryInput,
+  options?: StorageOptions,
+): boolean {
+  const database = openDanmuDatabase(options);
+
+  try {
+    const result = database
+      .prepare(`
+        UPDATE danmu_session
+        SET live_summary_status = ?,
+            live_summary = ?,
+            live_summary_source = ?,
+            live_summary_pushed = 0,
+            live_summary_claimed_at = NULL
+        WHERE id = ?
+          AND live_summary_status = 'pending'
+          AND live_summary_claimed_at = ?
+      `)
+      .run(input.status, input.text, input.source, sessionId, claimedAt);
+
+    return Number(result.changes) === 1;
+  } finally {
+    database.close();
+  }
+}
+
+/** 标记机器人侧的群推送已结束，启动补偿不会再发这一场。 */
+export function markLiveSummaryPushed(sessionId: number, options?: StorageOptions): void {
+  const database = openDanmuDatabase(options);
+
+  try {
+    database
+      .prepare(`
+        UPDATE danmu_session
+        SET live_summary_pushed = 1
+        WHERE id = ?
+          AND live_summary_source = 'bot'
+          AND live_summary_status = 'ok'
+      `)
+      .run(sessionId);
+  } finally {
+    database.close();
+  }
+}
+
+/** 列出机器人已写好、但还没完成群推送的摘要。 */
+export function listUnpushedLiveSummaries(options?: StorageOptions): UnpushedLiveSummary[] {
+  const database = openDanmuDatabase(options);
+
+  try {
+    const rows = database
+      .prepare(`
+        SELECT id, room_id, streamer, live_summary
+        FROM danmu_session
+        WHERE live_summary_status = 'ok'
+          AND live_summary_source = 'bot'
+          AND live_summary_pushed = 0
+          AND live_summary IS NOT NULL
+        ORDER BY id ASC
+      `)
+      .all() as Record<string, unknown>[];
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      roomId: String(row.room_id),
+      streamer: String(row.streamer),
+      text: String(row.live_summary),
+    }));
+  } finally {
+    database.close();
+  }
+}
+
+function readLiveSummaryRow(
+  database: DatabaseSync,
+  sessionId: number,
+): (StoredLiveSummary & { claimedAt: string | null }) | undefined {
+  const row = database
+    .prepare(`
+      SELECT ended_at, live_summary, live_summary_status, live_summary_source,
+             live_summary_pushed, live_summary_claimed_at
+      FROM danmu_session
+      WHERE id = ?
+    `)
+    .get(sessionId) as Record<string, unknown> | undefined;
+
+  if (!row) {
+    return undefined;
+  }
+
+  return {
+    ...mapLiveSummaryRow(row),
+    claimedAt: row.live_summary_claimed_at == null ? null : (row.live_summary_claimed_at as string),
+  };
 }

@@ -15,6 +15,8 @@ export interface DanmuRecorderOptions extends StorageOptions {
   /** 是否在收尾时推送词云，停机收尾与轮询兜底复用同一实现。 */
   pushOnEnd?: boolean;
   sendWordCloud: WordCloudSender;
+  /** 场次落库之后调用。词云推送失败时仍会调用。 */
+  onClosed?: (sessionId: number, closeReason: DanmuCloseReason) => Promise<void>;
   /** 时钟注入点，便于测试。 */
   now?: () => Date;
 }
@@ -123,19 +125,27 @@ export class DanmuRecorder {
         `[弹幕录制] ${this.options.streamer} 停止记录弹幕（场次 #${session.id}，原因 ${closeReason}）`,
       );
 
-      if (this.options.pushOnEnd === false) {
-        return;
+      if (this.options.pushOnEnd !== false) {
+        try {
+          await publishWordCloud({
+            sessionId: session.id,
+            streamer: this.options.streamer,
+            config: this.options.config,
+            notifyGroupIds: this.options.notifyGroupIds,
+            sendWordCloud: this.options.sendWordCloud,
+            closeReason,
+            rootDir: this.options.rootDir,
+          });
+        } catch (error) {
+          console.error(`[弹幕录制] ${this.options.streamer} 词云推送失败`, error);
+        }
       }
 
-      await publishWordCloud({
-        sessionId: session.id,
-        streamer: this.options.streamer,
-        config: this.options.config,
-        notifyGroupIds: this.options.notifyGroupIds,
-        sendWordCloud: this.options.sendWordCloud,
-        closeReason,
-        rootDir: this.options.rootDir,
-      });
+      try {
+        await this.options.onClosed?.(session.id, closeReason);
+      } catch (error) {
+        console.error(`[弹幕录制] ${this.options.streamer} 场次收尾回调失败`, error);
+      }
     } finally {
       this.finishing = false;
     }

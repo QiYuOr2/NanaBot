@@ -266,3 +266,28 @@ test("配置了推送群但没注入发送函数时，建 sink 直接失败", ()
     ),
   ).toThrow(/sendWordCloud/);
 });
+
+test("收尾时即使不推词云也会通知直播摘要", async () => {
+  const rootDir = createRootDir();
+  const closed: number[] = [];
+  const recorder = new DanmuRecorder({
+    roomId: 4629447,
+    streamer: "饭总",
+    config,
+    notifyGroupIds: [],
+    pushOnEnd: false,
+    sendWordCloud: async () => {
+      throw new Error("不推词云时不应调用发送函数");
+    },
+    onClosed: async (sessionId) => {
+      closed.push(sessionId);
+    },
+    rootDir,
+  });
+
+  recorder.start(new Date("2026-08-22T10:00:00.000Z"));
+  await recorder.finish("live.ended", new Date("2026-08-22T12:00:00.000Z"));
+
+  expect(closed).toEqual([1]);
+  expect(readDanmuSession(1, { rootDir })?.endedAt).toBe("2026-08-22T12:00:00.000Z");
+});

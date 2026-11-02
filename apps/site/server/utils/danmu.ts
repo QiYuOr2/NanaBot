@@ -3,8 +3,10 @@ import {
   listDanmuSessions,
   readDanmuMessages,
   readDanmuSession,
+  readLiveSummary,
   type DanmuSession,
   type DanmuSessionWithStats,
+  type StoredLiveSummary,
 } from "@nana/storage";
 import { extractWords, summarizeSession, type DanmuMessageLike } from "@nana/wordcloud";
 import { formatDuration } from "@nana/utils";
@@ -18,6 +20,7 @@ import {
   DANMU_WORDCLOUD_MAX_WORDS,
   toDanmuSessionStats,
   toDanmuSessionSummary,
+  type DanmuLiveSummaryDto,
   toDanmuWordCounts,
   type DanmuMessageDto,
   type DanmuSessionDetailResponse,
@@ -207,6 +210,7 @@ export function buildDanmuSessionDetail(id: number): DanmuSessionDetailResponse 
     topWords: toDanmuWordCounts(summary.topWords),
     messages: recent,
     messagesTruncated: session.msgCount > recent.length,
+    liveSummary: toLiveSummaryDto(readLiveSummary(session.id)),
   };
 }
 
@@ -249,6 +253,17 @@ export function buildDanmuWordCloudPayload(id: number): DanmuWordCloudPayload | 
     words,
     ended: session.endedAt !== null,
     fontPath: options.fontPath,
+  };
+}
+
+/** 把库里的摘要收成页面只需要的状态和正文。 */
+function toLiveSummaryDto(summary: StoredLiveSummary | undefined): DanmuLiveSummaryDto {
+  if (!summary || summary.status === null) {
+    return { status: null, text: null };
+  }
+  return {
+    status: summary.status,
+    text: summary.status === "ok" ? summary.text : null,
   };
 }
 

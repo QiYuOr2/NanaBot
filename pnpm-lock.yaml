@@ -256,6 +256,9 @@ importers:
       '@nana/constants':
         specifier: workspace:*
         version: link:../../packages/constants
+      '@nana/live-summary':
+        specifier: workspace:*
+        version: link:../../packages/live-summary
       '@nana/monitor':
         specifier: workspace:*
         version: link:../../packages/monitor
@@ -317,6 +320,12 @@ importers:
       '@nana/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@nana/constants':
+        specifier: workspace:*
+        version: link:../../packages/constants
+      '@nana/live-summary':
+        specifier: workspace:*
+        version: link:../../packages/live-summary
       '@nana/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -408,6 +417,28 @@ importers:
         version: 0.2.8(@types/node@26.4.0)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.0)
 
   packages/constants:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: npm:@voidzero-dev/vite-plus-core@0.2.8
+        version: '@voidzero-dev/vite-plus-core@0.2.8(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.0)'
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.2.8(@types/node@24.13.3)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.0)
+
+  packages/live-summary:
+    dependencies:
+      '@nana/constants':
+        specifier: workspace:*
+        version: link:../constants
+      '@nana/storage':
+        specifier: workspace:*
+        version: link:../storage
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

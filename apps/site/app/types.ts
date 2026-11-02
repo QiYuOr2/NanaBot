@@ -34,6 +34,8 @@ export type {
   PushTargetStatus,
 } from "#shared/push-log";
 export type {
+  DanmuLiveSummaryDto,
+  DanmuLiveSummaryResponse,
   DanmuMessageDto,
   DanmuSessionDetailResponse,
   DanmuSessionStatsDto,

@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue";
-import type { DanmuSessionDetailResponse, DanmuSessionsResponse } from "~/types";
+import type {
+  DanmuLiveSummaryDto,
+  DanmuSessionDetailResponse,
+  DanmuSessionsResponse,
+} from "~/types";
 
 const { data, error, pending, refresh } =
   await useFetch<DanmuSessionsResponse>("/api/danmu/sessions");
@@ -88,6 +92,15 @@ const timeRange = computed(() => {
   }
   return `${formatDateTime(session.startedAt)} → ${formatDateTime(session.endedAt)}`;
 });
+
+/** 页面补生成后只更新当前场次的摘要，不重新拉整页详情。 */
+function onLiveSummary(summary: DanmuLiveSummaryDto) {
+  const current = detail.value;
+  if (!current || current.session.id !== selectedId.value) {
+    return;
+  }
+  detail.value = { ...current, liveSummary: summary };
+}
 
 function formatDateTime(iso: string | null): string {
   if (!iso) {
@@ -215,6 +228,13 @@ function formatDateTime(iso: string | null): string {
               </span>
             </div>
           </section>
+
+          <DanmuLiveSummary
+            :session-id="detail.session.id"
+            :active="detail.session.active"
+            :summary="detail.liveSummary"
+            @updated="onLiveSummary"
+          />
 
           <DanmuWordCloud :session="detail.session" :stats="detail.stats" />
 

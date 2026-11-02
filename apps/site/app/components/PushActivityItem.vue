@@ -38,6 +38,7 @@ const PURPOSE_TAG: Record<string, string> = {
   "app.online": "bg-status-blue/10 text-status-blue",
   "app.offline": "bg-status-cyan/10 text-status-cyan",
   wordcloud: "bg-status-orange/10 text-status-orange",
+  "live.summary": "bg-status-teal/10 text-status-teal",
   notification: "bg-status-orange/10 text-status-orange",
 };
 

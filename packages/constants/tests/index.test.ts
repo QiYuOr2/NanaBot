@@ -36,11 +36,14 @@ test("环境变量名统一", () => {
   expect(ENV_KEYS.NC_WS_URL).toBe("NC_WS_URL");
   expect(ENV_KEYS.NC_ACCESS_TOKEN).toBe("NC_ACCESS_TOKEN");
   expect(ENV_KEYS.NC_DEBUG).toBe("NC_DEBUG");
+  expect(ENV_KEYS.DEEPSEEK_API_KEY).toBe("DEEPSEEK_API_KEY");
 });
 
 test("推送目的包含词云，且每个目的都有中文展示名", () => {
   expect(PUSH_LOG_PURPOSES).toContain("wordcloud");
   expect(PUSH_PURPOSE_LABELS.wordcloud).toBe("词云");
+  expect(PUSH_LOG_PURPOSES).toContain("live.summary");
+  expect(PUSH_PURPOSE_LABELS["live.summary"]).toBe("直播摘要");
 
   for (const purpose of PUSH_LOG_PURPOSES) {
     expect(PUSH_PURPOSE_LABELS[purpose]).toBeTruthy();

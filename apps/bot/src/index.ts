@@ -17,6 +17,7 @@ import {
   toWordCloudSender,
   wordCloudFeature,
 } from "./danmu";
+import { publishLiveSummary, pushUnsentLiveSummaries } from "./summary";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
 const entryDir = dirname(fileURLToPath(import.meta.url));
@@ -90,6 +91,22 @@ async function main(): Promise<void> {
   // 词云发到该主播自己配置的群，不再回落到 ADM_GROUP。
   const sendWordCloud = toWordCloudSender(app);
   const wordCloudEnabled = monitorConfig.streamers.some((streamer) => streamer.wordCloud.enabled);
+  const summaryApiKey = process.env[ENV_KEYS.DEEPSEEK_API_KEY];
+  const onSessionClosed = wordCloudEnabled
+    ? async (input: {
+        sessionId: number;
+        streamer: (typeof monitorConfig.streamers)[number];
+      }): Promise<void> => {
+        await publishLiveSummary({
+          sessionId: input.sessionId,
+          streamer: input.streamer.streamer,
+          notifyGroupIds: input.streamer.notifyEnabled ? input.streamer.notifyGroups : [],
+          send: sendWordCloud,
+          rootDir: projectRoot,
+          apiKey: summaryApiKey,
+        });
+      }
+    : undefined;
   const wordCloudOptions = wordCloudEnabled
     ? {
         streamers: monitorConfig.streamers,
@@ -97,6 +114,7 @@ async function main(): Promise<void> {
         rootDir: projectRoot,
         sendWordCloud,
         recorders,
+        onSessionClosed,
       }
     : undefined;
   const danmuSinkFactory = wordCloudOptions
@@ -150,12 +168,18 @@ async function main(): Promise<void> {
   // 上一场直播若在机器人停机期间结束，等状态同步完成后再补收尾，避免误判为「仍在直播」。
   // 遗留场次发到该主播自己的词云群。
   if (wordCloudEnabled) {
+    await pushUnsentLiveSummaries({
+      streamers: monitorConfig.streamers,
+      send: sendWordCloud,
+      rootDir: projectRoot,
+    });
     await resumeDanmuSessions({
       streamers: monitorConfig.streamers,
       config: wordCloudConfig,
       rootDir: projectRoot,
       isLive: (streamer) => fetchIsLive(streamer),
       sendWordCloud,
+      onSessionClosed,
     });
   }
 }

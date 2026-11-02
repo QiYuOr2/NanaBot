@@ -87,6 +87,49 @@ export interface DanmuMessage {
 /** 写入弹幕时由调用方提供的字段（id 与 sessionId 由存储层填充）。 */
 export type DanmuMessageInput = Omit<DanmuMessage, "id" | "sessionId">;
 
+/** 一场直播摘要的生成状态。`pending` 表示已有调用正在写，避免两边各生成一份。 */
+export type LiveSummaryStatus = "pending" | "ok" | "empty" | "failed";
+
+/** 摘要是谁写入的。只有 `bot` 且尚未推送的才会发到开播通知群。 */
+export type LiveSummarySource = "bot" | "site";
+
+/** `danmu_session` 上的直播摘要。正文只在 `ok` 时有值。 */
+export interface LiveSummaryRecord {
+  status: LiveSummaryStatus | null;
+  text: string | null;
+  source: LiveSummarySource | null;
+  /** 机器人侧的群推送已结束（含「没有通知群、不必再发」）。页面生成的摘要保持 false。 */
+  pushed: boolean;
+}
+
+/** 读取摘要时附带场次是否已结束，便于拒绝给进行中的场次生成。 */
+export interface StoredLiveSummary extends LiveSummaryRecord {
+  ended: boolean;
+}
+
+/** 认领摘要写入权的结果。`claimed` 的调用方必须用同一个 `claimedAt` 完成写入。 */
+export type ClaimLiveSummaryResult =
+  | { kind: "missing" }
+  | { kind: "active" }
+  | { kind: "busy" }
+  | { kind: "existing"; summary: LiveSummaryRecord }
+  | { kind: "claimed"; claimedAt: string };
+
+/** 把认领到的场次写成最终结果。`pending` 不能作为完成状态。 */
+export interface CompleteLiveSummaryInput {
+  status: Exclude<LiveSummaryStatus, "pending">;
+  text: string | null;
+  source: LiveSummarySource;
+}
+
+/** 机器人已生成、但进程在发出去之前退出的摘要。 */
+export interface UnpushedLiveSummary {
+  id: number;
+  roomId: string;
+  streamer: string;
+  text: string;
+}
+
 /** 场次及其统计信息，供面板列表展示。 */
 export interface DanmuSessionWithStats extends DanmuSession {
   /** 期间参与发言的人数（按 user_id 去重）。 */
