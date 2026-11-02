@@ -1,4 +1,6 @@
 import {
+  CLOUD_TITLE_BASELINE,
+  CLOUD_TITLE_FONT_SIZE,
   DEFAULT_CLOUD_BACKGROUND,
   DEFAULT_CLOUD_FONT_FAMILY,
   DEFAULT_CLOUD_HEIGHT,
@@ -69,7 +71,7 @@ export function buildWordCloudSvg(
 
   if (title) {
     lines.push(
-      `<text x="${width / 2}" y="52" fill="${DEFAULT_CLOUD_TITLE_COLOR}" font-size="22" font-family="${escapeXml(fontFamily)}" text-anchor="middle">${escapeXml(title)}</text>`,
+      `<text x="${width / 2}" y="${CLOUD_TITLE_BASELINE}" fill="${DEFAULT_CLOUD_TITLE_COLOR}" font-size="${CLOUD_TITLE_FONT_SIZE}" font-family="${escapeXml(fontFamily)}" text-anchor="middle">${escapeXml(title)}</text>`,
     );
   }
 

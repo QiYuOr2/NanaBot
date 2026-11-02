@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
+  CLOUD_TITLE_BAND_BOTTOM,
   colorForRank,
   createRandom,
   fontSizeForRank,
@@ -55,12 +56,11 @@ describe("fontSizeForRank", () => {
 });
 
 describe("colorForRank", () => {
-  test("最高频是墨色，紧随的高频词用强调蓝，长尾变灰", () => {
+  test("最高频是墨色，其余按深色色相轮换，相邻词颜色不同", () => {
     expect(colorForRank(0, 60)).toBe("#171717");
     expect(colorForRank(1, 60)).toBe("#005fcc");
-    expect(colorForRank(4, 60)).toBe("#005fcc");
-    expect(colorForRank(5, 60)).toBe("#3d3d3d");
-    expect(colorForRank(59, 60)).toBe("#5c5c5c");
+    expect(colorForRank(2, 60)).not.toBe(colorForRank(1, 60));
+    expect(colorForRank(59, 60)).not.toBe("#5c5c5c");
   });
 });
 
@@ -74,6 +74,21 @@ describe("layoutWords", () => {
       expect(item.x).toBeLessThan(1000);
       expect(item.y).toBeGreaterThan(0);
       expect(item.y).toBeLessThan(620);
+    }
+  });
+
+  test("有标题时词的占位避开标题", () => {
+    const title = "饭总 · 2026/02/27 19:40";
+    const words = Array.from({ length: 40 }, (_, index) => ({
+      word: `词语${index}`,
+      count: 40 - index,
+    }));
+    const placed = layoutWords(words, { width: 1000, height: 620, title });
+
+    expect(placed.length).toBeGreaterThan(20);
+    for (const item of placed) {
+      const halfHeight = (item.fontSize / 2) * 1.16;
+      expect(item.y - halfHeight).toBeGreaterThanOrEqual(CLOUD_TITLE_BAND_BOTTOM);
     }
   });
 

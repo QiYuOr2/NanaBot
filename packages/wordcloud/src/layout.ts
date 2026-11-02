@@ -15,6 +15,18 @@ export const DEFAULT_CLOUD_BACKGROUND = "#fafafa";
 /** 标题用次级墨色，在浅底上仍能和正文分开。 */
 export const DEFAULT_CLOUD_TITLE_COLOR = "#4d4d4d";
 
+/** 标题字号。布局避让和 SVG 绘制共用，避免标题框和实际字形错位。 */
+export const CLOUD_TITLE_FONT_SIZE = 22;
+
+/** 标题基线的纵坐标。 */
+export const CLOUD_TITLE_BASELINE = 40;
+
+/**
+ * 标题下方的禁放线。整条顶栏都不放词，避免只按估算字宽躲开、
+ * 真实字形仍然压住标题。
+ */
+export const CLOUD_TITLE_BAND_BOTTOM = 88;
+
 /** 默认最大字号。 */
 export const DEFAULT_CLOUD_MAX_FONT_SIZE = 84;
 
@@ -37,26 +49,44 @@ export const DEFAULT_CLOUD_FONT_FAMILY: readonly string[] = [
 ];
 
 /**
- * 词云配色，按词频从高到低：
- * 最高频用墨色压住画面，紧接着的几个高频词用站点强调蓝，其余逐级变灰。
- * 只保留一套明度接近的颜色，不再在深色底上轮换高饱和色。
+ * 浅底上的词色。都压在可读的深色里，色相分开，避免整片灰分不清。
+ * 第一项是最高频词的墨色，后面按排名轮换。
  */
-export const WORDCLOUD_PALETTE: readonly string[] = ["#171717", "#005fcc", "#3d3d3d", "#5c5c5c"];
+export const WORDCLOUD_PALETTE: readonly string[] = [
+  "#171717",
+  "#005fcc",
+  "#0f766e",
+  "#9a3412",
+  "#9f1239",
+  "#5b21b6",
+];
 
-/** 按排名取色。同一档的词颜色相同，颜色只辅助字号，不单独制造彩虹。 */
-export function colorForRank(rank: number, total: number): string {
-  const [ink, accent, secondary, quiet] = WORDCLOUD_PALETTE;
-  if (total <= 1 || rank <= 0) {
-    return ink ?? "#171717";
+/** 按排名取色。相邻名次颜色不同，小词也不会淡到看不清。 */
+export function colorForRank(rank: number, _total?: number): string {
+  const palette = WORDCLOUD_PALETTE;
+  if (rank <= 0) {
+    return palette[0] ?? "#171717";
   }
-  const accentUntil = Math.min(4, Math.max(1, Math.floor(total / 8)));
-  if (rank <= accentUntil) {
-    return accent ?? "#005fcc";
+  const chromatic = palette.slice(1);
+  return chromatic[(rank - 1) % chromatic.length] ?? palette[0] ?? "#171717";
+}
+
+/**
+ * 标题占用的矩形：有标题时占满顶栏整宽。
+ * 词的碰撞检测会把它当成已占用区域。
+ */
+export function titleClearance(title: string, width: number): Rect | undefined {
+  const text = title.trim();
+  if (text.length === 0) {
+    return undefined;
   }
-  if (rank <= Math.ceil(total * 0.4)) {
-    return secondary ?? "#3d3d3d";
-  }
-  return quiet ?? "#5c5c5c";
+  const bottom = CLOUD_TITLE_BAND_BOTTOM;
+  return {
+    x: width / 2,
+    y: bottom / 2,
+    halfWidth: width / 2,
+    halfHeight: bottom / 2,
+  };
 }
 
 /** 一个已排布好的词（坐标为中心点）。 */
@@ -144,8 +174,13 @@ export function layoutWords(
 
   const selected = words.filter((item) => item.word.trim().length > 0).slice(0, maxWords);
   const centerX = width / 2;
-  const centerY = height / 2;
+  const clearance = titleClearance(options.title ?? "", width);
+  const contentTop = clearance ? clearance.y + clearance.halfHeight : 8;
+  const centerY = clearance ? (contentTop + height) / 2 : height / 2;
   const placedRects: Rect[] = [];
+  if (clearance) {
+    placedRects.push(clearance);
+  }
   const result: PlacedWord[] = [];
 
   selected.forEach((item, index) => {
@@ -166,7 +201,7 @@ export function layoutWords(
       const insideCanvas =
         x - rectHalfWidth >= 4 &&
         x + rectHalfWidth <= width - 4 &&
-        y - rectHalfHeight >= 8 &&
+        y - rectHalfHeight >= contentTop &&
         y + rectHalfHeight <= height - 8;
 
       if (!insideCanvas) {
