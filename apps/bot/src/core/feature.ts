@@ -4,13 +4,16 @@ import type { Logger } from "./logger";
 import type { GroupPushOptions, PushPurposeInput } from "./napcat";
 
 export interface FeatureContext {
-  ws: NCWebsocket;
-  /** 当前连接对应的 NapCat 账号 id；单账号 legacy 部署为 `default`。 */
+  /** 仅 NapCat 通道提供原始连接。业务功能应使用发送方法。 */
+  ws?: NCWebsocket;
+  /** 当前 QQ 通道的账号 id；NapCat 单账号 legacy 部署为 `default`。 */
   accountId?: string;
   adminGroupId?: number;
   /** 当前账号的日志出口；运行时按账号写入独立文件。 */
   logger: Logger;
-  on<T extends EventKey>(event: T, handler: EventHandleMap[T]): () => void;
+  on?<T extends EventKey>(event: T, handler: EventHandleMap[T]): () => void;
+  /** 官方通道的连接状态；不伪造 OneBot 心跳。 */
+  onConnectionState?(handler: (connected: boolean) => void): () => void;
   onCleanup(cleanup: Cleanup): void;
   sendAdminText(text: string, purpose?: PushPurposeInput): Promise<void>;
   sendAdminMsg(messages: SendMessageSegment[], purpose?: PushPurposeInput): Promise<void>;

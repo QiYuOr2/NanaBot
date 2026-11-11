@@ -1,3 +1,5 @@
+# QQ 官方通道：在这里增加 qq.provider: official 与 qq.accounts；完整配置、扫码绑定及
+# group_openid 获取步骤见 README「QQ 官方机器人」。现有 NapCat 配置保留以便切回。
 napcat:
   accounts:
     # 当前 NC_WS_URL 对应的主号。

@@ -1,4 +1,5 @@
 export { createApp, type App, type CreateAppOptions, type StopOptions } from "./createApp";
+export type { BotApp } from "./app";
 export {
   CONNECT_TIMEOUT_MS,
   ConnectionSupervisor,

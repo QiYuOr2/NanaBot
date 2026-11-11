@@ -51,6 +51,7 @@ export interface App {
   adminGroupId?: number;
   use<TOptions>(feature: FeatureDefinition<TOptions>, options: TOptions): App;
   on<T extends EventKey>(event: T, handler: EventHandleMap[T]): () => void;
+  onConnected(handler: () => void): () => void;
   onCleanup(cleanup: Cleanup): void;
   sendAdminText(text: string, purpose?: PushPurposeInput): Promise<void>;
   sendAdminMsg(messages: SendMessageSegment[], purpose?: PushPurposeInput): Promise<void>;
@@ -153,7 +154,10 @@ export function createApp(options: CreateAppOptions): App {
       return app;
     },
     on(event, handler) {
-      return featureContext.on(event, handler);
+      return featureContext.on!(event, handler);
+    },
+    onConnected(handler) {
+      return featureContext.on!("socket.open", handler);
     },
     onCleanup(cleanup) {
       featureContext.onCleanup(cleanup);

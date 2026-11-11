@@ -127,12 +127,12 @@ export function loadNapcatAccountSet(env: NodeJS.ProcessEnv = process.env): Napc
  */
 export function groupStreamersByAccount<T extends AccountAssignableStreamer>(
   streamers: readonly T[],
-  accounts: readonly NapcatAccount[],
+  accounts: readonly { id: string }[],
   options: { skipAccountIds?: ReadonlySet<string> } = {},
 ): Map<string, T[]> {
   const [defaultAccount] = accounts;
   if (!defaultAccount) {
-    throw new Error("至少需要配置一个 NapCat 账号。");
+    throw new Error("至少需要配置一个 QQ 账号。");
   }
 
   const groups = new Map(accounts.map((account) => [account.id, [] as T[]]));
@@ -144,7 +144,7 @@ export function groupStreamersByAccount<T extends AccountAssignableStreamer>(
     }
     if (!group) {
       throw new Error(
-        `主播 "${streamer.streamer}" 的 qqAccount "${accountId}" 未在 napcat.accounts 中定义。`,
+        `主播 "${streamer.streamer}" 的 qqAccount "${accountId}" 未在当前通道的账号列表（napcat.accounts / qq.accounts）中定义。`,
       );
     }
     group.push(streamer);

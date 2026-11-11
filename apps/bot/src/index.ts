@@ -4,12 +4,13 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { resolveProjectRoot } from "@nana/utils";
 import { ENV_KEYS, NANA_CONFIG_FILE } from "@nana/constants";
+import { readConfig } from "@nana/config";
 import {
   createApp,
   createLoggerManager,
   RECONNECT_DELAY_MS,
   UNLIMITED_RECONNECT_ATTEMPTS,
-  type App,
+  type BotApp,
   type Logger,
 } from "./core";
 import {
@@ -41,7 +42,13 @@ import {
   wordCloudFeature,
 } from "./danmu";
 import { publishLiveSummary, pushUnsentLiveSummaries } from "./summary";
-import { groupStreamersByAccount, loadNapcatAccountSet, type NapcatAccount } from "./accounts";
+import { groupStreamersByAccount, resolveNapcatAccounts } from "./accounts";
+import {
+  createOfficialApp,
+  parseQQConfig,
+  resolveOfficialAccounts,
+  validateOfficialTargets,
+} from "./qq";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
 const entryDir = dirname(fileURLToPath(import.meta.url));
@@ -76,7 +83,7 @@ const loggers = createLoggerManager({ rootDir: projectRoot });
 const appLogger = loggers.root;
 
 interface AccountRuntime {
-  app: App;
+  app: BotApp;
   streamers: MonitorStreamerConfig[];
   sendWordCloud: WordCloudSender;
   onSessionClosed?: SessionClosedHandler;
@@ -84,7 +91,14 @@ interface AccountRuntime {
 }
 
 async function main(): Promise<void> {
-  const { accounts, unavailable } = loadNapcatAccountSet();
+  const config = readConfig();
+  const qq = parseQQConfig(config);
+  const officialAccounts = qq.provider === "official" ? resolveOfficialAccounts(qq.accounts) : [];
+  const { accounts, unavailable } =
+    qq.provider === "official"
+      ? { accounts: officialAccounts, unavailable: [] }
+      : resolveNapcatAccounts(config);
+  appLogger.info(`[app] QQ 通道：${qq.provider}`);
   const unavailableAccountIds = new Set(unavailable.map((account) => account.id));
   for (const account of unavailable) {
     appLogger.warn(
@@ -97,6 +111,15 @@ async function main(): Promise<void> {
   const streamersByAccount = groupStreamersByAccount(monitorConfig.streamers, accounts, {
     skipAccountIds: unavailableAccountIds,
   });
+  for (const account of officialAccounts) {
+    validateOfficialTargets(
+      account,
+      (streamersByAccount.get(account.id) ?? []).flatMap((streamer) => [
+        ...(streamer.notifyEnabled ? streamer.notifyGroups : []),
+        ...(streamer.wordCloud.enabled ? streamer.wordCloud.notifyGroups : []),
+      ]),
+    );
+  }
   const summaryApiKey = process.env[ENV_KEYS.DEEPSEEK_API_KEY];
   const showAccountLabel = accounts.length > 1;
 
@@ -116,27 +139,34 @@ async function main(): Promise<void> {
     } else {
       accountLogger.info(`上线 / 下线提示目标管理群：${account.adminGroupId}`);
     }
-    const app = createApp({
-      websocket: {
-        baseUrl: account.wsUrl,
-        accessToken: account.accessToken,
-        reconnection: {
-          enable: true,
-          // 不给库设重连预算：预算耗尽后它会永久停止重连，而且此时 connect() 会挂起而不是报错。
-          attempts: UNLIMITED_RECONNECT_ATTEMPTS,
-          delay: RECONNECT_DELAY_MS,
-        },
-      },
-      account: { id: account.id, name: account.name },
-      adminGroupId: account.adminGroupId,
-      logger: accountLogger,
-      // 推送记录也写入项目根的 db/，不再依赖 cwd。
-      storage: { rootDir: projectRoot },
-      // 多个 App 共用一次进程信号处理，避免每个账号都发一遍下线消息。
-      handleSignals: false,
-    });
+    const app: BotApp =
+      "appId" in account
+        ? createOfficialApp({
+            account,
+            storage: { rootDir: projectRoot },
+            logger: accountLogger,
+          })
+        : createApp({
+            websocket: {
+              baseUrl: account.wsUrl,
+              accessToken: account.accessToken,
+              reconnection: {
+                enable: true,
+                // 不给库设重连预算：预算耗尽后它会永久停止重连，而且此时 connect() 会挂起而不是报错。
+                attempts: UNLIMITED_RECONNECT_ATTEMPTS,
+                delay: RECONNECT_DELAY_MS,
+              },
+            },
+            account: { id: account.id, name: account.name },
+            adminGroupId: account.adminGroupId,
+            logger: accountLogger,
+            // 推送记录也写入项目根的 db/，不再依赖 cwd。
+            storage: { rootDir: projectRoot },
+            // 多个 App 共用一次进程信号处理，避免每个账号都发一遍下线消息。
+            handleSignals: false,
+          });
 
-    app.on("socket.open", () => {
+    app.onConnected(() => {
       const text = showAccountLabel ? `我来了~（${account.name}）` : "我来了~";
       app
         .sendAdminText(text, { purpose: "app.online" })
@@ -241,14 +271,14 @@ async function main(): Promise<void> {
 
     startErrors.push(result.reason);
     runtime.logger.error(
-      `[app] NapCat 账号 ${runtime.app.accountId ?? "unknown"} 启动失败`,
+      `[app] QQ 账号 ${runtime.app.accountId ?? "unknown"} 启动失败`,
       result.reason,
     );
     await runtime.app.stop();
   }
 
   if (activeRuntimes.length === 0) {
-    throw new AggregateError(startErrors, "所有 NapCat 账号均启动失败");
+    throw new AggregateError(startErrors, "所有 QQ 账号均启动失败");
   }
 
   try {
@@ -288,7 +318,7 @@ async function main(): Promise<void> {
 }
 
 /** 给每个账号的离线告警加上账号名，便于同一收件箱区分是哪台 NapCat 掉线。 */
-function withAccountLabel(notifier: Notifier, account: NapcatAccount): Notifier {
+function withAccountLabel(notifier: Notifier, account: { name: string }): Notifier {
   return {
     async send(message) {
       await notifier.send({ ...message, subject: `[${account.name}] ${message.subject}` });
@@ -300,7 +330,7 @@ function withAccountLabel(notifier: Notifier, account: NapcatAccount): Notifier 
 }
 
 /** 多 App 共用 SIGINT / SIGTERM：所有连接都收尾，但每个账号只发一次下线消息。 */
-function registerShutdown(apps: readonly App[]): void {
+function registerShutdown(apps: readonly BotApp[]): void {
   let stopping = false;
   const stopAll = async () => {
     if (stopping) {

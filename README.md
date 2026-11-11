@@ -1,6 +1,6 @@
 # NanaBot
 
-基于 NapCat WebSocket 的 TypeScript QQ 机器人：监听 B 站直播间开播 / 下播，向 QQ 群推送通知，
+支持 QQ 官方 API 与 NapCat WebSocket 的 TypeScript QQ 机器人：监听 B 站直播间开播 / 下播，向 QQ 群推送通知，
 并提供一个 Web 面板展示主播实时直播状态。
 
 基于 pnpm workspace 的 monorepo，由 [Vite+](https://viteplus.dev)（`vp`）统一管理。
@@ -8,7 +8,7 @@
 ## 功能
 
 - 多 B 站直播间开播 / 下播监控
-- 开播、下播、连接状态 QQ 群通知（NapCat）
+- 直播与连接状态 QQ 群通知，支持 QQ 官方机器人 / NapCat 两种通道
 - 推送记录：所有群推送（开播、应用上线 / 下线、管理员通知）无论成功或失败都写入
   `db/push-log.sqlite`，并可在 Web 面板查看最近推送与送达状态
 - 直播状态持久化到 SQLite（`db/live-status.sqlite`）
@@ -36,7 +36,7 @@ ecosystem.config.cjs   # PM2 入口
 
 - Node.js >= 22.18.0
 - pnpm 11.20.0
-- 可用的 NapCat WebSocket 服务
+- QQ 官方机器人的 AppID / AppSecret，或可用的 NapCat WebSocket 服务
 
 ## 快速开始
 
@@ -149,6 +149,82 @@ up:
 | `liveMonitorConfig.enableNotify`          | 是否发送 QQ 群通知                             |
 | `liveMonitorConfig.notifyGroups`          | 通知群号                                       |
 | `liveMonitorConfig.messageTemplate.start` | 开播文案，支持 `{uname}`、`{roomId}`、`{@all}` |
+
+### QQ 官方机器人（推荐用于新接入）
+
+使用腾讯维护的 [`@tencent-connect/qqbot-nodejs`](https://github.com/tencent-connect/qqbot-nodejs)
+连接官方 WebSocket Gateway，SDK 负责 access token 刷新、心跳与重连。无需部署 NapCat 或公网回调服务。
+原有 NapCat 代码和配置继续保留；没有 `qq` 配置时保持旧行为。
+
+1. 在 [QQ 开放平台](https://q.qq.com/)创建机器人，或通过
+   [官方 Agent 接入入口](https://bot.q.qq.com/wiki/agent-qqbot/)快捷创建。
+2. 在 `nana.config.yaml` 增加下方 `qq` 配置；`id` 可以沿用原来的 NapCat 账号标识，
+   这样 `up[].qqAccount`、开播通知群与词云群均不用改。启用官方通道后只读取 `qq.accounts`。
+3. 在 `apps/bot/.env` 填写 `QQ_BOT_APP_ID` / `QQ_BOT_APP_SECRET`，或在仓库根目录扫码绑定：
+
+```bash
+vp run @nana/bot#qq:bind 2227511984
+```
+
+扫码使用官方 `@tencent-connect/qqbot-connector`，凭据直接写入 `apps/bot/.env`，不打印密钥。
+命令缺省选择 `qq.accounts` 中第一个账号，Ctrl+C 可取消。多个机器人需分别配置不同的
+`appIdEnv` / `appSecretEnv`，再按账号 ID 分别绑定。
+
+```yaml
+qq:
+  provider: official # 改为 napcat 可切回原通道
+  accounts:
+    - id: "2227511984" # 本地路由标识，不是 AppID
+      name: 饭总机器人
+      appIdEnv: QQ_BOT_APP_ID
+      appSecretEnv: QQ_BOT_APP_SECRET
+      sandbox: false # 开发沙箱可设 true
+      # 获取映射前可以不写 adminGroup，groups 留空，先运行 qq:discover。
+      adminGroup: 1101365727
+      groups:
+        "1101365727":
+          openid: "此机器人收到的该群 group_openid"
+          name: 饭友群
+        "511731882":
+          openid: "另一个目标群的 group_openid"
+          name: 直播通知群
+        # 为该账号负责的所有通知群、词云群、管理群补齐映射。
+```
+
+官方 API 的 `group_openid` 是字符串，与 QQ 群号不同，也不能跨机器人复用。
+`groups` 的数字键仅作为本地别名，可以继续使用现有群号；实际请求与推送记录中的
+`target_id` 使用官方 openid，群展示名取 `name`，未填写时显示「群+别名」。
+
+4. 获取群标识（无需提前填写映射，不启动 B 站监控，也不主动发消息）：
+
+```bash
+vp run @nana/bot#qq:discover 2227511984
+```
+
+连接后将机器人加入目标群，或在目标群里 @机器人 发一条消息，终端会显示该账号收到的
+`group_openid`。逐个填入 `groups`，完成后 Ctrl+C 退出发现工具，再正常启动 bot。
+不要让发现工具与运行中的同一机器人账号同时连接。
+
+5. 由群主在机器人设置中开启「机器人主动在群聊内发言」。需要接收普通群消息时，可另开
+   「获取群内全部消息」；用于获取映射的 @消息不要求接收全部群消息。
+   若消息带直播链接，还需按开放平台要求配置消息 URL / 域名白名单，并配置服务端 IP 白名单、
+   沙箱成员及上线权限等平台设置。
+6. 执行 `vp run @nana/bot#build`，再按现有方式启动或部署 bot。
+
+官方通道复用开播通知、管理群上线 / 下线通知、词云 PNG、直播摘要、推送记录和邮件 / Bark
+离线告警。词云通过官方媒体 API 上传本地图片，再发送带正文的媒体消息；失败沿用纯文字降级。
+平台返回的发送失败会写入失败记录并向业务层抛出，不会当作送达成功。
+
+启动前会检查账号归属和所有群映射；缺少凭据 / 映射会明确报错，不会回退发到其他通道或群。
+官方 SDK 的 READY / RESUMED 表示连接可用，持续断连 90 秒后触发离线告警；NapCat 原有心跳
+检测保持原样。官方群消息接口没有 OneBot 的 @全体成员消息段，`{@all}` 会被省略并写入日志。
+主动消息最终能否送达仍取决于群授权、机器人权限与平台频率限制。
+
+参照：[官方 API 准备工作](https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/getting-started.html)、
+[当前 Agent 接入及群权限说明](https://bot.q.qq.com/wiki/agent-qqbot/)、
+[SDK 使用文档](https://github.com/tencent-connect/qqbot-nodejs/blob/main/USAGE.md)。
+旧版 API 文档曾公告停止主动推送，当前 Agent 文档已说明群主可授权主动发言，部署应以
+当前机器人实际开放权限为准。
 
 ### 多 QQ 号（多个 NapCat 实例）
 

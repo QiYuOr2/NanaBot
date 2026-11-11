@@ -11,6 +11,8 @@ catalog:
   "@fontsource/geist-sans": ^5.3.0
   "@node-rs/jieba": ^2.0.4
   "@resvg/resvg-js": ^2.6.2
+  "@tencent-connect/qqbot-connector": ^1.2.0
+  "@tencent-connect/qqbot-nodejs": ^1.0.5
   "@types/node": ^24.13.3
   js-yaml: ^5.3.0
   nodemailer: ^10.0.0

@@ -22,6 +22,8 @@
     "@nana/wordcloud": "workspace:*",
     "@node-rs/jieba": "catalog:",
     "@resvg/resvg-js": "catalog:",
+    "@tencent-connect/qqbot-connector": "catalog:",
+    "@tencent-connect/qqbot-nodejs": "catalog:",
     "dotenv": "^17.4.2",
     "node-napcat-ts": "^0.4.25",
     "zod": "catalog:"

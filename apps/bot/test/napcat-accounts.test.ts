@@ -275,5 +275,5 @@ test("主播引用了不存在的账号时直接报错", () => {
 
   expect(() =>
     groupStreamersByAccount([{ streamer: "走错门的主播", qqAccount: "missing" }], accounts),
-  ).toThrow('qqAccount "missing" 未在 napcat.accounts 中定义');
+  ).toThrow('qqAccount "missing" 未在当前通道的账号列表');
 });

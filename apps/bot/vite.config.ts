@@ -18,6 +18,17 @@ export default defineConfig({
   },
   run: {
     tasks: {
+      // 扫码和发现依赖外部交互，不能缓存终端输出或凭据文件。
+      "qq:bind": {
+        command: "node scripts/qq-bind.ts",
+        cache: false,
+        dependsOn: ["@nana/constants#build", "@nana/utils#build", "@nana/config#build"],
+      },
+      "qq:discover": {
+        command: "node scripts/qq-discover.ts",
+        cache: false,
+        dependsOn: ["@nana/constants#build", "@nana/utils#build", "@nana/config#build"],
+      },
       build: {
         command: "tsc && vp build",
         dependsOn: [{ task: "build", from: "dependencies" }],
