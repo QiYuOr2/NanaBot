@@ -107,6 +107,44 @@ describe("直播摘要认领", () => {
     ).toBe(false);
   });
 
+  test("force 可以覆盖已有摘要，但不会抢占正在生成的摘要", () => {
+    const rootDir = createRootDir();
+    const sessionId = endedSession(rootDir);
+    const firstAt = new Date("2026-10-01T12:05:00.000Z");
+
+    const first = claimLiveSummary(sessionId, { rootDir, now: firstAt });
+    if (first.kind !== "claimed") {
+      throw new Error("首次认领失败");
+    }
+    completeLiveSummary(
+      sessionId,
+      first.claimedAt,
+      { status: "ok", text: "旧摘要", source: "site" },
+      { rootDir },
+    );
+
+    expect(claimLiveSummary(sessionId, { rootDir }).kind).toBe("existing");
+
+    const secondAt = new Date("2026-10-01T12:10:00.000Z");
+    const forced = claimLiveSummary(sessionId, { rootDir, now: secondAt, force: true });
+    expect(forced).toEqual({ kind: "claimed", claimedAt: secondAt.toISOString() });
+    expect(claimLiveSummary(sessionId, { rootDir, now: secondAt, force: true }).kind).toBe("busy");
+
+    expect(
+      completeLiveSummary(
+        sessionId,
+        secondAt.toISOString(),
+        { status: "ok", text: "新摘要", source: "site" },
+        { rootDir },
+      ),
+    ).toBe(true);
+    expect(readLiveSummary(sessionId, { rootDir })).toMatchObject({
+      status: "ok",
+      text: "新摘要",
+      source: "site",
+    });
+  });
+
   test("只有机器人写好且未推送的摘要会被列出来", () => {
     const rootDir = createRootDir();
     const botSession = endedSession(rootDir);
