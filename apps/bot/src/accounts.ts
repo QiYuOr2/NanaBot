@@ -138,8 +138,8 @@ function toNapcatAccount(entry: NapcatAccountInput, env: NodeJS.ProcessEnv): Nap
     name: entry.name ?? entry.id,
     wsUrl: resolveWsUrl(entry, env),
     accessToken,
-    adminGroupId:
-      entry.adminGroup ?? parseOptionalNumber(env[ENV_KEYS.ADM_GROUP], ENV_KEYS.ADM_GROUP),
+    // 多账号必须各自显式指定管理群；否则会全部落到同一个 ADM_GROUP。
+    adminGroupId: entry.adminGroup,
   };
 }
 

@@ -44,8 +44,8 @@
 ## 兼容性与数据安全
 
 - 没有 `napcat.accounts` 时完全走旧版 `NC_WS_URL` / `NC_ACCESS_TOKEN` / `ADM_GROUP`。
-- 有 `napcat.accounts` 但某个账号省略 `wsUrl` / `adminGroup` 时，分别沿用
-  `NC_WS_URL` / `ADM_GROUP`；单实例迁移只需要补 QQ 号和主播归属。
+- 有 `napcat.accounts` 但某个账号省略 `wsUrl` 时沿用 `NC_WS_URL`；`adminGroup`
+  不继承全局 `ADM_GROUP`，避免多个账号的上线 / 下线提示全部落到同一个群。
 - 第二个实例可以用 `wsUrlEnv` 指向独立的环境变量（如 `NC_WS_URL_2`），避免把端口写死在
   配置里；配置了 `wsUrlEnv` 但变量缺失会直接报错，不会静默连回主号端口。
 - `push_log` 是新增可空列，旧库打开时执行 `ALTER TABLE ... ADD COLUMN account TEXT`；

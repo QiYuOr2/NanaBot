@@ -22,7 +22,7 @@ test("未配置 napcat.accounts 时回退到单账号环境变量", () => {
   ]);
 });
 
-test("多个账号各自从 accessTokenEnv 读取 token", () => {
+test("多个账号各自从 accessTokenEnv 读取 token，并使用自己的管理群", () => {
   const accounts = parseNapcatAccounts(
     {
       napcat: {
@@ -38,6 +38,7 @@ test("多个账号各自从 accessTokenEnv 读取 token", () => {
             id: "second",
             wsUrl: "ws://127.0.0.1:2222",
             accessTokenEnv: "NC_ACCESS_TOKEN_2",
+            adminGroup: 20002,
           },
         ],
       },
@@ -45,6 +46,7 @@ test("多个账号各自从 accessTokenEnv 读取 token", () => {
     {
       NC_ACCESS_TOKEN: "token-main",
       NC_ACCESS_TOKEN_2: "token-second",
+      ADM_GROUP: "9999",
     },
   );
 
@@ -61,12 +63,12 @@ test("多个账号各自从 accessTokenEnv 读取 token", () => {
       name: "second",
       wsUrl: "ws://127.0.0.1:2222",
       accessToken: "token-second",
-      adminGroupId: undefined,
+      adminGroupId: 20002,
     },
   ]);
 });
 
-test("账号省略 wsUrl / adminGroup 时沿用旧环境变量", () => {
+test("账号省略 wsUrl 时沿用旧环境变量，但不再继承 ADM_GROUP", () => {
   const accounts = parseNapcatAccounts(
     {
       napcat: {
@@ -86,7 +88,7 @@ test("账号省略 wsUrl / adminGroup 时沿用旧环境变量", () => {
       name: "饭总号",
       wsUrl: "ws://127.0.0.1:6364",
       accessToken: "legacy-token",
-      adminGroupId: 42,
+      adminGroupId: undefined,
     },
   ]);
 });

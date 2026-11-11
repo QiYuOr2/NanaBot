@@ -163,10 +163,11 @@ up:
 - `id` 只能包含字母、数字、`_`、`-`，用于 `up[].qqAccount` 引用。
 - `wsUrl` 可以直接写地址，也可以用 `wsUrlEnv` 指向 `.env` 变量；配置了 `wsUrlEnv` 时不会回退 `NC_WS_URL`。
 - `accessTokenEnv` 指向 `.env` 中的变量名；也可以直接写 `accessToken`（不推荐）。
-- 账号省略 `wsUrl` / `adminGroup` 时分别沿用 `NC_WS_URL` / `ADM_GROUP`，单实例迁移时不用重复写连接信息。
+- 账号省略 `wsUrl` 时沿用 `NC_WS_URL`；`adminGroup` 不继承全局 `ADM_GROUP`，多账号必须各自配置管理群。
 - `up[].qqAccount` 不写时使用第一个账号，已有单账号配置可以原样运行。
 - 不写 `napcat.accounts` 时继续读取旧的 `NC_WS_URL` / `NC_ACCESS_TOKEN` / `ADM_GROUP`。
 - 每个账号有独立的连接看门狗；离线告警邮件会在标题前加 `[账号名]`。
+- 每个账号的上线 / 下线群提示发送到该账号自己的 `adminGroup`，不会共用全局群。
 - 推送记录会写入 `account` 列，便于区分是哪个 QQ 发出的。
 
 ## 变更记录

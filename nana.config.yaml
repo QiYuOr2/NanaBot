@@ -11,6 +11,7 @@ napcat:
       name: 饭总号
       wsUrlEnv: NC_WS_URL_2
       accessTokenEnv: NC_ACCESS_TOKEN_2
+      adminGroup: 1101365727
 
 up:
   - dynamic: false
