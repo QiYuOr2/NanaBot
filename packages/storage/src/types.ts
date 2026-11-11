@@ -7,6 +7,11 @@ export interface StorageOptions {
   rootDir?: string;
 }
 
+/** 应用状态（离线检测）的存储配置；多账号时按 `accountId` 隔离状态文件。 */
+export interface AppStateOptions extends StorageOptions {
+  accountId?: string;
+}
+
 export interface LiveStatus {
   streamer: string;
   live: boolean;
@@ -23,6 +28,8 @@ export type { PushLogPurpose };
 
 /** 一条推送记录。 */
 export interface PushLog {
+  /** 发送该条推送的 NapCat 账号 id；旧记录为 null，单账号 legacy 部署记为 default。 */
+  account?: string | null;
   /** 推送目标的群 ID（字符串形式，便于与 SQLite 一致）。 */
   targetId: string;
   /** 推送目标的可读名称，通常是群昵称。 */

@@ -18,6 +18,8 @@ export interface GroupPushOptions extends PushPurposeInput {
 }
 
 export interface NapcatPushClientOptions extends StorageOptions {
+  /** 发送消息的 NapCat 账号 id，写入推送记录。 */
+  account?: string;
   /** 预置的群昵称缓存，避免每次发送都调用 get_group_info。 */
   groupNames?: Map<number, string>;
 }
@@ -29,11 +31,13 @@ export interface NapcatPushClientOptions extends StorageOptions {
  */
 export class NapcatPushClient {
   private readonly ws: NCWebsocket;
+  private readonly account?: string;
   private readonly groupNames: Map<number, string>;
   private readonly storageOptions: StorageOptions;
 
   constructor(ws: NCWebsocket, options: NapcatPushClientOptions = {}) {
     this.ws = ws;
+    this.account = options.account;
     this.groupNames = options.groupNames ?? new Map();
     this.storageOptions = options;
   }
@@ -67,6 +71,7 @@ export class NapcatPushClient {
     const target = await this.resolveGroupName(groupId);
     const purposeLabel = options.label ?? PUSH_PURPOSE_LABELS[options.purpose];
     const base = {
+      account: this.account ?? null,
       targetId: String(groupId),
       target,
       purpose: options.purpose,

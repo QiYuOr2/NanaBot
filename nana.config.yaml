@@ -1,3 +1,17 @@
+napcat:
+  accounts:
+    # 当前 NC_WS_URL 对应的主号。
+    - id: "2799397589"
+      name: 主号
+      adminGroup: 646247690
+
+    # 饭总使用的第二个 NapCat 实例；连接信息在 .env 的 NC_WS_URL_2 /
+    # NC_ACCESS_TOKEN_2 中配置。
+    - id: "2227511984"
+      name: 饭总号
+      wsUrlEnv: NC_WS_URL_2
+      accessTokenEnv: NC_ACCESS_TOKEN_2
+
 up:
   - dynamic: false
     dynamicMonitorConfig: {}
@@ -21,6 +35,7 @@ up:
       notifyGroups:
         - 1101365727
 
+    qqAccount: "2227511984"
     uid: 145149047
     liveRoomId: 4629447
     uname: 饭总

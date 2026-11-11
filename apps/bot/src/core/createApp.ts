@@ -21,11 +21,18 @@ import {
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;
+  /** 当前连接对应的 NapCat 账号；多账号部署时每个 App 传一个。 */
+  account?: {
+    id: string;
+    name?: string;
+  };
   adminGroupId?: number;
   /** 推送记录的存储配置（测试时可传 rootDir 隔离）。 */
   storage?: StorageOptions;
   /** 连接看门狗的配置，缺省即启用默认值。 */
   connection?: ConnectionSupervisorOptions;
+  /** 是否由 App 自己注册 SIGINT / SIGTERM；多 App 启动时由入口统一处理。 */
+  handleSignals?: boolean;
 }
 
 export interface StopOptions {
@@ -34,6 +41,8 @@ export interface StopOptions {
 
 export interface App {
   ws: NCWebsocket;
+  /** 当前连接对应的 NapCat 账号 id。 */
+  accountId?: string;
   /** 连接看门狗，可用 `isConnected` 观察当前连接状态。 */
   connection: ConnectionSupervisor;
   adminGroupId?: number;
@@ -58,13 +67,19 @@ const DEFAULT_ADMIN_PURPOSE: PushPurposeInput = { purpose: "notification" };
 const BOT_NAME = "NanaBot";
 
 export function createApp(options: CreateAppOptions): App {
+  const logTag = options.account
+    ? `[NanaBot:${options.account.name ?? options.account.id}]`
+    : "[NanaBot]";
   const isOpenDebug = readOptionalNumberEnv(ENV_KEYS.NC_DEBUG) === 1;
   // oxlint-disable-next-line no-unused-expressions
-  isOpenDebug && console.log(`[NanaBot] 调试模式`);
+  isOpenDebug && console.log(`${logTag} 调试模式`);
 
   const napcat = new NCWebsocket(options.websocket, isOpenDebug);
-  console.log(`[NanaBot] ${(options.websocket as any)["baseUrl"]}`);
-  const pushClient = new NapcatPushClient(napcat, options.storage);
+  console.log(`${logTag} ${(options.websocket as any)["baseUrl"]}`);
+  const pushClient = new NapcatPushClient(napcat, {
+    ...options.storage,
+    account: options.account?.id,
+  });
   const connection = new ConnectionSupervisor(napcat, options.connection);
 
   const cleanupManager = createCleanupManager();
@@ -74,6 +89,7 @@ export function createApp(options: CreateAppOptions): App {
 
   const featureContext: FeatureContext = {
     ws: napcat,
+    accountId: options.account?.id,
     adminGroupId: options.adminGroupId,
     on(event, handler) {
       const unsubscribe = napcat.subscribe(event, handler);
@@ -114,6 +130,7 @@ export function createApp(options: CreateAppOptions): App {
 
   const app: App = {
     ws: napcat,
+    accountId: options.account?.id,
     connection,
     adminGroupId: options.adminGroupId,
     use(feature, featureOptions) {
@@ -145,7 +162,7 @@ export function createApp(options: CreateAppOptions): App {
       return featureContext.sendGroupMsg(groupId, options, messages);
     },
     async start() {
-      console.log(`[NanaBot] start() state === ${state}`);
+      console.log(`${logTag} start() state === ${state}`);
       if (state === "started") {
         return;
       }
@@ -156,17 +173,19 @@ export function createApp(options: CreateAppOptions): App {
 
       state = "starting";
       await Promise.all(pluginTasks);
-      console.log(`[NanaBot] 插件注册数量：${pluginTasks.length}`);
-      registerSignalHandlers(app, cleanupManager);
+      console.log(`${logTag} 插件注册数量：${pluginTasks.length}`);
+      if (options.handleSignals !== false) {
+        registerSignalHandlers(app, cleanupManager);
+      }
       // 先启动看门狗：首次连接若卡住（库的 connect() 会永不 settle），由它负责持续重连。
       connection.start();
       if (!(await settleWithin(napcat.connect(), CONNECT_TIMEOUT_MS))) {
         console.warn(
-          `[NanaBot] 首次连接 NapCat 超过 ${CONNECT_TIMEOUT_MS}ms 未成功，改由连接看门狗持续重试。`,
+          `${logTag} 首次连接 NapCat 超过 ${CONNECT_TIMEOUT_MS}ms 未成功，改由连接看门狗持续重试。`,
         );
       }
       state = "started";
-      console.log(`[NanaBot] Connected state === ${state}`);
+      console.log(`${logTag} Connected state === ${state}`);
     },
     async stop(stopOptions) {
       if (state === "stopped") {

@@ -18,6 +18,8 @@ export interface MonitorStreamerConfig {
   uid: number;
   roomId: number;
   streamer: string;
+  /** 该主播的通知由哪个 NapCat 账号发送；缺省为第一个账号。 */
+  qqAccount?: string;
   notifyEnabled: boolean;
   notifyGroups: number[];
   messages: MonitorMessageConfig;
@@ -44,6 +46,7 @@ const UpMonitorConfigSchema = z.object({
   }),
   /** 不写则不为该主播录制或推送词云。 */
   wordcloud: StreamerWordCloudConfigSchema.optional(),
+  qqAccount: z.string().min(1).optional(),
   uid: z.number().int(),
   liveRoomId: z.number().int(),
   uname: z.string().min(1),
@@ -69,6 +72,7 @@ function toMonitorStreamerConfig(config: UpMonitorConfig): MonitorStreamerConfig
     uid: config.uid,
     roomId: config.liveRoomId,
     streamer: config.uname,
+    qqAccount: config.qqAccount,
     notifyEnabled: config.liveMonitorConfig.enableNotify,
     notifyGroups: config.liveMonitorConfig.notifyGroups,
     messages: {

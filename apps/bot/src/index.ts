@@ -2,22 +2,39 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
-import { readOptionalNumberEnv, resolveProjectRoot } from "@nana/utils";
-import { DEFAULT_NC_WS_URL, ENV_KEYS, NANA_CONFIG_FILE } from "@nana/constants";
-import { createApp, RECONNECT_DELAY_MS, UNLIMITED_RECONNECT_ATTEMPTS } from "./core";
-import { createMonitorFeature, loadMonitorConfig, syncLiveStatus } from "./monitor";
-import { loadOfflineDetectorConfig, offlineDetectorFeature } from "./offline";
-import { createBarkNotifier, createEmailNotifier } from "@nana/notify";
+import { resolveProjectRoot } from "@nana/utils";
+import { ENV_KEYS, NANA_CONFIG_FILE } from "@nana/constants";
+import { createApp, RECONNECT_DELAY_MS, UNLIMITED_RECONNECT_ATTEMPTS, type App } from "./core";
+import {
+  createMonitorFeature,
+  loadMonitorConfig,
+  syncLiveStatus,
+  type MonitorStreamerConfig,
+} from "./monitor";
+import {
+  createOfflineStateStore,
+  loadOfflineDetectorConfig,
+  offlineDetectorFeature,
+} from "./offline";
+import {
+  createBarkNotifier,
+  createCompositeNotifier,
+  createEmailNotifier,
+  type Notifier,
+} from "@nana/notify";
 import {
   createWordCloudMonitorSink,
   DanmuRecorder,
   fetchIsLive,
   loadWordCloudConfig,
   resumeDanmuSessions,
+  type SessionClosedHandler,
   toWordCloudSender,
+  type WordCloudSender,
   wordCloudFeature,
 } from "./danmu";
 import { publishLiveSummary, pushUnsentLiveSummaries } from "./summary";
+import { groupStreamersByAccount, loadNapcatAccounts, type NapcatAccount } from "./accounts";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
 const entryDir = dirname(fileURLToPath(import.meta.url));
@@ -49,115 +66,140 @@ function resolveAppRoot(): string {
 
 const projectRoot = resolveAppRoot();
 
-const accessToken = process.env[ENV_KEYS.NC_ACCESS_TOKEN];
-if (!accessToken) {
-  console.error(
-    `[app] 缺少环境变量 ${ENV_KEYS.NC_ACCESS_TOKEN}。请确认 ${envFile} 存在且包含该变量（或在 pm2 env 中提供）。`,
-  );
-  throw new Error(`缺少环境变量 ${ENV_KEYS.NC_ACCESS_TOKEN}`);
+interface AccountRuntime {
+  app: App;
+  streamers: MonitorStreamerConfig[];
+  sendWordCloud: WordCloudSender;
+  onSessionClosed?: SessionClosedHandler;
 }
-console.log(`[app] ${ENV_KEYS.NC_ACCESS_TOKEN}: ${accessToken}`);
 
 async function main(): Promise<void> {
-  const adminGroupId = readOptionalNumberEnv(ENV_KEYS.ADM_GROUP);
-  const app = createApp({
-    websocket: {
-      baseUrl: process.env[ENV_KEYS.NC_WS_URL] ?? DEFAULT_NC_WS_URL,
-      accessToken: process.env[ENV_KEYS.NC_ACCESS_TOKEN],
-      reconnection: {
-        enable: true,
-        // 不给库设重连预算：预算耗尽后它会永久停止重连，而且此时 connect() 会挂起而不是报错。
-        attempts: UNLIMITED_RECONNECT_ATTEMPTS,
-        delay: RECONNECT_DELAY_MS,
-      },
-    },
-    adminGroupId,
-    // 推送记录也写入项目根的 db/，不再依赖 cwd。
-    storage: { rootDir: projectRoot },
-  });
-
-  app.on("socket.open", () => {
-    app.sendAdminText("我来了~", { purpose: "app.online" }).catch((error) => {
-      console.error("[app] 发送机器人连接提示失败", error);
-    });
-  });
-
+  const accounts = loadNapcatAccounts();
   const monitorConfig = loadMonitorConfig();
   const wordCloudConfig = loadWordCloudConfig();
-
-  // 每个主播只建一条 blive 长连接：开播通知与弹幕录制共用同一条连接的事件流。
-  // 录制器要等监控 setup 才创建，轮询/停机必须拿这张 Map 的引用，不能提前拷贝。
-  const recorders = new Map<number, DanmuRecorder>();
-  // 词云发到该主播自己配置的群，不再回落到 ADM_GROUP。
-  const sendWordCloud = toWordCloudSender(app);
-  const wordCloudEnabled = monitorConfig.streamers.some((streamer) => streamer.wordCloud.enabled);
+  const streamersByAccount = groupStreamersByAccount(monitorConfig.streamers, accounts);
   const summaryApiKey = process.env[ENV_KEYS.DEEPSEEK_API_KEY];
-  const onSessionClosed = wordCloudEnabled
-    ? async (input: {
-        sessionId: number;
-        streamer: (typeof monitorConfig.streamers)[number];
-      }): Promise<void> => {
-        await publishLiveSummary({
-          sessionId: input.sessionId,
-          streamer: input.streamer.streamer,
-          notifyGroupIds: input.streamer.notifyEnabled ? input.streamer.notifyGroups : [],
-          send: sendWordCloud,
-          rootDir: projectRoot,
-          apiKey: summaryApiKey,
-        });
-      }
-    : undefined;
-  const wordCloudOptions = wordCloudEnabled
-    ? {
-        streamers: monitorConfig.streamers,
-        config: wordCloudConfig,
-        rootDir: projectRoot,
-        sendWordCloud,
-        recorders,
-        onSessionClosed,
-      }
-    : undefined;
-  const danmuSinkFactory = wordCloudOptions
-    ? createWordCloudMonitorSink(wordCloudOptions, recorders)
-    : undefined;
+  const showAccountLabel = accounts.length > 1;
 
-  for (const streamerConfig of monitorConfig.streamers) {
-    app.use(
-      createMonitorFeature({
-        rootDir: projectRoot,
-        createSink: () => danmuSinkFactory?.(streamerConfig),
-      }),
-      {
-        roomId: streamerConfig.roomId,
-        streamer: streamerConfig.streamer,
-        uid: streamerConfig.uid,
-        notifyEnabled: streamerConfig.notifyEnabled,
-        notifyGroupIds: streamerConfig.notifyGroups,
-        messages: streamerConfig.messages,
-      },
-    );
-  }
-
-  if (wordCloudOptions) {
-    app.use(wordCloudFeature, wordCloudOptions);
-  }
-
+  let offlineConfig: ReturnType<typeof loadOfflineDetectorConfig> | undefined;
   try {
-    const offlineConfig = loadOfflineDetectorConfig();
-    const notifiers = [createEmailNotifier(offlineConfig.notifier)];
-    if (process.env[ENV_KEYS.BARK_KEY]) {
-      notifiers.push(createBarkNotifier());
-    }
-    app.use(offlineDetectorFeature, {
-      notifier: notifiers,
-      confirmCount: offlineConfig.confirmCount,
-      notifyRecovery: offlineConfig.notifyRecovery,
-    });
+    offlineConfig = loadOfflineDetectorConfig();
   } catch (error) {
     console.warn("[app] 未启用离线告警（缺少 adminEmail 配置）", error);
   }
 
-  await app.start();
+  const runtimes: AccountRuntime[] = [];
+  for (const account of accounts) {
+    const streamers = streamersByAccount.get(account.id) ?? [];
+    const app = createApp({
+      websocket: {
+        baseUrl: account.wsUrl,
+        accessToken: account.accessToken,
+        reconnection: {
+          enable: true,
+          // 不给库设重连预算：预算耗尽后它会永久停止重连，而且此时 connect() 会挂起而不是报错。
+          attempts: UNLIMITED_RECONNECT_ATTEMPTS,
+          delay: RECONNECT_DELAY_MS,
+        },
+      },
+      account: { id: account.id, name: account.name },
+      adminGroupId: account.adminGroupId,
+      // 推送记录也写入项目根的 db/，不再依赖 cwd。
+      storage: { rootDir: projectRoot },
+      // 多个 App 共用一次进程信号处理，避免每个账号都发一遍下线消息。
+      handleSignals: false,
+    });
+
+    app.on("socket.open", () => {
+      const text = showAccountLabel ? `我来了~（${account.name}）` : "我来了~";
+      app.sendAdminText(text, { purpose: "app.online" }).catch((error) => {
+        console.error(`[app] ${account.name} 发送机器人连接提示失败`, error);
+      });
+    });
+
+    // 每个主播只建一条 blive 长连接：开播通知与弹幕录制共用同一条连接的事件流。
+    // 录制器要等监控 setup 才创建，轮询/停机必须拿这张 Map 的引用，不能提前拷贝。
+    const recorders = new Map<number, DanmuRecorder>();
+    // 词云发到该主播自己配置的群，不再回落到 ADM_GROUP。
+    const sendWordCloud = toWordCloudSender(app);
+    const wordCloudEnabled = streamers.some((streamer) => streamer.wordCloud.enabled);
+    const onSessionClosed: SessionClosedHandler | undefined = wordCloudEnabled
+      ? async (input): Promise<void> => {
+          await publishLiveSummary({
+            sessionId: input.sessionId,
+            streamer: input.streamer.streamer,
+            notifyGroupIds: input.streamer.notifyEnabled ? input.streamer.notifyGroups : [],
+            send: sendWordCloud,
+            rootDir: projectRoot,
+            apiKey: summaryApiKey,
+          });
+        }
+      : undefined;
+    const wordCloudOptions = wordCloudEnabled
+      ? {
+          streamers,
+          config: wordCloudConfig,
+          rootDir: projectRoot,
+          sendWordCloud,
+          recorders,
+          onSessionClosed,
+        }
+      : undefined;
+    const danmuSinkFactory = wordCloudOptions
+      ? createWordCloudMonitorSink(wordCloudOptions, recorders)
+      : undefined;
+
+    for (const streamerConfig of streamers) {
+      app.use(
+        createMonitorFeature({
+          rootDir: projectRoot,
+          createSink: () => danmuSinkFactory?.(streamerConfig),
+        }),
+        {
+          roomId: streamerConfig.roomId,
+          streamer: streamerConfig.streamer,
+          uid: streamerConfig.uid,
+          notifyEnabled: streamerConfig.notifyEnabled,
+          notifyGroupIds: streamerConfig.notifyGroups,
+          messages: streamerConfig.messages,
+        },
+      );
+    }
+
+    if (wordCloudOptions) {
+      app.use(wordCloudFeature, wordCloudOptions);
+    }
+
+    if (offlineConfig) {
+      const notifiers = [createEmailNotifier(offlineConfig.notifier)];
+      if (process.env[ENV_KEYS.BARK_KEY]) {
+        notifiers.push(createBarkNotifier());
+      }
+      const notifier = createCompositeNotifier(notifiers);
+      app.use(offlineDetectorFeature, {
+        notifier: showAccountLabel ? withAccountLabel(notifier, account) : notifier,
+        confirmCount: offlineConfig.confirmCount,
+        notifyRecovery: offlineConfig.notifyRecovery,
+        storage: { rootDir: projectRoot },
+        // 默认账号继续用旧文件，站点「告警」页仍能看到主号状态；
+        // 其它账号各用一份状态文件，避免互相覆盖在线/离线状态机。
+        store: createOfflineStateStore({
+          rootDir: projectRoot,
+          accountId: account.id === accounts[0]?.id ? undefined : account.id,
+        }),
+      });
+    }
+
+    runtimes.push({ app, streamers, sendWordCloud, onSessionClosed });
+  }
+
+  registerShutdown(runtimes.map((runtime) => runtime.app));
+  try {
+    await Promise.all(runtimes.map((runtime) => runtime.app.start()));
+  } catch (error) {
+    await Promise.allSettled(runtimes.map((runtime) => runtime.app.stop()));
+    throw error;
+  }
 
   try {
     await syncLiveStatus(monitorConfig.streamers, { rootDir: projectRoot });
@@ -167,19 +209,60 @@ async function main(): Promise<void> {
 
   // 上一场直播若在机器人停机期间结束，等状态同步完成后再补收尾，避免误判为「仍在直播」。
   // 遗留场次发到该主播自己的词云群。
-  if (wordCloudEnabled) {
+  for (const runtime of runtimes) {
+    if (!runtime.streamers.some((streamer) => streamer.wordCloud.enabled)) {
+      continue;
+    }
+
+    // roomIds 限定本账号的主播，避免第一个账号把其它账号的摘要误标成已发送。
     await pushUnsentLiveSummaries({
-      streamers: monitorConfig.streamers,
-      send: sendWordCloud,
+      streamers: runtime.streamers,
+      send: runtime.sendWordCloud,
       rootDir: projectRoot,
+      roomIds: new Set(runtime.streamers.map((streamer) => streamer.roomId)),
     });
     await resumeDanmuSessions({
-      streamers: monitorConfig.streamers,
+      streamers: runtime.streamers,
       config: wordCloudConfig,
       rootDir: projectRoot,
       isLive: (streamer) => fetchIsLive(streamer),
-      sendWordCloud,
-      onSessionClosed,
+      sendWordCloud: runtime.sendWordCloud,
+      onSessionClosed: runtime.onSessionClosed,
+    });
+  }
+}
+
+/** 给每个账号的离线告警加上账号名，便于同一收件箱区分是哪台 NapCat 掉线。 */
+function withAccountLabel(notifier: Notifier, account: NapcatAccount): Notifier {
+  return {
+    async send(message) {
+      await notifier.send({ ...message, subject: `[${account.name}] ${message.subject}` });
+    },
+    async close() {
+      await notifier.close?.();
+    },
+  };
+}
+
+/** 多 App 共用 SIGINT / SIGTERM：所有连接都收尾，但每个账号只发一次下线消息。 */
+function registerShutdown(apps: readonly App[]): void {
+  let stopping = false;
+  const stopAll = async () => {
+    if (stopping) {
+      return;
+    }
+    stopping = true;
+    const results = await Promise.allSettled(apps.map((app) => app.stop({ announce: "我溜了~" })));
+    for (const result of results) {
+      if (result.status === "rejected") {
+        console.error("[app] 关闭应用时发生错误", result.reason);
+      }
+    }
+  };
+
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      void stopAll();
     });
   }
 }

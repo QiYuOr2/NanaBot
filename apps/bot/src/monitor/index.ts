@@ -1,4 +1,4 @@
-export { loadMonitorConfig, type MonitorConfig } from "./config.ts";
+export { loadMonitorConfig, type MonitorConfig, type MonitorStreamerConfig } from "./config.ts";
 export {
   createMonitorFeature,
   type MonitorFeatureRegistration,

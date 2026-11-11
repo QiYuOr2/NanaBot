@@ -37,7 +37,7 @@ function createFakeWs(overrides: Partial<FakeWs> = {}): FakeWs {
 
 test("成功发送会解析群昵称并写入成功记录", async () => {
   const rootDir = createRootDir();
-  const client = new NapcatPushClient(createFakeWs() as never, { rootDir });
+  const client = new NapcatPushClient(createFakeWs() as never, { rootDir, account: "main" });
 
   const target = await client.sendGroupMsg(
     1101365727,
@@ -48,6 +48,7 @@ test("成功发送会解析群昵称并写入成功记录", async () => {
   expect(target).toBe("饭友群");
   expect(readPushLogs({ rootDir })).toEqual([
     expect.objectContaining({
+      account: "main",
       targetId: "1101365727",
       target: "饭友群",
       purpose: "live.start",

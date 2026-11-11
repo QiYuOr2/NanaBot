@@ -170,3 +170,51 @@ test("启动时只补发机器人写好但还没发出去的摘要", async () =>
   expect(sent).toEqual([1101365727]);
   expect(listUnpushedLiveSummaries({ rootDir })).toEqual([]);
 });
+
+test("按 roomIds 分批补发时不会误处理其它账号的摘要", async () => {
+  const rootDir = createRootDir();
+  const sent: number[] = [];
+  const send: WordCloudSender = async (groupId) => {
+    sent.push(groupId);
+  };
+  const session = openDanmuSession(
+    { roomId: 4629447, streamer: "饭总", startedAt: "2026-10-01T10:00:00.000Z" },
+    { rootDir },
+  );
+  appendDanmuMessages(
+    session.id,
+    [{ sentAt: "2026-10-01T10:01:00.000Z", userId: "1", username: "观众", content: "等一下" }],
+    { rootDir },
+  );
+  closeDanmuSession(
+    session.id,
+    { endedAt: "2026-10-01T12:00:00.000Z", reason: "live.ended" },
+    { rootDir },
+  );
+
+  const { settleLiveSummary } = await import("@nana/live-summary");
+  await settleLiveSummary({
+    sessionId: session.id,
+    source: "bot",
+    apiKey: "test-key",
+    rootDir,
+    fetch: async () => jsonResponse("观众在等补发。"),
+  });
+
+  await pushUnsentLiveSummaries({
+    streamers: [
+      {
+        roomId: 999,
+        streamer: "另一个主播",
+        notifyEnabled: true,
+        notifyGroups: [999],
+      },
+    ],
+    send,
+    rootDir,
+    roomIds: new Set([999]),
+  });
+
+  expect(sent).toEqual([]);
+  expect(listUnpushedLiveSummaries({ rootDir })).toHaveLength(1);
+});

@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { APP_STATE_FILE } from "@nana/constants";
-import type { StorageOptions } from "./types.ts";
+import type { AppStateOptions } from "./types.ts";
 import { resolveDbPath } from "./paths.ts";
 
 /** 应用自身的持久化状态（机器人在线/离线告警状态机）。 */
@@ -19,8 +19,8 @@ export interface AppState {
   lastOnlineAlertAt: string | null;
 }
 
-function openAppStateDatabase(options?: StorageOptions): DatabaseSync {
-  const filePath = resolveDbPath(APP_STATE_FILE, options);
+function openAppStateDatabase(options?: AppStateOptions): DatabaseSync {
+  const filePath = resolveDbPath(appStateFile(options?.accountId), options);
   mkdirSync(dirname(filePath), { recursive: true });
 
   const database = new DatabaseSync(filePath);
@@ -39,6 +39,17 @@ function openAppStateDatabase(options?: StorageOptions): DatabaseSync {
   return database;
 }
 
+/** 默认账号沿用旧文件，保证站点当前状态与历史数据不中断。 */
+function appStateFile(accountId: string | undefined): string {
+  if (!accountId) {
+    return APP_STATE_FILE;
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(accountId)) {
+    throw new Error("账号 id 只能包含字母、数字、下划线和短横线。");
+  }
+  return `app-state-${accountId}.sqlite`;
+}
+
 function mapAppStateRow(row: Record<string, unknown>): AppState {
   return {
     online: Number(row.online) === 1,
@@ -52,7 +63,7 @@ function mapAppStateRow(row: Record<string, unknown>): AppState {
 }
 
 /** 读取应用状态；无记录时返回 undefined。 */
-export function readAppState(options?: StorageOptions): AppState | undefined {
+export function readAppState(options?: AppStateOptions): AppState | undefined {
   const database = openAppStateDatabase(options);
 
   try {
@@ -71,7 +82,7 @@ export function readAppState(options?: StorageOptions): AppState | undefined {
 }
 
 /** 写入（或覆盖）应用状态。 */
-export function writeAppState(state: AppState, options?: StorageOptions): void {
+export function writeAppState(state: AppState, options?: AppStateOptions): void {
   const database = openAppStateDatabase(options);
 
   try {

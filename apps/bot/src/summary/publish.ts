@@ -50,6 +50,8 @@ export interface PushUnsentLiveSummaryOptions extends StorageOptions {
     notifyGroups: number[];
   }[];
   send: WordCloudSender;
+  /** 只补发这些直播间的摘要；多账号按账号分批补发时使用。 */
+  roomIds?: ReadonlySet<number>;
 }
 
 /** 补发上一进程写好但还没发出去的机器人摘要。页面生成的摘要不在此列。 */
@@ -60,6 +62,9 @@ export async function pushUnsentLiveSummaries(
   const pending = listUnpushedLiveSummaries(storage);
 
   for (const item of pending) {
+    if (options.roomIds && !options.roomIds.has(Number(item.roomId))) {
+      continue;
+    }
     const streamer = options.streamers.find((entry) => String(entry.roomId) === item.roomId);
     const groups = streamer?.notifyEnabled ? streamer.notifyGroups : [];
     await deliverLiveSummary(groups, item.streamer, item.text, options.send);

@@ -67,3 +67,25 @@ test("空数据库返回 undefined", () => {
   const rootDir = createRootDir();
   expect(readAppState({ rootDir })).toBeUndefined();
 });
+
+test("按 accountId 隔离多账号的在线状态", () => {
+  const rootDir = createRootDir();
+
+  writeAppState(
+    {
+      online: false,
+      offlineCount: 3,
+      offlineSince: "2026-09-07T08:00:00.000Z",
+      lastOfflineAlertAt: null,
+      lastOnlineAlertAt: null,
+    },
+    { rootDir, accountId: "second" },
+  );
+
+  expect(readAppState({ rootDir })).toBeUndefined();
+  expect(existsSync(join(rootDir, DATABASE_DIRECTORY, "app-state-second.sqlite"))).toBe(true);
+  expect(readAppState({ rootDir, accountId: "second" })).toMatchObject({
+    online: false,
+    offlineCount: 3,
+  });
+});

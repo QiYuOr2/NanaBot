@@ -4,6 +4,8 @@ import type { GroupPushOptions, PushPurposeInput } from "./napcat";
 
 export interface FeatureContext {
   ws: NCWebsocket;
+  /** 当前连接对应的 NapCat 账号 id；单账号 legacy 部署为 `default`。 */
+  accountId?: string;
   adminGroupId?: number;
   on<T extends EventKey>(event: T, handler: EventHandleMap[T]): () => void;
   onCleanup(cleanup: Cleanup): void;

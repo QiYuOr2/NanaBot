@@ -1,4 +1,5 @@
 export type {
+  AppStateOptions,
   ClaimLiveSummaryResult,
   CompleteLiveSummaryInput,
   DanmuMessage,

@@ -51,8 +51,9 @@ packages/
 
 ## 运行时配置
 
-- 根目录 `nana.config.yaml`：直播监控配置，同时作为项目根目录标记（`@nana/config` 读取）。
+- 根目录 `nana.config.yaml`：直播监控配置与 `napcat.accounts` 账号列表，同时作为项目根目录标记（`@nana/config` 读取）。
 - `apps/bot/.env`（参考 `.env.example`）：`NC_WS_URL`、`NC_ACCESS_TOKEN`、`ADM_GROUP`、`NC_DEBUG`、`BARK_KEY`，变量名收口在 `@nana/constants` 的 `ENV_KEYS`。
+- 多 QQ：`nana.config.yaml#napcat.accounts` 配置多个 NapCat WS 实例（每个实例一个 QQ），主播通过 `up[].qqAccount` 指定由哪个账号推送；未配置该段时回退旧版单账号环境变量。
 - `db/*.sqlite`：运行时 SQLite（`live-status.sqlite` / `push-log.sqlite` / `danmu.sqlite`，已 gitignore）。
 - `apps/site/ecosystem.config.cjs`：site 的 PM2 配置，端口 `6364`（`PORT`），运行 `.output/server/index.mjs`。
 

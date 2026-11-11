@@ -14,6 +14,7 @@ function openPushLogDatabase(options?: StorageOptions): DatabaseSync {
   database.exec(`
     CREATE TABLE IF NOT EXISTS push_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account TEXT,
       target_id TEXT NOT NULL,
       target TEXT NOT NULL,
       purpose TEXT NOT NULL,
@@ -25,8 +26,19 @@ function openPushLogDatabase(options?: StorageOptions): DatabaseSync {
       subject TEXT
     ) STRICT;
   `);
+  ensureAccountColumn(database);
 
   return database;
+}
+
+/** 旧库的 `push_log` 没有 account 列；打开时补上，避免多账号上线后必须手工迁移。 */
+function ensureAccountColumn(database: DatabaseSync): void {
+  const columns = database.prepare("PRAGMA table_info(push_log)").all() as {
+    name?: unknown;
+  }[];
+  if (!columns.some((column) => column.name === "account")) {
+    database.exec("ALTER TABLE push_log ADD COLUMN account TEXT;");
+  }
 }
 
 export interface PushLogRecord extends PushLog {
@@ -36,6 +48,7 @@ export interface PushLogRecord extends PushLog {
 function mapPushLogRow(row: Record<string, unknown>): PushLogRecord {
   return {
     id: Number(row.id),
+    account: row.account == null ? null : (row.account as string),
     targetId: String(row.target_id),
     target: String(row.target),
     purpose: row.purpose as PushLogPurpose,
@@ -56,10 +69,11 @@ export function writePushLog(log: PushLog, options?: StorageOptions): void {
     database
       .prepare(`
         INSERT INTO push_log
-          (target_id, target, purpose, purpose_label, pushed_at, success, error, content, subject)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (account, target_id, target, purpose, purpose_label, pushed_at, success, error, content, subject)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
+        log.account ?? null,
         log.targetId,
         log.target,
         log.purpose,
@@ -82,7 +96,7 @@ export function readPushLogs(options?: StorageOptions, limit = 20): PushLogRecor
   try {
     const rows = database
       .prepare(`
-        SELECT id, target_id, target, purpose, purpose_label, pushed_at, success, error, content, subject
+        SELECT id, account, target_id, target, purpose, purpose_label, pushed_at, success, error, content, subject
         FROM push_log
         ORDER BY pushed_at DESC, id DESC
         LIMIT ?

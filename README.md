@@ -129,6 +129,46 @@ up:
 | `liveMonitorConfig.notifyGroups`          | 通知群号                                       |
 | `liveMonitorConfig.messageTemplate.start` | 开播文案，支持 `{uname}`、`{roomId}`、`{@all}` |
 
+### 多 QQ 号（多个 NapCat 实例）
+
+NapCat 一个实例只能登录一个 QQ 号，所以两个 QQ 号需要两个 NapCat 实例、两个 WebSocket
+端口。NanaBot 仍然只跑一个进程，通过 `nana.config.yaml#napcat.accounts` 同时连接它们：
+
+```yaml
+napcat:
+  accounts:
+    - id: main
+      name: 主号
+      wsUrl: ws://127.0.0.1:1111
+      accessTokenEnv: NC_ACCESS_TOKEN
+      adminGroup: 1111111
+    - id: second
+      name: 副号
+      wsUrl: ws://127.0.0.1:2222
+      accessTokenEnv: NC_ACCESS_TOKEN_2
+      adminGroup: 2222222
+
+up:
+  - live: true
+    uid: 145149047
+    liveRoomId: 4629447
+    uname: 饭总
+    qqAccount: second # 该主播的开播、词云、摘要都走副号
+    liveMonitorConfig:
+      enableNotify: true
+      notifyGroups:
+        - 123456789
+```
+
+- `id` 只能包含字母、数字、`_`、`-`，用于 `up[].qqAccount` 引用。
+- `wsUrl` 可以直接写地址，也可以用 `wsUrlEnv` 指向 `.env` 变量；配置了 `wsUrlEnv` 时不会回退 `NC_WS_URL`。
+- `accessTokenEnv` 指向 `.env` 中的变量名；也可以直接写 `accessToken`（不推荐）。
+- 账号省略 `wsUrl` / `adminGroup` 时分别沿用 `NC_WS_URL` / `ADM_GROUP`，单实例迁移时不用重复写连接信息。
+- `up[].qqAccount` 不写时使用第一个账号，已有单账号配置可以原样运行。
+- 不写 `napcat.accounts` 时继续读取旧的 `NC_WS_URL` / `NC_ACCESS_TOKEN` / `ADM_GROUP`。
+- 每个账号有独立的连接看门狗；离线告警邮件会在标题前加 `[账号名]`。
+- 推送记录会写入 `account` 列，便于区分是哪个 QQ 发出的。
+
 ## 变更记录
 
 功能改动的文档在 [docs/changes/](./docs/changes/README.md)，按「概览 → 明细」两级组织：

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vite-plus/test";
 import { DATABASE_DIRECTORY, PUSH_LOG_FILE } from "@nana/constants";
 import { readPushLogs, writePushLog } from "../src/index.ts";
@@ -16,6 +17,7 @@ test("写入并读取推送记录（成功与失败）", () => {
       purposeLabel: "开播",
       pushedAt: "2026-08-28T08:00:00.000Z",
       success: true,
+      account: "main",
       content: "饭总播了",
       subject: "饭总",
     },
@@ -44,6 +46,7 @@ test("写入并读取推送记录（成功与失败）", () => {
     purpose: "app.offline",
     purposeLabel: "下线",
     success: false,
+    account: null,
     error: "ws 未连接",
   });
   expect(logs[1]).toMatchObject({
@@ -52,6 +55,7 @@ test("写入并读取推送记录（成功与失败）", () => {
     purpose: "live.start",
     purposeLabel: "开播",
     success: true,
+    account: "main",
     content: "饭总播了",
     subject: "饭总",
   });
@@ -83,4 +87,40 @@ test("readPushLogs 按推送时间倒序并限制条数", () => {
 test("空数据库返回空数组", () => {
   const rootDir = createRootDir();
   expect(readPushLogs({ rootDir })).toEqual([]);
+});
+
+test("旧库缺少 account 列时自动补列", () => {
+  const rootDir = createRootDir();
+  const filePath = join(rootDir, DATABASE_DIRECTORY, PUSH_LOG_FILE);
+  const database = new DatabaseSync(filePath);
+  database.exec(`
+    CREATE TABLE push_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      target_id TEXT NOT NULL,
+      target TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      purpose_label TEXT NOT NULL,
+      pushed_at TEXT NOT NULL,
+      success INTEGER NOT NULL CHECK (success IN (0, 1)),
+      error TEXT,
+      content TEXT,
+      subject TEXT
+    ) STRICT;
+  `);
+  database.close();
+
+  writePushLog(
+    {
+      targetId: "123",
+      target: "测试群",
+      purpose: "notification",
+      purposeLabel: "通知",
+      pushedAt: "2026-08-28T00:00:00.000Z",
+      success: true,
+      account: "second",
+    },
+    { rootDir },
+  );
+
+  expect(readPushLogs({ rootDir })[0]).toMatchObject({ account: "second" });
 });
