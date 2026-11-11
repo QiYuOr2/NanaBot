@@ -5,6 +5,7 @@ import { Structs } from "node-napcat-ts";
 import type { StorageOptions } from "@nana/storage";
 import { buildWordCloudSvg, renderSessionMessage, renderWordCloudPng } from "@nana/wordcloud";
 import type { WordCount } from "@nana/wordcloud";
+import { consoleLogger, type Logger } from "../core/logger.ts";
 import type { WordCloudConfig } from "./config.ts";
 import type { WordCloudPublishOptions } from "./types.ts";
 import { buildWordCloudSummary } from "./wordCloud.ts";
@@ -16,6 +17,7 @@ export const DEFAULT_MESSAGE_TOP_WORDS = 10;
 export async function renderWordCloudImage(
   words: readonly WordCount[],
   config: WordCloudConfig,
+  logger: Logger = consoleLogger,
 ): Promise<string | undefined> {
   if (words.length === 0) {
     return undefined;
@@ -31,7 +33,7 @@ export async function renderWordCloudImage(
     writeFileSync(filePath, png);
     return filePath;
   } catch (error) {
-    console.error("[弹幕词云] 渲染词云图片失败，降级为纯文字", error);
+    logger.error("[弹幕词云] 渲染词云图片失败，降级为纯文字", error);
     return undefined;
   }
 }
@@ -44,15 +46,16 @@ export async function renderWordCloudImage(
  */
 export async function publishWordCloud(options: WordCloudPublishOptions): Promise<void> {
   const { sessionId, streamer, config, notifyGroupIds, sendWordCloud } = options;
+  const logger = options.logger ?? consoleLogger;
   const storage: StorageOptions = { rootDir: options.rootDir };
   const summary = buildWordCloudSummary(sessionId, streamer, config, storage);
   if (!summary) {
-    console.warn(`[弹幕词云] 场次 #${sessionId} 不存在，跳过推送`);
+    logger.warn(`[弹幕词云] 场次 #${sessionId} 不存在，跳过推送`);
     return;
   }
 
   if (notifyGroupIds.length === 0) {
-    console.warn(`[弹幕词云] ${streamer} 未配置推送群，跳过词云推送`);
+    logger.warn(`[弹幕词云] ${streamer} 未配置推送群，跳过词云推送`);
     return;
   }
 
@@ -65,14 +68,22 @@ export async function publishWordCloud(options: WordCloudPublishOptions): Promis
     subject: streamer,
   };
 
-  const imagePath = await renderWordCloudImage(summary.topWords, config);
+  const imagePath = await renderWordCloudImage(summary.topWords, config, logger);
   try {
     for (const groupId of notifyGroupIds) {
-      await deliverWordCloud(groupId, message.text, imagePath, purpose, sendWordCloud, sessionId);
+      await deliverWordCloud(
+        groupId,
+        message.text,
+        imagePath,
+        purpose,
+        sendWordCloud,
+        sessionId,
+        logger,
+      );
     }
   } finally {
     if (imagePath) {
-      removeQuietly(imagePath);
+      removeQuietly(imagePath, logger);
     }
   }
 }
@@ -85,13 +96,14 @@ async function deliverWordCloud(
   purpose: NonNullable<Parameters<WordCloudPublishOptions["sendWordCloud"]>[2]>,
   sendWordCloud: WordCloudPublishOptions["sendWordCloud"],
   sessionId: number,
+  logger: Logger,
 ): Promise<void> {
   if (imagePath) {
     try {
       await sendWordCloud(groupId, [Structs.text(text), Structs.image(imagePath)], purpose);
       return;
     } catch (error) {
-      console.error(
+      logger.error(
         `[弹幕词云] 场次 #${sessionId} 向群 ${groupId} 发送词云图片失败，降级为纯文字`,
         error,
       );
@@ -101,14 +113,14 @@ async function deliverWordCloud(
   try {
     await sendWordCloud(groupId, [Structs.text(text)], purpose);
   } catch (error) {
-    console.error(`[弹幕词云] 场次 #${sessionId} 向群 ${groupId} 推送词云失败`, error);
+    logger.error(`[弹幕词云] 场次 #${sessionId} 向群 ${groupId} 推送词云失败`, error);
   }
 }
 
-function removeQuietly(filePath: string): void {
+function removeQuietly(filePath: string, logger: Logger): void {
   try {
     rmSync(filePath, { force: true });
   } catch (error) {
-    console.error("[弹幕词云] 清理临时图片失败", error);
+    logger.error("[弹幕词云] 清理临时图片失败", error);
   }
 }

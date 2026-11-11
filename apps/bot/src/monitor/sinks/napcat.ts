@@ -71,7 +71,7 @@ async function sendGroupText(
         toMessageSegments(isAdminGroup ? content : text),
       );
     } catch (error) {
-      console.error(`[直播监控] 向群 ${groupId} 发送 "${streamer}" 开播通知失败`, error);
+      context.logger.error(`[直播监控] 向群 ${groupId} 发送 "${streamer}" 开播通知失败`, error);
       await context.sendAdminMsg(
         [
           Structs.text(`向群 ${groupId} 发送 "${streamer}" 开播通知失败`),

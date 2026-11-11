@@ -46,6 +46,10 @@
 - 没有 `napcat.accounts` 时完全走旧版 `NC_WS_URL` / `NC_ACCESS_TOKEN` / `ADM_GROUP`。
 - 有 `napcat.accounts` 但某个账号省略 `wsUrl` 时沿用 `NC_WS_URL`；`adminGroup`
   不继承全局 `ADM_GROUP`，避免多个账号的上线 / 下线提示全部落到同一个群。
+- 第一个账号是主账号，连接变量错误会直接启动失败；后续账号缺少连接变量时只跳过
+  该账号并输出警告，主账号仍会正常连接和发送上线 / 下线提示。
+- 某个 NapCat 实例暂时未启动时由看门狗后台重连，不阻塞其它账号；账号 `start()`
+  失败也只停用该账号，不会连带关闭已经启动的账号。
 - 第二个实例可以用 `wsUrlEnv` 指向独立的环境变量（如 `NC_WS_URL_2`），避免把端口写死在
   配置里；配置了 `wsUrlEnv` 但变量缺失会直接报错，不会静默连回主号端口。
 - `push_log` 是新增可空列，旧库打开时执行 `ALTER TABLE ... ADD COLUMN account TEXT`；

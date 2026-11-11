@@ -103,6 +103,27 @@ pnpm app deploy bot --no-build   # 跳过构建，只做 PM2 重启
 `apps/site/ecosystem.config.cjs`），根目录 `ecosystem.config.cjs` 只是把两者合并，
 供 `pnpm pm2:*` 一起管理；`pnpm app` 则直接用各应用自己的配置，两者效果一致。
 
+### Bot 日志
+
+Bot 会自己把日志写到项目根目录（即使 PM2 的 `cwd` 是 `apps/bot`），不依赖 PM2 日志文件：
+
+```text
+logs/
+  bot.log                       # 进程启动、停机、账号跳过等全局事件
+  accounts/
+    2799397589.log              # 主号自己的连接、监控、推送、弹幕日志
+    2227511984.log              # 饭总号自己的日志
+```
+
+每个账号写自己的文件，不会混在一起。单个文件默认达到 10 MiB 后轮转，保留 5 份历史
+（`bot.log.1` … `bot.log.5`）。控制台仍会同步输出，`pnpm app logs bot` 只用于实时观察；
+排查历史问题时直接看文件：
+
+```bash
+tail -f logs/bot.log
+tail -n 200 logs/accounts/2227511984.log
+```
+
 ## 配置
 
 `nana.config.yaml` 中，只有 `live: true` 的主播会被监控：
@@ -164,6 +185,8 @@ up:
 - `wsUrl` 可以直接写地址，也可以用 `wsUrlEnv` 指向 `.env` 变量；配置了 `wsUrlEnv` 时不会回退 `NC_WS_URL`。
 - `accessTokenEnv` 指向 `.env` 中的变量名；也可以直接写 `accessToken`（不推荐）。
 - 账号省略 `wsUrl` 时沿用 `NC_WS_URL`；`adminGroup` 不继承全局 `ADM_GROUP`，多账号必须各自配置管理群。
+- 第一个账号是主账号，必须能解析出连接变量；后续账号缺少变量时只跳过该账号，不阻塞主账号启动。
+- NapCat 实例暂时未启动时会在后台持续重连；某个账号启动失败也只会停用它自己，其它账号照常运行。
 - `up[].qqAccount` 不写时使用第一个账号，已有单账号配置可以原样运行。
 - 不写 `napcat.accounts` 时继续读取旧的 `NC_WS_URL` / `NC_ACCESS_TOKEN` / `ADM_GROUP`。
 - 每个账号有独立的连接看门狗；离线告警邮件会在标题前加 `[账号名]`。

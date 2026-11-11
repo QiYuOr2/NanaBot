@@ -2,12 +2,15 @@ import { live } from "@nana/bilibili-api";
 import { writeLiveStatus, type StorageOptions } from "@nana/storage";
 import type { MonitorStreamerConfig } from "./config.ts";
 import { buildLiveStatus, isLiveStatus } from "./live.ts";
+import { consoleLogger, type Logger } from "../core/logger.ts";
 
 export interface SyncLiveStatusOptions extends StorageOptions {
   /** 覆盖 B 站直播 API 的默认域名。 */
   baseUrl?: string;
   /** 覆盖默认的 fetch 实现，便于测试注入。 */
   fetch?: typeof globalThis.fetch;
+  /** 日志出口。 */
+  logger?: Logger;
 }
 
 /**
@@ -20,6 +23,7 @@ export async function syncLiveStatus(
   streamers: MonitorStreamerConfig[],
   options: SyncLiveStatusOptions = {},
 ): Promise<void> {
+  const logger = options.logger ?? consoleLogger;
   const uids = streamers.map((streamer) => streamer.uid);
   if (uids.length === 0) {
     return;
@@ -34,7 +38,7 @@ export async function syncLiveStatus(
   for (const streamer of streamers) {
     const info = statusByUid[String(streamer.uid)];
     if (!info) {
-      console.error(
+      logger.error(
         `[直播监控] 未查询到主播 "${streamer.streamer}" (uid=${streamer.uid}) 的直播状态`,
       );
       continue;
@@ -51,7 +55,7 @@ export async function syncLiveStatus(
       options,
     );
 
-    console.log(
+    logger.info(
       `[直播监控] 已同步 "${streamer.streamer}" 直播间 ${streamer.roomId} 状态：${
         isLiveStatus(info) ? "直播中" : "未开播"
       }`,

@@ -2,6 +2,7 @@ import type { PushLogPurpose } from "@nana/constants";
 import type { SendMessageSegment } from "node-napcat-ts";
 import type { DanmuSessionCloseReason, StorageOptions } from "@nana/storage";
 import type { FeatureContext } from "../core";
+import type { Logger } from "../core/logger.ts";
 import type { WordCloudConfig } from "./config.ts";
 
 /** 场次收尾原因（与 `@nana/storage` 保持一致）。 */
@@ -35,4 +36,6 @@ export interface WordCloudPublishOptions extends StorageOptions {
   topWords?: number;
   /** 推送目的，默认 `wordcloud`。 */
   purpose?: PushLogPurpose;
+  /** 当前账号的日志出口。 */
+  logger?: Logger;
 }

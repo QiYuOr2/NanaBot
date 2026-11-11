@@ -5,6 +5,7 @@ import { DATABASE_DIRECTORY, LIVE_STATUS_FILE, NANA_CONFIG_FILE } from "@nana/co
 import { readLiveStatus } from "@nana/storage";
 import { expect, test, vi } from "vite-plus/test";
 import type { FeatureContext } from "../src/core/feature.ts";
+import { consoleLogger } from "../src/core/logger.ts";
 import type { MonitorStreamerConfig } from "../src/monitor/config.ts";
 
 /**
@@ -52,6 +53,7 @@ function createContext(): FeatureContext {
   return {
     ws: {} as never,
     adminGroupId: undefined,
+    logger: consoleLogger,
     on: () => () => {},
     onCleanup: () => {},
     sendAdminText: async () => {},

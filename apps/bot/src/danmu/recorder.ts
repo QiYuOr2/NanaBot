@@ -1,6 +1,7 @@
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
 import { closeDanmuSession, findActiveDanmuSession, openDanmuSession } from "@nana/storage";
 import type { DanmuSession, StorageOptions } from "@nana/storage";
+import { consoleLogger, type Logger } from "../core/logger.ts";
 import type { WordCloudConfig } from "./config.ts";
 import { publishWordCloud } from "./publish.ts";
 import { DanmuStore, FLUSH_INTERVAL_MS } from "./store.ts";
@@ -19,6 +20,8 @@ export interface DanmuRecorderOptions extends StorageOptions {
   onClosed?: (sessionId: number, closeReason: DanmuCloseReason) => Promise<void>;
   /** 时钟注入点，便于测试。 */
   now?: () => Date;
+  /** 当前账号的日志出口。 */
+  logger?: Logger;
 }
 
 /**
@@ -31,6 +34,7 @@ export class DanmuRecorder {
   private readonly options: DanmuRecorderOptions;
   private readonly now: () => Date;
   private readonly store: DanmuStore;
+  private readonly logger: Logger;
   private readonly storage: StorageOptions;
   private session: DanmuSession | undefined;
   private flushTimer: ReturnType<typeof setInterval> | undefined;
@@ -41,7 +45,8 @@ export class DanmuRecorder {
     this.options = options;
     this.now = options.now ?? (() => new Date());
     this.storage = { rootDir: options.rootDir };
-    this.store = new DanmuStore(() => this.session?.id, this.storage);
+    this.logger = options.logger ?? consoleLogger;
+    this.store = new DanmuStore(() => this.session?.id, this.storage, this.logger);
   }
 
   /** 当前是否有正在录制的场次。 */
@@ -79,7 +84,7 @@ export class DanmuRecorder {
     this.store.flush();
     this.flushTimer = setInterval(() => this.store.flush(), FLUSH_INTERVAL_MS);
     this.flushTimer.unref?.();
-    console.log(
+    this.logger.info(
       `[弹幕录制] ${this.options.streamer} ${resumed ? "继续记录" : "开始记录"}弹幕（场次 #${this.session.id}）`,
     );
 
@@ -121,7 +126,7 @@ export class DanmuRecorder {
         { endedAt: (endedAt ?? this.now()).toISOString(), reason: closeReason },
         this.storage,
       );
-      console.log(
+      this.logger.info(
         `[弹幕录制] ${this.options.streamer} 停止记录弹幕（场次 #${session.id}，原因 ${closeReason}）`,
       );
 
@@ -135,16 +140,17 @@ export class DanmuRecorder {
             sendWordCloud: this.options.sendWordCloud,
             closeReason,
             rootDir: this.options.rootDir,
+            logger: this.logger,
           });
         } catch (error) {
-          console.error(`[弹幕录制] ${this.options.streamer} 词云推送失败`, error);
+          this.logger.error(`[弹幕录制] ${this.options.streamer} 词云推送失败`, error);
         }
       }
 
       try {
         await this.options.onClosed?.(session.id, closeReason);
       } catch (error) {
-        console.error(`[弹幕录制] ${this.options.streamer} 场次收尾回调失败`, error);
+        this.logger.error(`[弹幕录制] ${this.options.streamer} 场次收尾回调失败`, error);
       }
     } finally {
       this.finishing = false;
@@ -156,7 +162,7 @@ export class DanmuRecorder {
     try {
       await this.finish("shutdown");
     } catch (error) {
-      console.error("[弹幕录制] 停机收尾失败", error);
+      this.logger.error("[弹幕录制] 停机收尾失败", error);
     }
   }
 

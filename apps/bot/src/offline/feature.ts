@@ -1,4 +1,4 @@
-import { defineFeature, type FeatureContext } from "../core";
+import { consoleLogger, defineFeature, type FeatureContext } from "../core";
 import type { Notifier } from "@nana/notify";
 import { createCompositeNotifier } from "@nana/notify";
 import type { OfflineAlert, OfflineStateStore } from "@nana/offline-detector";
@@ -29,6 +29,7 @@ export interface OfflineDetectorOptions {
 export const offlineDetectorFeature = defineFeature<OfflineDetectorOptions>({
   name: "离线检测告警",
   setup(context: FeatureContext, options) {
+    const logger = context.logger ?? consoleLogger;
     const notifier = Array.isArray(options.notifier)
       ? createCompositeNotifier(options.notifier)
       : options.notifier;
@@ -69,12 +70,12 @@ export const offlineDetectorFeature = defineFeature<OfflineDetectorOptions>({
       try {
         recordAlert(result);
       } catch (error) {
-        console.error("[离线检测] 记录告警失败", error);
+        logger.error("[离线检测] 记录告警失败", error);
       }
       try {
         await notifier.send(renderOfflineAlert(result));
       } catch (error) {
-        console.error("[离线检测] 发送告警失败", error);
+        logger.error("[离线检测] 发送告警失败", error);
       }
     }
 

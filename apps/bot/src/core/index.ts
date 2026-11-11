@@ -10,3 +10,13 @@ export {
 } from "./connection";
 export { defineFeature, type FeatureContext, type FeatureDefinition } from "./feature";
 export { type Cleanup, type MaybePromise } from "./event";
+export {
+  accountLogPath,
+  botLogPath,
+  consoleLogger,
+  createLoggerManager,
+  type LogLevel,
+  type Logger,
+  type LoggerManager,
+  type LoggerManagerOptions,
+} from "./logger";

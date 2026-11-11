@@ -1,7 +1,6 @@
 import { createBliveMonitorSource, createMonitor, type MonitorFeatureOptions } from "@nana/monitor";
 import type { MonitorSink } from "@nana/monitor";
 import type { StorageOptions } from "@nana/storage";
-import { dateFormat } from "@nana/utils";
 import { defineFeature, type FeatureContext } from "../core";
 import { createLiveStatusSink, createNapcatMonitorSink } from "./sinks";
 
@@ -32,7 +31,11 @@ export function createMonitorFeature(registration: MonitorFeatureRegistration = 
     name: "直播监控",
     setup(context: FeatureContext, options) {
       const sinks: MonitorSink[] = [
-        createLiveStatusSink({ uid: options.uid, rootDir: registration.rootDir }),
+        createLiveStatusSink({
+          uid: options.uid,
+          rootDir: registration.rootDir,
+          logger: context.logger,
+        }),
         createNapcatMonitorSink(context, options.notifyGroupIds, options.notifyEnabled),
       ];
       const extraSink = registration.createSink?.(options);
@@ -46,10 +49,10 @@ export function createMonitorFeature(registration: MonitorFeatureRegistration = 
         sinks,
         logger: {
           log(message) {
-            console.log(`[${dateFormat(Date.now())}] ${message}`);
+            context.logger.info(message);
           },
           error(message, error) {
-            console.error(message, error);
+            context.logger.error(message, error);
           },
         },
       });

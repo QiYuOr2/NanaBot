@@ -1,6 +1,10 @@
 import type { NCWebsocket, SendMessageSegment } from "node-napcat-ts";
 import { writePushLog, type StorageOptions } from "@nana/storage";
 import { PUSH_PURPOSE_LABELS, type PushLogPurpose } from "@nana/constants";
+import { consoleLogger, type Logger } from "./logger";
+
+/** 解析群昵称的最长等待时间；超时后用「群+ID」照常发送消息。 */
+export const DEFAULT_GROUP_NAME_TIMEOUT_MS = 5_000;
 
 /** 一次推送的目的参数：稳定标识 + 展示名。 */
 export interface PushPurposeInput {
@@ -22,6 +26,10 @@ export interface NapcatPushClientOptions extends StorageOptions {
   account?: string;
   /** 预置的群昵称缓存，避免每次发送都调用 get_group_info。 */
   groupNames?: Map<number, string>;
+  /** 群昵称解析超时；超时不会阻塞消息发送，默认 5000ms。 */
+  groupNameTimeoutMs?: number;
+  /** 当前账号的日志出口。 */
+  logger?: Logger;
 }
 
 /**
@@ -33,13 +41,17 @@ export class NapcatPushClient {
   private readonly ws: NCWebsocket;
   private readonly account?: string;
   private readonly groupNames: Map<number, string>;
+  private readonly groupNameTimeoutMs: number;
   private readonly storageOptions: StorageOptions;
+  private readonly logger: Logger;
 
   constructor(ws: NCWebsocket, options: NapcatPushClientOptions = {}) {
     this.ws = ws;
     this.account = options.account;
     this.groupNames = options.groupNames ?? new Map();
+    this.groupNameTimeoutMs = options.groupNameTimeoutMs ?? DEFAULT_GROUP_NAME_TIMEOUT_MS;
     this.storageOptions = options;
+    this.logger = options.logger ?? consoleLogger;
   }
 
   /** 解析群昵称；get_group_info 失败时回退到「群+ID」。 */
@@ -50,11 +62,15 @@ export class NapcatPushClient {
     }
 
     try {
-      const info = await this.ws.get_group_info({ group_id: groupId });
+      const info = await withTimeout(
+        this.ws.get_group_info({ group_id: groupId }),
+        this.groupNameTimeoutMs,
+      );
       const name = info.group_name || `群${groupId}`;
       this.groupNames.set(groupId, name);
       return name;
-    } catch {
+    } catch (error) {
+      this.logger.warn(`[推送] 解析群 ${groupId} 昵称失败，将使用「群${groupId}」继续发送`, error);
       return `群${groupId}`;
     }
   }
@@ -100,7 +116,19 @@ export class NapcatPushClient {
     try {
       writePushLog(log, this.storageOptions);
     } catch (error) {
-      console.error("[推送记录] 写入推送日志失败", error);
+      this.logger.error("[推送记录] 写入推送日志失败", error);
     }
   }
+}
+
+function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    task,
+    new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error(`解析群昵称超过 ${ms}ms`)), ms);
+    }),
+  ]).finally(() => {
+    clearTimeout(timer);
+  });
 }

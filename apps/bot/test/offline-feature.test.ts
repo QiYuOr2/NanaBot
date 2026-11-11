@@ -2,6 +2,7 @@ import { expect, test } from "vite-plus/test";
 import type { Notifier } from "@nana/notify";
 import type { OfflineAlert, OfflineState, OfflineStateStore } from "@nana/offline-detector";
 import { offlineDetectorFeature } from "../src/offline/index.ts";
+import { consoleLogger } from "../src/core/logger.ts";
 
 type Handler = (context: never) => unknown;
 
@@ -34,6 +35,7 @@ async function createHarness(recoveryFallbackMs = 30): Promise<Harness> {
     {
       ws: {},
       adminGroupId: undefined,
+      logger: consoleLogger,
       on(event: string, handler: Handler) {
         const list = handlers.get(event) ?? [];
         list.push(handler);

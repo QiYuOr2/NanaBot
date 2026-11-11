@@ -18,6 +18,7 @@ import {
   settleWithin,
   type ConnectionSupervisorOptions,
 } from "./connection";
+import { consoleLogger, type Logger } from "./logger";
 
 export interface CreateAppOptions {
   websocket: NCWebsocketOptions;
@@ -31,6 +32,8 @@ export interface CreateAppOptions {
   storage?: StorageOptions;
   /** 连接看门狗的配置，缺省即启用默认值。 */
   connection?: ConnectionSupervisorOptions;
+  /** 当前账号的日志出口；缺省只写控制台。 */
+  logger?: Logger;
   /** 是否由 App 自己注册 SIGINT / SIGTERM；多 App 启动时由入口统一处理。 */
   handleSignals?: boolean;
 }
@@ -67,20 +70,22 @@ const DEFAULT_ADMIN_PURPOSE: PushPurposeInput = { purpose: "notification" };
 const BOT_NAME = "NanaBot";
 
 export function createApp(options: CreateAppOptions): App {
-  const logTag = options.account
-    ? `[NanaBot:${options.account.name ?? options.account.id}]`
-    : "[NanaBot]";
+  const logger = options.logger ?? consoleLogger;
   const isOpenDebug = readOptionalNumberEnv(ENV_KEYS.NC_DEBUG) === 1;
   // oxlint-disable-next-line no-unused-expressions
-  isOpenDebug && console.log(`${logTag} 调试模式`);
+  isOpenDebug && logger.debug("调试模式");
 
   const napcat = new NCWebsocket(options.websocket, isOpenDebug);
-  console.log(`${logTag} ${(options.websocket as any)["baseUrl"]}`);
+  logger.info(`NapCat WebSocket: ${(options.websocket as any)["baseUrl"]}`);
   const pushClient = new NapcatPushClient(napcat, {
     ...options.storage,
     account: options.account?.id,
+    logger,
   });
-  const connection = new ConnectionSupervisor(napcat, options.connection);
+  const connection = new ConnectionSupervisor(napcat, {
+    ...options.connection,
+    logger: options.connection?.logger ?? logger,
+  });
 
   const cleanupManager = createCleanupManager();
   const pluginTasks: Promise<void>[] = [];
@@ -91,6 +96,7 @@ export function createApp(options: CreateAppOptions): App {
     ws: napcat,
     accountId: options.account?.id,
     adminGroupId: options.adminGroupId,
+    logger,
     on(event, handler) {
       const unsubscribe = napcat.subscribe(event, handler);
       cleanupManager.add(() => {
@@ -162,7 +168,7 @@ export function createApp(options: CreateAppOptions): App {
       return featureContext.sendGroupMsg(groupId, options, messages);
     },
     async start() {
-      console.log(`${logTag} start() state === ${state}`);
+      logger.debug(`start() state === ${state}`);
       if (state === "started") {
         return;
       }
@@ -173,19 +179,19 @@ export function createApp(options: CreateAppOptions): App {
 
       state = "starting";
       await Promise.all(pluginTasks);
-      console.log(`${logTag} 插件注册数量：${pluginTasks.length}`);
+      logger.info(`插件注册数量：${pluginTasks.length}`);
       if (options.handleSignals !== false) {
-        registerSignalHandlers(app, cleanupManager);
+        registerSignalHandlers(app, cleanupManager, logger);
       }
       // 先启动看门狗：首次连接若卡住（库的 connect() 会永不 settle），由它负责持续重连。
       connection.start();
       if (!(await settleWithin(napcat.connect(), CONNECT_TIMEOUT_MS))) {
-        console.warn(
-          `${logTag} 首次连接 NapCat 超过 ${CONNECT_TIMEOUT_MS}ms 未成功，改由连接看门狗持续重试。`,
+        logger.warn(
+          `首次连接 NapCat 超过 ${CONNECT_TIMEOUT_MS}ms 未成功，改由连接看门狗持续重试。`,
         );
       }
       state = "started";
-      console.log(`${logTag} Connected state === ${state}`);
+      logger.info(`启动完成；连接状态：${connection.isConnected ? "已连接" : "等待重连"}`);
     },
     async stop(stopOptions) {
       if (state === "stopped") {
@@ -202,11 +208,14 @@ export function createApp(options: CreateAppOptions): App {
         connection.stop();
 
         if (stopOptions?.announce) {
-          await safely(() => app.sendAdminText(stopOptions.announce!, { purpose: "app.offline" }));
+          await safely(
+            () => app.sendAdminText(stopOptions.announce!, { purpose: "app.offline" }),
+            logger,
+          );
         }
 
-        await safely(() => cleanupManager.run());
-        await safely(() => napcat.disconnect());
+        await safely(() => cleanupManager.run(), logger);
+        await safely(() => napcat.disconnect(), logger);
         state = "stopped";
       })();
 
@@ -217,7 +226,11 @@ export function createApp(options: CreateAppOptions): App {
   return app;
 }
 
-function registerSignalHandlers(app: App, cleanupManager: ReturnType<typeof createCleanupManager>) {
+function registerSignalHandlers(
+  app: App,
+  cleanupManager: ReturnType<typeof createCleanupManager>,
+  logger: Logger,
+) {
   for (const signal of SIGNALS) {
     const handler = () => {
       app
@@ -225,7 +238,7 @@ function registerSignalHandlers(app: App, cleanupManager: ReturnType<typeof crea
           announce: `我溜了~`,
         })
         .catch((error) => {
-          console.error("[NanaBot] 关闭应用时发生错误", error);
+          logger.error("关闭应用时发生错误", error);
         });
     };
 
@@ -236,10 +249,10 @@ function registerSignalHandlers(app: App, cleanupManager: ReturnType<typeof crea
   }
 }
 
-async function safely(task: () => Promise<void>) {
+async function safely(task: () => Promise<void>, logger: Logger) {
   try {
     await task();
   } catch (error) {
-    console.error("[NanaBot] 执行清理任务时发生错误", error);
+    logger.error("执行清理任务时发生错误", error);
   }
 }

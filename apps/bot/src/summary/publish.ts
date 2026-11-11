@@ -2,6 +2,7 @@ import { Structs } from "node-napcat-ts";
 import { listUnpushedLiveSummaries, markLiveSummaryPushed } from "@nana/storage";
 import type { StorageOptions } from "@nana/storage";
 import { renderLiveSummaryMessage, settleLiveSummary } from "@nana/live-summary";
+import { consoleLogger, type Logger } from "../core/logger.ts";
 import type { WordCloudSender } from "../danmu/types.ts";
 
 export interface PublishLiveSummaryOptions extends StorageOptions {
@@ -12,6 +13,7 @@ export interface PublishLiveSummaryOptions extends StorageOptions {
   send: WordCloudSender;
   apiKey?: string;
   fetch?: typeof globalThis.fetch;
+  logger?: Logger;
 }
 
 /**
@@ -20,6 +22,7 @@ export interface PublishLiveSummaryOptions extends StorageOptions {
  * 页面已经生成过、没有弹幕、或生成失败时都不发，避免同一场出现两份不同的群消息。
  */
 export async function publishLiveSummary(options: PublishLiveSummaryOptions): Promise<void> {
+  const logger = options.logger ?? consoleLogger;
   const storage: StorageOptions = { rootDir: options.rootDir };
   const settled = await settleLiveSummary({
     sessionId: options.sessionId,
@@ -31,14 +34,20 @@ export async function publishLiveSummary(options: PublishLiveSummaryOptions): Pr
 
   if (settled.kind !== "ready" || !settled.shouldPush || !settled.text) {
     if (settled.kind === "ready" && settled.message) {
-      console.warn(
+      logger.warn(
         `[直播摘要] ${options.streamer} 场次 #${options.sessionId} 未推送：${settled.message}`,
       );
     }
     return;
   }
 
-  await deliverLiveSummary(options.notifyGroupIds, options.streamer, settled.text, options.send);
+  await deliverLiveSummary(
+    options.notifyGroupIds,
+    options.streamer,
+    settled.text,
+    options.send,
+    logger,
+  );
   markLiveSummaryPushed(options.sessionId, storage);
 }
 
@@ -52,12 +61,14 @@ export interface PushUnsentLiveSummaryOptions extends StorageOptions {
   send: WordCloudSender;
   /** 只补发这些直播间的摘要；多账号按账号分批补发时使用。 */
   roomIds?: ReadonlySet<number>;
+  logger?: Logger;
 }
 
 /** 补发上一进程写好但还没发出去的机器人摘要。页面生成的摘要不在此列。 */
 export async function pushUnsentLiveSummaries(
   options: PushUnsentLiveSummaryOptions,
 ): Promise<void> {
+  const logger = options.logger ?? consoleLogger;
   const storage: StorageOptions = { rootDir: options.rootDir };
   const pending = listUnpushedLiveSummaries(storage);
 
@@ -67,7 +78,7 @@ export async function pushUnsentLiveSummaries(
     }
     const streamer = options.streamers.find((entry) => String(entry.roomId) === item.roomId);
     const groups = streamer?.notifyEnabled ? streamer.notifyGroups : [];
-    await deliverLiveSummary(groups, item.streamer, item.text, options.send);
+    await deliverLiveSummary(groups, item.streamer, item.text, options.send, logger);
     markLiveSummaryPushed(item.id, storage);
   }
 }
@@ -77,10 +88,11 @@ async function deliverLiveSummary(
   streamer: string,
   text: string,
   send: WordCloudSender,
+  logger: Logger,
 ): Promise<void> {
   const message = renderLiveSummaryMessage(text);
   if (groupIds.length === 0) {
-    console.warn(`[直播摘要] ${streamer} 没有开播通知群，摘要只保留在页面`);
+    logger.warn(`[直播摘要] ${streamer} 没有开播通知群，摘要只保留在页面`);
     return;
   }
 
@@ -92,7 +104,7 @@ async function deliverLiveSummary(
         subject: streamer,
       });
     } catch (error) {
-      console.error(`[直播摘要] 发到群 ${groupId} 失败`, error);
+      logger.error(`[直播摘要] 发到群 ${groupId} 失败`, error);
     }
   }
 }

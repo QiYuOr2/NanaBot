@@ -1,5 +1,6 @@
 import type { MonitorStreamerConfig } from "../monitor/config.ts";
 import type { StorageOptions } from "@nana/storage";
+import type { Logger } from "../core/logger.ts";
 import type { WordCloudConfig } from "./config.ts";
 import type { DanmuRecorder } from "./recorder.ts";
 import type { DanmuCloseReason, WordCloudSender } from "./types.ts";
@@ -25,6 +26,8 @@ export interface WordCloudFeatureOptions extends StorageOptions {
   onSessionClosed?: SessionClosedHandler;
   /** 定时器是否 unref（默认 true，避免拖住进程退出）。 */
   unrefTimers?: boolean;
+  /** 当前账号的日志出口。 */
+  logger?: Logger;
   /**
    * 与 sink 工厂共用的录制器表。
    *

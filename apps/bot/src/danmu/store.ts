@@ -1,5 +1,6 @@
 import { appendDanmuMessages } from "@nana/storage";
 import type { DanmuMessageInput, StorageOptions } from "@nana/storage";
+import { consoleLogger, type Logger } from "../core/logger.ts";
 
 /** 内存队列的批量落库窗口：到达间隔或条数任一命中即提交。 */
 export const FLUSH_INTERVAL_MS = 5_000;
@@ -15,10 +16,16 @@ export class DanmuStore {
   private buffer: DanmuMessageInput[] = [];
   private readonly getSessionId: () => number | undefined;
   private readonly storage: StorageOptions;
+  private readonly logger: Logger;
 
-  constructor(getSessionId: () => number | undefined, storage: StorageOptions = {}) {
+  constructor(
+    getSessionId: () => number | undefined,
+    storage: StorageOptions = {},
+    logger: Logger = consoleLogger,
+  ) {
     this.getSessionId = getSessionId;
     this.storage = storage;
+    this.logger = logger;
   }
 
   enqueue(message: DanmuMessageInput): void {
@@ -40,7 +47,7 @@ export class DanmuStore {
     try {
       appendDanmuMessages(targetSessionId, pending, this.storage);
     } catch (error) {
-      console.error(`[弹幕录制] 场次 #${targetSessionId} 写入弹幕失败`, error);
+      this.logger.error(`[弹幕录制] 场次 #${targetSessionId} 写入弹幕失败`, error);
     }
   }
 }

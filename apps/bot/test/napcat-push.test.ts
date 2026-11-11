@@ -109,3 +109,33 @@ test("get_group_info 失败时回退到「群+ID」但仍记录", async () => {
     }),
   ]);
 });
+
+test("群昵称解析超时不会阻塞消息发送", async () => {
+  const rootDir = createRootDir();
+  let sent = false;
+  const client = new NapcatPushClient(
+    createFakeWs({
+      async get_group_info() {
+        return new Promise(() => {});
+      },
+      async send_group_msg() {
+        sent = true;
+        return { message_id: 1 };
+      },
+    }) as never,
+    { rootDir, groupNameTimeoutMs: 10 },
+  );
+
+  const target = await client.sendGroupMsg(646247690, { purpose: "app.online" }, []);
+
+  expect(sent).toBe(true);
+  expect(target).toBe("群646247690");
+  expect(readPushLogs({ rootDir })).toEqual([
+    expect.objectContaining({
+      targetId: "646247690",
+      target: "群646247690",
+      purpose: "app.online",
+      success: true,
+    }),
+  ]);
+});

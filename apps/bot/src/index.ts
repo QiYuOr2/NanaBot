@@ -4,7 +4,14 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { resolveProjectRoot } from "@nana/utils";
 import { ENV_KEYS, NANA_CONFIG_FILE } from "@nana/constants";
-import { createApp, RECONNECT_DELAY_MS, UNLIMITED_RECONNECT_ATTEMPTS, type App } from "./core";
+import {
+  createApp,
+  createLoggerManager,
+  RECONNECT_DELAY_MS,
+  UNLIMITED_RECONNECT_ATTEMPTS,
+  type App,
+  type Logger,
+} from "./core";
 import {
   createMonitorFeature,
   loadMonitorConfig,
@@ -34,7 +41,7 @@ import {
   wordCloudFeature,
 } from "./danmu";
 import { publishLiveSummary, pushUnsentLiveSummaries } from "./summary";
-import { groupStreamersByAccount, loadNapcatAccounts, type NapcatAccount } from "./accounts";
+import { groupStreamersByAccount, loadNapcatAccountSet, type NapcatAccount } from "./accounts";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
 const entryDir = dirname(fileURLToPath(import.meta.url));
@@ -65,19 +72,31 @@ function resolveAppRoot(): string {
 }
 
 const projectRoot = resolveAppRoot();
+const loggers = createLoggerManager({ rootDir: projectRoot });
+const appLogger = loggers.root;
 
 interface AccountRuntime {
   app: App;
   streamers: MonitorStreamerConfig[];
   sendWordCloud: WordCloudSender;
   onSessionClosed?: SessionClosedHandler;
+  logger: Logger;
 }
 
 async function main(): Promise<void> {
-  const accounts = loadNapcatAccounts();
+  const { accounts, unavailable } = loadNapcatAccountSet();
+  const unavailableAccountIds = new Set(unavailable.map((account) => account.id));
+  for (const account of unavailable) {
+    appLogger.warn(
+      `[app] NapCat 账号 ${account.name}（${account.id}）暂不可用，已跳过：${account.error.message}`,
+    );
+  }
+
   const monitorConfig = loadMonitorConfig();
   const wordCloudConfig = loadWordCloudConfig();
-  const streamersByAccount = groupStreamersByAccount(monitorConfig.streamers, accounts);
+  const streamersByAccount = groupStreamersByAccount(monitorConfig.streamers, accounts, {
+    skipAccountIds: unavailableAccountIds,
+  });
   const summaryApiKey = process.env[ENV_KEYS.DEEPSEEK_API_KEY];
   const showAccountLabel = accounts.length > 1;
 
@@ -85,12 +104,18 @@ async function main(): Promise<void> {
   try {
     offlineConfig = loadOfflineDetectorConfig();
   } catch (error) {
-    console.warn("[app] 未启用离线告警（缺少 adminEmail 配置）", error);
+    appLogger.warn("[app] 未启用离线告警（缺少 adminEmail 配置）", error);
   }
 
   const runtimes: AccountRuntime[] = [];
   for (const account of accounts) {
     const streamers = streamersByAccount.get(account.id) ?? [];
+    const accountLogger = loggers.account(account.id, account.name);
+    if (!account.adminGroupId) {
+      accountLogger.warn("未配置 adminGroup，该账号的上线 / 下线提示不会发送");
+    } else {
+      accountLogger.info(`上线 / 下线提示目标管理群：${account.adminGroupId}`);
+    }
     const app = createApp({
       websocket: {
         baseUrl: account.wsUrl,
@@ -104,6 +129,7 @@ async function main(): Promise<void> {
       },
       account: { id: account.id, name: account.name },
       adminGroupId: account.adminGroupId,
+      logger: accountLogger,
       // 推送记录也写入项目根的 db/，不再依赖 cwd。
       storage: { rootDir: projectRoot },
       // 多个 App 共用一次进程信号处理，避免每个账号都发一遍下线消息。
@@ -112,9 +138,16 @@ async function main(): Promise<void> {
 
     app.on("socket.open", () => {
       const text = showAccountLabel ? `我来了~（${account.name}）` : "我来了~";
-      app.sendAdminText(text, { purpose: "app.online" }).catch((error) => {
-        console.error(`[app] ${account.name} 发送机器人连接提示失败`, error);
-      });
+      app
+        .sendAdminText(text, { purpose: "app.online" })
+        .then(() => {
+          if (account.adminGroupId) {
+            accountLogger.info(`上线提示已发送到管理群 ${account.adminGroupId}`);
+          }
+        })
+        .catch((error) => {
+          accountLogger.error(`[app] ${account.name} 发送机器人连接提示失败`, error);
+        });
     });
 
     // 每个主播只建一条 blive 长连接：开播通知与弹幕录制共用同一条连接的事件流。
@@ -132,6 +165,7 @@ async function main(): Promise<void> {
             send: sendWordCloud,
             rootDir: projectRoot,
             apiKey: summaryApiKey,
+            logger: accountLogger,
           });
         }
       : undefined;
@@ -143,6 +177,7 @@ async function main(): Promise<void> {
           sendWordCloud,
           recorders,
           onSessionClosed,
+          logger: accountLogger,
         }
       : undefined;
     const danmuSinkFactory = wordCloudOptions
@@ -190,26 +225,44 @@ async function main(): Promise<void> {
       });
     }
 
-    runtimes.push({ app, streamers, sendWordCloud, onSessionClosed });
+    runtimes.push({ app, streamers, sendWordCloud, onSessionClosed, logger: accountLogger });
   }
 
   registerShutdown(runtimes.map((runtime) => runtime.app));
-  try {
-    await Promise.all(runtimes.map((runtime) => runtime.app.start()));
-  } catch (error) {
-    await Promise.allSettled(runtimes.map((runtime) => runtime.app.stop()));
-    throw error;
+  const startResults = await Promise.allSettled(runtimes.map((runtime) => runtime.app.start()));
+  const activeRuntimes: AccountRuntime[] = [];
+  const startErrors: unknown[] = [];
+  for (const [index, result] of startResults.entries()) {
+    const runtime = runtimes[index];
+    if (result.status === "fulfilled") {
+      activeRuntimes.push(runtime);
+      continue;
+    }
+
+    startErrors.push(result.reason);
+    runtime.logger.error(
+      `[app] NapCat 账号 ${runtime.app.accountId ?? "unknown"} 启动失败`,
+      result.reason,
+    );
+    await runtime.app.stop();
+  }
+
+  if (activeRuntimes.length === 0) {
+    throw new AggregateError(startErrors, "所有 NapCat 账号均启动失败");
   }
 
   try {
-    await syncLiveStatus(monitorConfig.streamers, { rootDir: projectRoot });
+    await syncLiveStatus(monitorConfig.streamers, {
+      rootDir: projectRoot,
+      logger: appLogger,
+    });
   } catch (error) {
-    console.error("[app] 同步启动时的直播状态失败", error);
+    appLogger.error("[app] 同步启动时的直播状态失败", error);
   }
 
   // 上一场直播若在机器人停机期间结束，等状态同步完成后再补收尾，避免误判为「仍在直播」。
   // 遗留场次发到该主播自己的词云群。
-  for (const runtime of runtimes) {
+  for (const runtime of activeRuntimes) {
     if (!runtime.streamers.some((streamer) => streamer.wordCloud.enabled)) {
       continue;
     }
@@ -220,6 +273,7 @@ async function main(): Promise<void> {
       send: runtime.sendWordCloud,
       rootDir: projectRoot,
       roomIds: new Set(runtime.streamers.map((streamer) => streamer.roomId)),
+      logger: runtime.logger,
     });
     await resumeDanmuSessions({
       streamers: runtime.streamers,
@@ -228,6 +282,7 @@ async function main(): Promise<void> {
       isLive: (streamer) => fetchIsLive(streamer),
       sendWordCloud: runtime.sendWordCloud,
       onSessionClosed: runtime.onSessionClosed,
+      logger: runtime.logger,
     });
   }
 }
@@ -255,7 +310,7 @@ function registerShutdown(apps: readonly App[]): void {
     const results = await Promise.allSettled(apps.map((app) => app.stop({ announce: "我溜了~" })));
     for (const result of results) {
       if (result.status === "rejected") {
-        console.error("[app] 关闭应用时发生错误", result.reason);
+        appLogger.error("[app] 关闭应用时发生错误", result.reason);
       }
     }
   };
@@ -268,5 +323,5 @@ function registerShutdown(apps: readonly App[]): void {
 }
 
 main().catch((error) => {
-  console.error("[app] 启动失败", error);
+  appLogger.error("[app] 启动失败", error);
 });

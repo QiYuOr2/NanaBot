@@ -3,6 +3,7 @@ import { writeLiveStatus, type StorageOptions } from "@nana/storage";
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
 import type { LiveStatusInfo } from "@nana/bilibili-api";
 import { buildLiveStatus } from "../live.ts";
+import { consoleLogger, type Logger } from "../../core/logger.ts";
 
 export interface LiveStatusSinkOptions extends StorageOptions {
   /** B 站用户 ID，用于按 UID 查询直播详情。 */
@@ -11,10 +12,14 @@ export interface LiveStatusSinkOptions extends StorageOptions {
   baseUrl?: string;
   /** 覆盖默认的 fetch 实现，便于测试注入。 */
   fetch?: typeof globalThis.fetch;
+  /** 当前账号的日志出口。 */
+  logger?: Logger;
 }
 
 /** 监听开播 / 下播事件，把直播状态持久化到 SQLite。 */
 export function createLiveStatusSink(options: LiveStatusSinkOptions = {}): MonitorSink {
+  const logger = options.logger ?? consoleLogger;
+
   return {
     async handle(event: MonitorEvent) {
       if (event.type !== "live.started" && event.type !== "live.ended") {
@@ -26,7 +31,7 @@ export function createLiveStatusSink(options: LiveStatusSinkOptions = {}): Monit
         try {
           info = await fetchLiveStatusInfo(options.uid, options);
         } catch (error) {
-          console.error(`[直播监控] 拉取直播间 ${event.roomId} 详情失败`, error);
+          logger.error(`[直播监控] 拉取直播间 ${event.roomId} 详情失败`, error);
         }
       }
 

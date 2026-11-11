@@ -13,6 +13,18 @@ export interface NapcatAccount {
   adminGroupId?: number;
 }
 
+/** 配置存在、但当前缺少连接变量而无法启动的账号。 */
+export interface UnavailableNapcatAccount {
+  id: string;
+  name: string;
+  error: Error;
+}
+
+export interface NapcatAccountSet {
+  accounts: NapcatAccount[];
+  unavailable: UnavailableNapcatAccount[];
+}
+
 /** 至少带主播名与可选的账号归属，用于把主播分配到账号。 */
 export interface AccountAssignableStreamer {
   streamer: string;
@@ -55,26 +67,56 @@ export function parseNapcatAccounts(
   config: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): NapcatAccount[] {
-  const parsed = NapcatConfigSchema.parse(config);
-  const configured = parsed.napcat?.accounts ?? [];
-
-  if (configured.length === 0) {
+  const configured = readConfiguredAccounts(config);
+  if (!configured) {
     return [legacyAccount(env)];
   }
 
-  const seen = new Set<string>();
-  return configured.map((entry) => {
-    if (seen.has(entry.id)) {
-      throw new Error(`napcat.accounts 中存在重复的账号 id "${entry.id}"。`);
+  return configured.map((entry) => toNapcatAccount(entry, env));
+}
+
+/**
+ * 解析可启动账号与暂不可用账号。
+ *
+ * 第一个账号是主账号，配置错误时直接失败；后续账号缺少 `wsUrlEnv` /
+ * `accessTokenEnv` 对应的变量时只跳过自己，保证主号仍能上线并处理其它实例未启动的场景。
+ */
+export function resolveNapcatAccounts(
+  config: unknown,
+  env: NodeJS.ProcessEnv = process.env,
+): NapcatAccountSet {
+  const configured = readConfiguredAccounts(config);
+  if (!configured) {
+    return { accounts: [legacyAccount(env)], unavailable: [] };
+  }
+
+  const [primary, ...secondary] = configured;
+  const accounts = [toNapcatAccount(primary, env)];
+  const unavailable: UnavailableNapcatAccount[] = [];
+
+  for (const entry of secondary) {
+    try {
+      accounts.push(toNapcatAccount(entry, env));
+    } catch (error) {
+      unavailable.push({
+        id: entry.id,
+        name: entry.name ?? entry.id,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
     }
-    seen.add(entry.id);
-    return toNapcatAccount(entry, env);
-  });
+  }
+
+  return { accounts, unavailable };
 }
 
 /** 从项目配置读取 NapCat 账号列表。 */
 export function loadNapcatAccounts(env: NodeJS.ProcessEnv = process.env): NapcatAccount[] {
   return parseNapcatAccounts(readConfig(), env);
+}
+
+/** 从项目配置读取主账号与暂不可用的后续账号。 */
+export function loadNapcatAccountSet(env: NodeJS.ProcessEnv = process.env): NapcatAccountSet {
+  return resolveNapcatAccounts(readConfig(), env);
 }
 
 /**
@@ -86,6 +128,7 @@ export function loadNapcatAccounts(env: NodeJS.ProcessEnv = process.env): Napcat
 export function groupStreamersByAccount<T extends AccountAssignableStreamer>(
   streamers: readonly T[],
   accounts: readonly NapcatAccount[],
+  options: { skipAccountIds?: ReadonlySet<string> } = {},
 ): Map<string, T[]> {
   const [defaultAccount] = accounts;
   if (!defaultAccount) {
@@ -96,6 +139,9 @@ export function groupStreamersByAccount<T extends AccountAssignableStreamer>(
   for (const streamer of streamers) {
     const accountId = streamer.qqAccount ?? defaultAccount.id;
     const group = groups.get(accountId);
+    if (options.skipAccountIds?.has(accountId)) {
+      continue;
+    }
     if (!group) {
       throw new Error(
         `主播 "${streamer.streamer}" 的 qqAccount "${accountId}" 未在 napcat.accounts 中定义。`,
@@ -105,6 +151,24 @@ export function groupStreamersByAccount<T extends AccountAssignableStreamer>(
   }
 
   return groups;
+}
+
+function readConfiguredAccounts(config: unknown): NapcatAccountInput[] | undefined {
+  const parsed = NapcatConfigSchema.parse(config);
+  const configured = parsed.napcat?.accounts ?? [];
+  if (configured.length === 0) {
+    return undefined;
+  }
+
+  const seen = new Set<string>();
+  for (const entry of configured) {
+    if (seen.has(entry.id)) {
+      throw new Error(`napcat.accounts 中存在重复的账号 id "${entry.id}"。`);
+    }
+    seen.add(entry.id);
+  }
+
+  return configured;
 }
 
 function legacyAccount(env: NodeJS.ProcessEnv): NapcatAccount {

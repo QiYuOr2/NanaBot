@@ -1,5 +1,9 @@
 import { expect, test } from "vite-plus/test";
-import { groupStreamersByAccount, parseNapcatAccounts } from "../src/accounts.ts";
+import {
+  groupStreamersByAccount,
+  parseNapcatAccounts,
+  resolveNapcatAccounts,
+} from "../src/accounts.ts";
 
 test("未配置 napcat.accounts 时回退到单账号环境变量", () => {
   const accounts = parseNapcatAccounts(
@@ -152,6 +156,57 @@ test("账号缺少 token 时给出具体账号与变量名", () => {
   ).toThrow('NapCat 账号 "second" 缺少 access token');
 });
 
+test("后续账号缺少连接变量时只跳过该账号，主账号仍可启动", () => {
+  const { accounts, unavailable } = resolveNapcatAccounts(
+    {
+      napcat: {
+        accounts: [
+          {
+            id: "2799397589",
+            name: "主号",
+            wsUrlEnv: "NC_WS_URL",
+            accessTokenEnv: "NC_ACCESS_TOKEN",
+            adminGroup: 646247690,
+          },
+          {
+            id: "2227511984",
+            name: "饭总号",
+            wsUrlEnv: "NC_WS_URL_2",
+            accessTokenEnv: "NC_ACCESS_TOKEN_2",
+            adminGroup: 1101365727,
+          },
+        ],
+      },
+    },
+    {
+      NC_WS_URL: "ws://127.0.0.1:1111",
+      NC_ACCESS_TOKEN: "token-main",
+    },
+  );
+
+  expect(accounts.map((account) => account.id)).toEqual(["2799397589"]);
+  expect(unavailable).toEqual([
+    expect.objectContaining({
+      id: "2227511984",
+      name: "饭总号",
+      error: expect.objectContaining({ message: expect.stringContaining("NC_ACCESS_TOKEN_2") }),
+    }),
+  ]);
+});
+
+test("主账号缺少连接变量时直接启动失败", () => {
+  expect(() =>
+    resolveNapcatAccounts(
+      {
+        napcat: {
+          accounts: [{ id: "main", wsUrlEnv: "NC_WS_URL", accessToken: "token" }],
+        },
+      },
+      {},
+    ),
+  ).toThrow('NapCat 账号 "main" 缺少 WebSocket 地址');
+});
+
 test("重复账号 id 直接报错", () => {
   expect(() =>
     parseNapcatAccounts(
@@ -195,6 +250,21 @@ test("主播按 qqAccount 分组，未配置的落在第一个账号", () => {
     "显式主号",
   ]);
   expect(groups.get("second")?.map((streamer) => streamer.streamer)).toEqual(["二号机主播"]);
+});
+
+test("分配给暂不可用账号的主播会被跳过，不影响其它账号", () => {
+  const accounts = parseNapcatAccounts(
+    { napcat: { accounts: [{ id: "main", wsUrl: "ws://a", accessToken: "a" }] } },
+    {},
+  );
+
+  const groups = groupStreamersByAccount(
+    [{ streamer: "主号主播" }, { streamer: "暂不可用主播", qqAccount: "second" }],
+    accounts,
+    { skipAccountIds: new Set(["second"]) },
+  );
+
+  expect(groups.get("main")?.map((streamer) => streamer.streamer)).toEqual(["主号主播"]);
 });
 
 test("主播引用了不存在的账号时直接报错", () => {

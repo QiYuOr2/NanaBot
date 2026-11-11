@@ -1,9 +1,9 @@
 import { live } from "@nana/bilibili-api";
 import type { MonitorSink } from "@nana/monitor";
 import { closeDanmuSession, findActiveDanmuSession } from "@nana/storage";
-import { dateFormat } from "@nana/utils";
 import { defineFeature } from "../core/feature.ts";
 import type { FeatureContext } from "../core/feature.ts";
+import { consoleLogger, type Logger } from "../core/logger.ts";
 import type { MonitorStreamerConfig } from "../monitor/config.ts";
 import type {
   LiveStatusChecker,
@@ -31,15 +31,6 @@ export async function fetchIsLive(
   return statusByUid[String(streamer.uid)]?.live_status === 1;
 }
 
-const logger = {
-  log(message: string) {
-    console.log(`[${dateFormat(Date.now())}] ${message}`);
-  },
-  error(message: string, error?: unknown) {
-    console.error(message, error);
-  },
-};
-
 /**
  * 弹幕录制与词云推送功能。
  *
@@ -49,7 +40,8 @@ const logger = {
  */
 export const wordCloudFeature = defineFeature<WordCloudFeatureOptions>({
   name: "弹幕词云",
-  setup(_context: FeatureContext, options) {
+  setup(context: FeatureContext, options) {
+    const logger = options.logger ?? context.logger ?? consoleLogger;
     // 与 sink 工厂共用同一张表。录制器在监控启动后才写入，轮询和停机必须看到后补上的项。
     const recorders = options.recorders ?? new Map<number, DanmuRecorder>();
     const isLive: LiveStatusChecker =
@@ -59,7 +51,7 @@ export const wordCloudFeature = defineFeature<WordCloudFeatureOptions>({
     let pollTimer: ReturnType<typeof setInterval> | undefined;
     if (options.config.pollIntervalMs > 0) {
       pollTimer = setInterval(() => {
-        void pollActiveRecorders(recorders, options.streamers, isLive);
+        void pollActiveRecorders(recorders, options.streamers, isLive, logger);
       }, options.config.pollIntervalMs);
       if (unrefTimers) {
         pollTimer.unref?.();
@@ -105,6 +97,7 @@ export function createWordCloudMonitorSink(
       notifyGroupIds: configured.wordCloud.notifyGroups,
       sendWordCloud,
       rootDir: options.rootDir,
+      logger: options.logger ?? consoleLogger,
       onClosed: options.onSessionClosed
         ? (sessionId, closeReason) =>
             options.onSessionClosed?.({ sessionId, streamer: configured, closeReason }) ??
@@ -122,6 +115,7 @@ async function pollActiveRecorders(
   recorders: Map<number, DanmuRecorder>,
   streamers: MonitorStreamerConfig[],
   isLive: LiveStatusChecker,
+  logger: Logger,
 ): Promise<void> {
   for (const streamer of streamers) {
     const recorder = recorders.get(streamer.roomId);
@@ -141,13 +135,14 @@ async function pollActiveRecorders(
       continue;
     }
 
-    logger.log(`[弹幕词云] 轮询发现 ${streamer.streamer} 已下播，收尾本场记录`);
+    logger.info(`[弹幕词云] 轮询发现 ${streamer.streamer} 已下播，收尾本场记录`);
     await recorder.finish("poll");
   }
 }
 
 /** 启动时处理上一进程遗留的未结束场次。 */
 export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<void> {
+  const logger = options.logger ?? consoleLogger;
   const isLive: LiveStatusChecker =
     options.isLive ?? ((streamer) => fetchIsLive(streamer, options.fetch));
   const now = options.now ?? (() => new Date());
@@ -168,7 +163,7 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
     try {
       liveNow = await isLive(streamer);
     } catch (error) {
-      console.warn(
+      logger.warn(
         `[弹幕词云] 查询 ${streamer.streamer} 的直播状态失败，保留场次 #${session.id} 交给轮询收尾`,
         error,
       );
@@ -176,7 +171,7 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
     }
 
     if (liveNow) {
-      console.log(`[弹幕词云] ${streamer.streamer} 仍在直播，继续记录场次 #${session.id}`);
+      logger.info(`[弹幕词云] ${streamer.streamer} 仍在直播，继续记录场次 #${session.id}`);
       continue;
     }
 
@@ -186,7 +181,7 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
       { endedAt: endedAt, reason: "stale" },
       { rootDir: options.rootDir },
     );
-    logger.log(
+    logger.info(
       `[弹幕词云] ${streamer.streamer} 已下播，补收尾遗留场次 #${session.id}（${endedAt}）`,
     );
     try {
@@ -198,9 +193,10 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
         sendWordCloud,
         closeReason: "stale",
         rootDir: options.rootDir,
+        logger,
       });
     } catch (error) {
-      console.error(`[弹幕词云] ${streamer.streamer} 补发词云失败`, error);
+      logger.error(`[弹幕词云] ${streamer.streamer} 补发词云失败`, error);
     }
 
     try {
@@ -210,7 +206,7 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
         closeReason: "stale",
       });
     } catch (error) {
-      console.error(`[弹幕词云] ${streamer.streamer} 补生成直播摘要失败`, error);
+      logger.error(`[弹幕词云] ${streamer.streamer} 补生成直播摘要失败`, error);
     }
   }
 }
