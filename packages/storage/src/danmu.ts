@@ -406,16 +406,14 @@ export function readLiveSummary(
 /**
  * 认领一场摘要的写入权。
  *
- * 已有 `ok` / `empty` 时默认直接返回现有结果，不再生成；`force` 为 true 时允许覆盖重算。
- * 进行中的场次不能认领。
+ * 已有 `ok` / `empty` 时直接返回现有结果，不再生成。进行中的场次不能认领。
  * 两个调用同时认领时只有一个得到 `claimed`。
  */
 export function claimLiveSummary(
   sessionId: number,
-  options?: StorageOptions & { now?: Date; staleMs?: number; force?: boolean },
+  options?: StorageOptions & { now?: Date; staleMs?: number },
 ): ClaimLiveSummaryResult {
   const now = options?.now ?? new Date();
-  const force = options?.force === true;
   const claimedAt = now.toISOString();
   const staleBefore = new Date(
     now.getTime() - (options?.staleMs ?? LIVE_SUMMARY_CLAIM_STALE_MS),
@@ -430,7 +428,7 @@ export function claimLiveSummary(
     if (!current.ended) {
       return { kind: "active" };
     }
-    if (!force && (current.status === "ok" || current.status === "empty")) {
+    if (current.status === "ok" || current.status === "empty") {
       return { kind: "existing", summary: toLiveSummaryRecord(current) };
     }
     if (
@@ -455,10 +453,9 @@ export function claimLiveSummary(
               live_summary_status = 'pending'
               AND (live_summary_claimed_at IS NULL OR live_summary_claimed_at < ?)
             )
-            OR (? = 1 AND live_summary_status IN ('ok', 'empty'))
           )
       `)
-      .run(claimedAt, sessionId, staleBefore, force ? 1 : 0);
+      .run(claimedAt, sessionId, staleBefore);
 
     if (Number(result.changes) !== 1) {
       const latest = readLiveSummaryRow(database, sessionId);
@@ -468,7 +465,7 @@ export function claimLiveSummary(
       if (!latest.ended) {
         return { kind: "active" };
       }
-      if (!force && (latest.status === "ok" || latest.status === "empty")) {
+      if (latest.status === "ok" || latest.status === "empty") {
         return { kind: "existing", summary: toLiveSummaryRecord(latest) };
       }
       return { kind: "busy" };

@@ -84,8 +84,6 @@ export interface SettleLiveSummaryOptions extends StorageOptions {
   sessionId: number;
   source: LiveSummarySource;
   apiKey: string | undefined;
-  /** 已有成功或空结果时强制重新生成；页面测试入口使用。 */
-  force?: boolean;
   fetch?: typeof globalThis.fetch;
   now?: Date;
 }
@@ -93,19 +91,14 @@ export interface SettleLiveSummaryOptions extends StorageOptions {
 /**
  * 认领一场摘要并在需要时生成。
  *
- * 默认已有成功或「没有弹幕」结果时直接返回，保证群消息和页面不会各写一份；
- * `force` 为 true 时覆盖重算，但仍需通过存储层认领，避免并发各写一份。
+ * 已经有成功或「没有弹幕」结果时直接返回，保证群消息和页面不会各写一份。
  * 页面来源永远 `shouldPush = false`。
  */
 export async function settleLiveSummary(
   options: SettleLiveSummaryOptions,
 ): Promise<SettleLiveSummaryResult> {
   const storage: StorageOptions = { rootDir: options.rootDir };
-  const claim = claimLiveSummary(options.sessionId, {
-    ...storage,
-    now: options.now,
-    force: options.force,
-  });
+  const claim = claimLiveSummary(options.sessionId, { ...storage, now: options.now });
 
   if (claim.kind === "missing" || claim.kind === "active" || claim.kind === "busy") {
     return claim;
