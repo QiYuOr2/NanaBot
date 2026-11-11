@@ -3,7 +3,7 @@ export const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/comp
 
 export const DEEPSEEK_SUMMARY_MODEL = "deepseek-chat";
 
-const REQUEST_TIMEOUT_MS = 45_000;
+const REQUEST_TIMEOUT_MS = 90_000;
 
 export interface ChatMessage {
   role: "system" | "user";

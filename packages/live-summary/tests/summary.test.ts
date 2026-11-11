@@ -7,6 +7,7 @@ import { appendDanmuMessages } from "@nana/storage";
 import { describe, expect, test } from "vite-plus/test";
 import {
   buildDanmuExcerpt,
+  buildSummaryPrompt,
   normalizeSummaryText,
   renderLiveSummaryMessage,
   settleLiveSummary,
@@ -24,10 +25,11 @@ describe("弹幕摘录与正文", () => {
     expect(buildDanmuExcerpt([{ content: "  " }, { content: "" }])).toEqual({
       text: "",
       usableCount: 0,
+      mode: "full",
     });
   });
 
-  test("重复句和靠近结尾的发言会留下，超长正文截在句号", () => {
+  test("重复句会留下，超长正文截在句号", () => {
     const messages = [
       ...Array.from({ length: 5 }, () => ({ content: "好听" })),
       { content: `${"很".repeat(180)}。后面这句不该留下` },
@@ -42,6 +44,61 @@ describe("弹幕摘录与正文", () => {
     expect(normalized).not.toContain("不该留下");
     expect(renderLiveSummaryMessage("观众在聊歌")).toBe(
       "【直播摘要】根据弹幕推断，不是直播内容本身\n观众在聊歌",
+    );
+  });
+
+  test("5000 条以内且正文未超限时使用完整弹幕", () => {
+    const messages = Array.from({ length: 5000 }, (_, index) => ({
+      content: `第${index}条弹幕`,
+    }));
+    const excerpt = buildDanmuExcerpt(messages);
+    const transcript = excerpt.text.split("完整弹幕（按时间顺序）：\n")[1] ?? "";
+    const included = transcript.match(/第\d+条弹幕/g) ?? [];
+
+    expect(excerpt.mode).toBe("full");
+    expect(included).toHaveLength(5000);
+    expect(included[0]).toBe("第0条弹幕");
+    expect(included[1234]).toBe("第1234条弹幕");
+    expect(included.at(-1)).toBe("第4999条弹幕");
+  });
+
+  test("超过 5000 条时等距抽样覆盖全程", () => {
+    const messages = Array.from({ length: 6000 }, (_, index) => ({
+      content: `第${index}条弹幕`,
+    }));
+    const excerpt = buildDanmuExcerpt(messages);
+    const sampled = [...excerpt.text.matchAll(/第(\d+)条弹幕/g)].map((match) => Number(match[1]));
+    const buckets = [0, 0, 0];
+    for (const index of sampled) {
+      buckets[Math.floor(index / 2000)] += 1;
+    }
+
+    expect(excerpt.mode).toBe("sampled");
+    expect(sampled[0]).toBe(0);
+    expect(sampled.at(-1)).toBe(5999);
+    expect(buckets.every((count) => count >= 30)).toBe(true);
+  });
+
+  test("超长弹幕仍受摘录字符上限约束", () => {
+    const messages = Array.from({ length: 400 }, (_, index) => ({
+      content: `第${index}条${"很".repeat(240)}`,
+    }));
+    const excerpt = buildDanmuExcerpt(messages);
+    const sample = excerpt.text.split("全程抽样（覆盖开播到下播，相邻行不一定连续）：\n")[1] ?? "";
+
+    expect(excerpt.mode).toBe("sampled");
+    expect(sample.startsWith("第0条")).toBe(true);
+    expect(sample.length).toBeLessThanOrEqual(7000);
+  });
+
+  test("提示词区分完整弹幕与抽样", () => {
+    const common = { streamer: "饭总", messageCount: 5000, excerpt: "弹幕" };
+
+    expect(buildSummaryPrompt({ ...common, fullTranscript: true }).system).toContain(
+      "本场全部弹幕",
+    );
+    expect(buildSummaryPrompt({ ...common, fullTranscript: false }).system).toContain(
+      "均匀抽取的样本",
     );
   });
 });
@@ -188,5 +245,66 @@ describe("settleLiveSummary", () => {
 
     expect(settled).toMatchObject({ kind: "ready", status: "ok", shouldPush: false });
     expect(readLiveSummary(session.id, { rootDir })?.source).toBe("site");
+  });
+
+  test("force 会重新调用模型并覆盖已有摘要", async () => {
+    const rootDir = createRootDir();
+    const session = openDanmuSession(
+      { roomId: 1, streamer: "饭总", startedAt: "2026-10-01T10:00:00.000Z" },
+      { rootDir },
+    );
+    appendDanmuMessages(
+      session.id,
+      [
+        {
+          sentAt: "2026-10-01T10:01:00.000Z",
+          userId: "1",
+          username: "观众",
+          content: "今天在聊新歌",
+        },
+      ],
+      { rootDir },
+    );
+    closeDanmuSession(
+      session.id,
+      { endedAt: "2026-10-01T11:00:00.000Z", reason: "live.ended" },
+      { rootDir },
+    );
+
+    let calls = 0;
+    const fetchImpl: typeof fetch = async () => {
+      calls += 1;
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: calls === 1 ? "第一版摘要。" : "第二版摘要。" } }],
+        }),
+        { status: 200 },
+      );
+    };
+
+    await settleLiveSummary({
+      sessionId: session.id,
+      source: "site",
+      apiKey: "test-key",
+      rootDir,
+      fetch: fetchImpl,
+    });
+    const regenerated = await settleLiveSummary({
+      sessionId: session.id,
+      source: "site",
+      apiKey: "test-key",
+      rootDir,
+      force: true,
+      fetch: fetchImpl,
+    });
+
+    expect(calls).toBe(2);
+    expect(regenerated).toMatchObject({
+      kind: "ready",
+      status: "ok",
+      shouldPush: false,
+      text: "第二版摘要。",
+    });
+    expect(readLiveSummary(session.id, { rootDir })?.text).toBe("第二版摘要。");
   });
 });

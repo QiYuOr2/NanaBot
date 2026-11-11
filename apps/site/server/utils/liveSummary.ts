@@ -30,11 +30,15 @@ export function readDeepSeekApiKey(rootDir?: string): string | undefined {
 }
 
 /** 页面主动生成摘要。来源固定为 `site`，不会发到通知群。 */
-export function requestSiteLiveSummary(sessionId: number): Promise<SettleLiveSummaryResult> {
+export function requestSiteLiveSummary(
+  sessionId: number,
+  options: { force?: boolean } = {},
+): Promise<SettleLiveSummaryResult> {
   return settleLiveSummary({
     sessionId,
     source: "site",
     apiKey: readDeepSeekApiKey(),
+    force: options.force,
   });
 }
 

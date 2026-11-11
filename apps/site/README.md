@@ -34,6 +34,8 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
   `wordcloud.minWordLength` 控制最短词长，`wordcloud.fontPath` 指定渲染字体。
 - 性能：列表接口只为最近 10 场计算 Top 词，更早的场次 `topWords` 返回空数组；详情接口的
   Top 词与统计复用 `summarizeSession`，弹幕只返回最近 200 条。
+- 直播摘要展示在同一场次详情里；已成功的摘要旁提供测试用「重新生成」，可随时隐藏，
+  隐藏状态按浏览器保存在 Cookie 中。重新生成会覆盖已有正文，但来源固定为 `site`，不会发群。
 
 ### 推送活动的合并规则
 
@@ -69,6 +71,7 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
 | `GET /api/danmu/sessions`      | `{ sessions, limit }`，按开播时间倒序；`?limit=` 覆盖条数（默认 20，上限 100）                               |
 | `GET /api/danmu/:id`           | 场次统计 + Top 词（前 30）+ 最近 200 条弹幕（倒序）；不存在返回 404                                          |
 | `GET /api/danmu/:id/wordcloud` | 直接返回 `image/png`（`Cache-Control: public, max-age=3600`）；`?format=svg` 返回 SVG 文本，渲染失败返回 500 |
+| `POST /api/danmu/:id/summary`  | 生成直播摘要；`?regenerate=1` 强制覆盖已有摘要。只写 `site` 来源，不触发群推送                               |
 
 页面外壳（侧边栏 + 主列）在 `app/layouts/default.vue`，顶栏由 `components/AppHeader.vue` 提供：
 它只负责吸顶外壳与面包屑（`trail` 属性），各页面通过 `#status` 插槽补侧边状态、通过默认插槽

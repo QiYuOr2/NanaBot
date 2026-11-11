@@ -7,15 +7,17 @@
 
 ## 索引
 
-| 编号                                         | 主题                                  | 影响范围                                                      | 状态   |
-| -------------------------------------------- | ------------------------------------- | ------------------------------------------------------------- | ------ |
-| [0001](./0001-push-activity-aggregation.md)  | 推送活动合并（同一次直播合并为一条）  | `apps/site`：接口 + 面板卡片 + 共享合并逻辑                   | 已完成 |
-| [0002](./0002-push-activity-page.md)         | 推送活动独立页面 `/pushes`            | `apps/site`：新页面 + 列表项组件 + 侧边栏导航                 | 已完成 |
-| [0003](./0003-layout-and-header.md)          | 页面外壳与顶栏抽取                    | `apps/site`：layout + `AppHeader` + 刷新按钮                  | 已完成 |
-| [0004](./0004-napcat-connection-watchdog.md) | NapCat 连接看门狗（断线不再需要重启） | `apps/bot`：`core` 看门狗 + 入口重连配置 + 测试 + 诊断脚本    | 已完成 |
-| [0005](./0005-push-status-and-ui.md)         | 推送送达状态纠偏与推送 UI 优化        | `apps/site`：合并口径 + 展示辅助 + 面板 / 活动页              | 已完成 |
-| [0006](./0006-multi-napcat-accounts.md)      | 多 QQ 号（多个 NapCat 实例）          | `apps/bot` + `packages/storage`：账号配置、连接编排、推送记录 | 已完成 |
-| [0007](./0007-bot-file-logs.md)              | Bot 文件日志与按账号拆分              | `apps/bot`：日志组件、账号级日志接入、入口装配                | 已完成 |
+| 编号                                         | 主题                                  | 影响范围                                                        | 状态   |
+| -------------------------------------------- | ------------------------------------- | --------------------------------------------------------------- | ------ |
+| [0001](./0001-push-activity-aggregation.md)  | 推送活动合并（同一次直播合并为一条）  | `apps/site`：接口 + 面板卡片 + 共享合并逻辑                     | 已完成 |
+| [0002](./0002-push-activity-page.md)         | 推送活动独立页面 `/pushes`            | `apps/site`：新页面 + 列表项组件 + 侧边栏导航                   | 已完成 |
+| [0003](./0003-layout-and-header.md)          | 页面外壳与顶栏抽取                    | `apps/site`：layout + `AppHeader` + 刷新按钮                    | 已完成 |
+| [0004](./0004-napcat-connection-watchdog.md) | NapCat 连接看门狗（断线不再需要重启） | `apps/bot`：`core` 看门狗 + 入口重连配置 + 测试 + 诊断脚本      | 已完成 |
+| [0005](./0005-push-status-and-ui.md)         | 推送送达状态纠偏与推送 UI 优化        | `apps/site`：合并口径 + 展示辅助 + 面板 / 活动页                | 已完成 |
+| [0006](./0006-multi-napcat-accounts.md)      | 多 QQ 号（多个 NapCat 实例）          | `apps/bot` + `packages/storage`：账号配置、连接编排、推送记录   | 已完成 |
+| [0007](./0007-bot-file-logs.md)              | Bot 文件日志与按账号拆分              | `apps/bot`：日志组件、账号级日志接入、入口装配                  | 已完成 |
+| [0008](./0008-live-summary-full-session.md)  | 直播摘要覆盖整场弹幕                  | `packages/live-summary`：摘录抽样 + 提示词 + 回归测试           | 已完成 |
+| [0009](./0009-live-summary-regenerate.md)    | 直播摘要重新生成                      | `apps/site` + `storage` + `live-summary`：强制重算 + 可隐藏入口 | 已完成 |
 
 新增改动时：复制 [TEMPLATE.md](./TEMPLATE.md) 为 `NNNN-<主题>.md`（编号递增），写完在上表补一行。
 
