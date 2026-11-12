@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from "vue";
+import { parseProjectLogRows } from "#shared/log-presentation";
 import type { ProjectLogsResponse } from "#shared/logs";
 
 useHead({ title: "项目日志 · NanaBot" });
@@ -10,6 +11,22 @@ const { data, error, pending, refresh } = await useFetch<ProjectLogsResponse>("/
   query,
   watch: false,
 });
+const viewport = useTemplateRef<HTMLElement>("viewport");
+const logRows = computed(() => parseProjectLogRows(data.value?.content ?? ""));
+
+async function scrollToLatest() {
+  await nextTick();
+  const element = viewport.value;
+  if (!element) return;
+  element.scrollTop = element.scrollHeight;
+  requestAnimationFrame(() => {
+    if (viewport.value === element) element.scrollTop = element.scrollHeight;
+  });
+}
+
+onMounted(() => void scrollToLatest());
+watch(data, () => void scrollToLatest(), { flush: "post" });
+
 async function load() {
   await refresh();
 }
@@ -78,12 +95,26 @@ function formatSize(size: number) {
       >
         仅展示文件末尾，单次最多读取 256 KiB。
       </p>
-      <pre
+      <div
         v-if="data.content"
-        class="max-h-[70dvh] overflow-auto bg-[#171717] p-4 font-mono text-[12px] leading-6 text-[#ededed]"
+        ref="viewport"
+        class="max-h-[70dvh] overflow-auto bg-[#171717] p-4 font-mono text-[12px] leading-5 text-[#ededed]"
         tabindex="0"
+        role="log"
         aria-label="日志内容"
-        >{{ data.content }}</pre>
+      >
+        <template v-for="(row, index) in logRows" :key="index">
+          <div v-if="row.timestamp" class="flex min-w-0 items-start gap-2 py-0.5">
+            <span :class="row.timestampClass">{{ row.timestamp }}</span>
+            <span :class="row.levelClass">{{ row.levelText }}</span>
+            <span :class="row.sourceClass" :title="row.source ?? undefined">{{ row.source }}</span>
+            <span class="min-w-0 flex-1 whitespace-pre-wrap break-words">{{ row.message }}</span>
+          </div>
+          <div v-else class="whitespace-pre-wrap break-words py-0.5 pl-2 text-[#bdbdbd]">
+            {{ row.message }}
+          </div>
+        </template>
+      </div>
       <p v-else class="p-5 text-[13px] text-ink-muted">
         {{ data.selected ? "日志文件为空。" : "logs/ 下暂无可读取的日志。" }}
       </p>
