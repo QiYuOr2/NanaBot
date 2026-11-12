@@ -106,6 +106,25 @@ pnpm app deploy site --stop-before-build  # 构建前先停应用，降低小内
 `apps/site/ecosystem.config.cjs`），根目录 `ecosystem.config.cjs` 只是把两者合并，
 供 `pnpm pm2:*` 一起管理；`pnpm app` 则直接用各应用自己的配置，两者效果一致。
 
+### 在 CI 构建 site
+
+小内存服务器不建议运行 `pnpm build:site`。推送 `v2` 后，
+[`site.yml`](./.github/workflows/site.yml) 会在 Linux x64 上构建并上传
+`site-output-<sha>` artifact，服务器只接收产物并重启 PM2。
+
+配置以下 GitHub Actions secrets 后会自动部署，否则仅保留 artifact：
+
+```text
+DEPLOY_HOST      服务器地址
+DEPLOY_PORT      SSH 端口，可选，默认 22
+DEPLOY_USER      SSH 用户
+DEPLOY_SSH_KEY   SSH 私钥
+DEPLOY_PATH      服务器仓库绝对路径，例如 /root/NanaBotV2
+```
+
+配置完成后无需再在服务器执行 `pnpm build:site`；workflow 会解包到临时目录，
+验证 `.output`、重启 `@nana/site`，并在健康检查失败时回滚。
+
 ### Bot 日志
 
 Bot 会自己把日志写到项目根目录（即使 PM2 的 `cwd` 是 `apps/bot`），不依赖 PM2 日志文件：

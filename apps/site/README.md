@@ -160,6 +160,10 @@ pm2 logs @nana/site
 内存较小的服务器可加 `--stop-before-build`：`pnpm app deploy site --stop-before-build`，
 构建期间先释放旧站点占用的内存，构建失败会自动尝试恢复。
 
+更推荐由 [GitHub Actions](../../.github/workflows/site.yml) 在 Linux x64 构建 site，
+服务器只接收 `.output` 产物。未配置 `DEPLOY_*` secrets 时 workflow 只上传 artifact；
+配置后会通过 SSH 原子替换产物、重启 `@nana/site` 并做健康检查。
+
 ## 依赖的 workspace 包
 
 服务端接口直接依赖：

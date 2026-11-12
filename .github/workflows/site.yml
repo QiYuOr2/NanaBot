@@ -1,0 +1,118 @@
+name: Build site
+
+on:
+  push:
+    branches: [v2]
+    paths:
+      - "apps/site/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "vite.config.ts"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build site dependencies
+        run: pnpm --filter "@nana/site^..." --workspace-concurrency=1 run build
+
+      - name: Build site
+        run: pnpm build:site
+
+      - name: Verify Linux artifact
+        run: |
+          set -euo pipefail
+          test -f apps/site/.output/server/index.mjs
+          test -d apps/site/.output/server/node_modules
+          find apps/site/.output/server/node_modules -type f -name '*.node' -print
+          test -d apps/site/.output/server/node_modules/@node-rs/jieba-linux-x64-gnu
+          test -d apps/site/.output/server/node_modules/@resvg/resvg-js-linux-x64-gnu
+
+      - name: Package site artifact
+        run: tar -C apps/site/.output -czf site-output.tar.gz .
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-output-${{ github.sha }}
+          path: site-output.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Check deploy configuration
+        id: deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          if [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ] && [ -n "$DEPLOY_SSH_KEY" ] && [ -n "$DEPLOY_PATH" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEPLOY_* secrets are not configured; the artifact was built but not deployed."
+          fi
+
+      - name: Configure SSH
+        if: steps.deploy.outputs.enabled == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts"
+
+      - name: Deploy site artifact
+        if: steps.deploy.outputs.enabled == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          remote_arch="$(ssh -p "$port" "${DEPLOY_USER}@${DEPLOY_HOST}" 'uname -m')"
+          if [ "$remote_arch" != "x86_64" ]; then
+            echo "::error::The site artifact targets Linux x64, but the server reports $remote_arch."
+            exit 1
+          fi
+          scp -P "$port" site-output.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/site-output.tar.gz.next"
+          ssh -p "$port" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "cd '${DEPLOY_PATH}' && bash -s -- site-output.tar.gz.next" \
+            < scripts/deploy-site-output.sh

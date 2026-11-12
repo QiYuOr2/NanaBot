@@ -22,6 +22,7 @@
 | [0011](./0011-site-mobile-navigation.md)     | site 移动端导航抽屉                   | `apps/site`：布局、顶栏、侧边栏、导航状态                     | 已完成 |
 | [0012](./0012-site-tests-via-bot-control.md) | site 测试消息改走 bot 控制接口        | `apps/bot`、`apps/site`：运行中账号发送与内部控制接口         | 已完成 |
 | [0013](./0013-low-memory-deploy.md)          | 低内存部署选项                        | `scripts/app.mjs`：构建前停止应用、失败恢复                   | 已完成 |
+| [0014](./0014-site-ci-build.md)              | Site Linux CI 构建与产物部署          | GitHub Actions、部署脚本：服务器不再构建 site                 | 已完成 |
 
 新增改动时：复制 [TEMPLATE.md](./TEMPLATE.md) 为 `NNNN-<主题>.md`（编号递增），写完在上表补一行。
 
