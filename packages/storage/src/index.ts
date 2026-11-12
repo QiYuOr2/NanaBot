@@ -45,3 +45,9 @@ export type { LiveStatusRecord } from "./live-status.ts";
 export { readAllLiveStatus, readLiveStatus, writeLiveStatus } from "./live-status.ts";
 export type { PushLogRecord } from "./push-log.ts";
 export { readPushLogs, writePushLog } from "./push-log.ts";
+export {
+  prepareQQGroupDiscovery,
+  recordDiscoveredQQGroup,
+  readDiscoveredQQGroups,
+  type DiscoveredQQGroup,
+} from "./qq-group.ts";

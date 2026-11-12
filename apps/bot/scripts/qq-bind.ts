@@ -1,18 +1,13 @@
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { qrConnect } from "@tencent-connect/qqbot-connector";
-import { readConfig } from "@nana/config";
-import { parseQQConfig } from "../src/qq/config.ts";
+import { connectQQRobot } from "@nana/qq/connect";
+import { readConfig, selectOfficialAccount } from "@nana/config";
 
-const qq = parseQQConfig(readConfig());
-const id = process.argv[2] ?? qq.accounts[0]?.id;
-const account = qq.accounts.find((entry) => entry.id === id);
-if (!account)
-  throw new Error("请先在 nana.config.yaml#qq.accounts 配置账号，再运行 qq:bind [账号id]。");
+const account = selectOfficialAccount(readConfig(), process.argv[2]);
 const controller = new AbortController();
 process.once("SIGINT", () => controller.abort());
 process.once("SIGTERM", () => controller.abort());
-const credentials = await qrConnect({ signal: controller.signal });
+const credentials = await connectQQRobot({ signal: controller.signal });
 if (credentials.length !== 1)
   throw new Error("扫码返回的机器人数量不是 1，未写入凭据，请逐个账号绑定。");
 const credential = credentials[0];

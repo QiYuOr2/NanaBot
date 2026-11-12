@@ -1,0 +1,124 @@
+# NanaBot 全量配置示例。复制为 nana.config.yaml，并按实际情况填写。
+# 敏感凭据放在 apps/bot/.env；site 管理口令放在 apps/site/.env。
+# 同一进程可同时连接多个官方机器人和多个 NapCat 实例。
+qq:
+  # 主播没有填写 qqAccount 时使用的账号；省略则选择列表中的第一个。
+  # 默认账号暂不可用时，其主播暂不推送，不会改发到其他账号。
+  defaultAccount: main
+  accounts:
+    - id: main
+      name: 主号（NapCat）
+      provider: napcat
+      adminGroup: 100000001
+      napcat:
+        # wsUrlEnv 指定的变量必须存在；也可以直接填 wsUrl。
+        wsUrlEnv: NC_WS_URL
+        accessTokenEnv: NC_ACCESS_TOKEN
+        # 以下为直接配置地址的可选形式；与环境变量同时存在时优先用直接值。
+        # wsUrl: ws://127.0.0.1:1111
+        # accessToken: 不建议直接填写密钥
+
+    - id: live
+      name: 直播通知（官方 API）
+      provider: official
+      adminGroup: 100000002
+      official:
+        appIdEnv: QQ_BOT_APP_ID
+        appSecretEnv: QQ_BOT_APP_SECRET
+        sandbox: false
+      # 数字键为本地群别名，可直接沿用 QQ 群号。openid 必须使用本机器人收到的值。
+      # 初次接入可写 groups: {}，运行 bot 后在 site 设置中选择发现的群并保存。
+      groups:
+        "100000002":
+          openid: REPLACE_WITH_ADMIN_GROUP_OPENID
+          name: 官方机器人管理群
+        "100000003":
+          openid: REPLACE_WITH_NOTIFY_GROUP_OPENID
+          name: 直播通知群
+        "100000004":
+          openid: REPLACE_WITH_WORDCLOUD_GROUP_OPENID
+          name: 弹幕词云群
+
+    - id: backup
+      name: 备用 NapCat
+      provider: napcat
+      adminGroup: 100000005
+      napcat:
+        wsUrlEnv: NC_WS_URL_2
+        accessTokenEnv: NC_ACCESS_TOKEN_2
+
+    - id: official-second
+      name: 第二个官方机器人
+      provider: official
+      official:
+        # 每个官方机器人使用独立的变量名与 AppID。
+        appIdEnv: QQ_BOT_APP_ID_2
+        appSecretEnv: QQ_BOT_APP_SECRET_2
+        sandbox: true
+      groups: {}
+
+up:
+  - uname: 示例主播（官方推送）
+    uid: 145149047
+    liveRoomId: 4629447
+    live: true
+    qqAccount: live
+    liveMonitorConfig:
+      enableNotify: true
+      notifyGroups: [100000003]
+      messageTemplate:
+        # 支持 {uname}、{roomId}、{@all}。
+        # 官方 @全体要求机器人是群管理员，且每群每天仅限一次。
+        start: "{uname}开播了 https://live.bilibili.com/{roomId} {@all}"
+    wordcloud:
+      enabled: true
+      notifyGroups: [100000004]
+    # 动态监控目前未启用，保留配置兼容字段。
+    dynamic: false
+    dynamicMonitorConfig: {}
+
+  - uname: 示例主播（NapCat 推送）
+    uid: 1
+    liveRoomId: 1
+    # 按需启用，避免未修改示例就开始监控这个房间。
+    live: false
+    qqAccount: main
+    liveMonitorConfig:
+      enableNotify: true
+      notifyGroups: [100000001]
+      messageTemplate:
+        start: "{uname}开播了 https://live.bilibili.com/{roomId} {@all}"
+    wordcloud:
+      enabled: false
+      notifyGroups: []
+    dynamic: false
+    dynamicMonitorConfig: {}
+
+# 配置此段后启用邮件离线告警；发件凭据在 apps/bot/.env 中填写
+# SERVER_EMAIL 与 SERVER_EMAIL_PASSWORD。删除本段可关闭邮件告警。
+adminEmail:
+  address: admin@example.com
+  cc: []
+  smtp:
+    host: smtp.qq.com
+    port: 587
+    secure: false
+
+offlineDetector:
+  confirmCount: 3
+  notifyRecovery: true
+
+# 所有主播共用的词云计算与渲染参数。通知目标在各主播的 wordcloud 中配置。
+wordcloud:
+  topN: 60
+  minWordLength: 2
+  stopWords: []
+  noiseWords: []
+  # 中文字体路径可选，省略时由渲染器选择系统字体。
+  # fontPath: /path/to/chinese-font.ttf
+  # 下播兜底轮询间隔，毫秒；0 表示关闭轮询。
+  pollIntervalMs: 300000
+
+# DeepSeek 摘要凭据 DEEPSEEK_API_KEY、Bark 凭据 BARK_KEY、NapCat 调试 NC_DEBUG
+# 均放在 apps/bot/.env；详细变量见 apps/bot/.env.example。
+# site 群映射管理口令 NANA_SITE_CONFIG_TOKEN 放在 apps/site/.env。

@@ -17,13 +17,12 @@
     "@nana/monitor": "workspace:*",
     "@nana/notify": "workspace:*",
     "@nana/offline-detector": "workspace:*",
+    "@nana/qq": "workspace:*",
     "@nana/storage": "workspace:*",
     "@nana/utils": "workspace:*",
     "@nana/wordcloud": "workspace:*",
     "@node-rs/jieba": "catalog:",
     "@resvg/resvg-js": "catalog:",
-    "@tencent-connect/qqbot-connector": "catalog:",
-    "@tencent-connect/qqbot-nodejs": "catalog:",
     "dotenv": "^17.4.2",
     "node-napcat-ts": "^0.4.25",
     "zod": "catalog:"
@@ -32,6 +31,7 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "yaml": "catalog:"
   }
 }

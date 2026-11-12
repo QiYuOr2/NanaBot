@@ -22,12 +22,22 @@ export default defineConfig({
       "qq:bind": {
         command: "node scripts/qq-bind.ts",
         cache: false,
-        dependsOn: ["@nana/constants#build", "@nana/utils#build", "@nana/config#build"],
+        dependsOn: [
+          "@nana/constants#build",
+          "@nana/utils#build",
+          "@nana/config#build",
+          "@nana/qq#build",
+        ],
       },
       "qq:discover": {
         command: "node scripts/qq-discover.ts",
         cache: false,
-        dependsOn: ["@nana/constants#build", "@nana/utils#build", "@nana/config#build"],
+        dependsOn: [
+          "@nana/constants#build",
+          "@nana/utils#build",
+          "@nana/config#build",
+          "@nana/qq#build",
+        ],
       },
       build: {
         command: "tsc && vp build",

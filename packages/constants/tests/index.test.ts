@@ -38,6 +38,7 @@ test("环境变量名统一", () => {
   expect(ENV_KEYS.NC_DEBUG).toBe("NC_DEBUG");
   expect(ENV_KEYS.QQ_BOT_APP_ID).toBe("QQ_BOT_APP_ID");
   expect(ENV_KEYS.QQ_BOT_APP_SECRET).toBe("QQ_BOT_APP_SECRET");
+  expect(ENV_KEYS.NANA_SITE_CONFIG_TOKEN).toBe("NANA_SITE_CONFIG_TOKEN");
   expect(ENV_KEYS.DEEPSEEK_API_KEY).toBe("DEEPSEEK_API_KEY");
 });
 

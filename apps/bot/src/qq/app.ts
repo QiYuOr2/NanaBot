@@ -1,6 +1,11 @@
-import { QQBot } from "@tencent-connect/qqbot-nodejs";
+import { QQClient, type QQClientPort } from "@nana/qq";
 import { Structs } from "node-napcat-ts";
-import type { StorageOptions } from "@nana/storage";
+import {
+  prepareQQGroupDiscovery,
+  recordDiscoveredQQGroup,
+  type StorageOptions,
+} from "@nana/storage";
+import { loadOfficialGroups } from "@nana/config";
 import type { BotApp } from "../core/app";
 import { createCleanupManager } from "../core/event";
 import type { FeatureContext } from "../core/feature";
@@ -14,26 +19,25 @@ export interface OfficialAppOptions {
   storage?: StorageOptions;
   logger?: Logger;
   /** 测试注入；生产使用腾讯官方 SDK。 */
-  bot?: QQBot;
+  client?: QQClientPort;
   connectTimeoutMs?: number;
 }
 
 export function createOfficialApp(options: OfficialAppOptions): BotApp {
   const { account } = options;
   const logger = options.logger ?? consoleLogger;
-  const bot =
-    options.bot ??
-    new QQBot({
+  const client =
+    options.client ??
+    new QQClient({
       appId: account.appId,
       appSecret: account.appSecret,
       accountId: account.id,
       logger,
-      // 仅订阅 QQ 群与单聊，避免申请无关的频道权限。
-      intents: 1 << 25,
-      markdownSupport: false,
-      ...(account.sandbox ? { baseUrl: "https://sandbox.api.sgroup.qq.com" } : {}),
+      sandbox: account.sandbox,
     });
-  const push = new OfficialPushClient(bot, account, options.storage, logger);
+  const push = new OfficialPushClient(client, account, options.storage, logger, () =>
+    loadOfficialGroups(account.id, options.storage?.rootDir),
+  );
   const cleanups = createCleanupManager();
   const pluginTasks: Promise<void>[] = [];
   const connectedHandlers = new Set<() => void>();
@@ -54,33 +58,39 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
     notifyState(true);
     for (const handler of connectedHandlers) handler();
   };
-  bot.on("ready", onReady);
-  bot.on("resumed", onReady);
-  bot.on("disconnected", (event) => {
-    if (state === "stopping" || state === "stopped") return;
-    logger.warn(
-      `[官方 QQ] 连接断开（${event.code}），${event.willReconnect ? "等待自动重连" : "无法重连"}`,
-    );
-    notifyState(false);
-  });
-  bot.on("error", (error) => logger.error("[官方 QQ] SDK 错误", error));
+  cleanups.add(client.on("connected", onReady));
+  cleanups.add(
+    client.on("disconnected", (event) => {
+      if (state === "stopping" || state === "stopped") return;
+      logger.warn(
+        `[官方 QQ] 连接断开（${event.code}），${event.willReconnect ? "等待自动重连" : "无法重连"}`,
+      );
+      notifyState(false);
+    }),
+  );
+  cleanups.add(client.on("error", (error) => logger.error("[官方 QQ] 通信错误", error)));
   // 只记录路由发现信息，不回复普通聊天，也不记录群聊内容。
-  const discovered = new Set<string>();
+  const discovered = new Map<string, number>();
   const discoverGroup = (openid: string) => {
-    if (discovered.has(openid)) return;
-    discovered.add(openid);
-    logger.info(
-      `[官方 QQ] 发现 group_openid=${openid}；请将其填入当前账号的 groups.<群别名>.openid。`,
-    );
+    const last = discovered.get(openid);
+    if (last && Date.now() - last < 60_000) return;
+    try {
+      recordDiscoveredQQGroup(
+        {
+          accountId: account.id,
+          appId: account.appId,
+          openid,
+          lastSeenAt: new Date().toISOString(),
+        },
+        options.storage,
+      );
+      discovered.set(openid, Date.now());
+      if (!last) logger.info(`[官方 QQ] 发现 group_openid=${openid}；可在 site 设置中绑定对应群。`);
+    } catch (error) {
+      logger.error("[官方 QQ] 保存已发现的群标识失败", error);
+    }
   };
-  bot.on("message", (_ctx, message) => {
-    if (message.kind === "group" && message.groupOpenid) discoverGroup(message.groupOpenid);
-  });
-  bot.on("rawEvent", (event) => {
-    if (event.eventType !== "GROUP_ADD_ROBOT") return;
-    const data = event.data as { group_openid?: unknown };
-    if (typeof data?.group_openid === "string") discoverGroup(data.group_openid);
-  });
+  cleanups.add(client.on("groupDiscovered", (group) => discoverGroup(group.openid)));
 
   const context: FeatureContext = {
     accountId: account.id,
@@ -135,8 +145,13 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
       state = "starting";
       await Promise.all(pluginTasks);
       if (state !== "starting") return;
+      try {
+        prepareQQGroupDiscovery(account.id, account.appId, options.storage);
+      } catch (error) {
+        logger.error("[官方 QQ] 初始化群标识发现存储失败", error);
+      }
       notifyState(false);
-      runTask = bot.start();
+      runTask = client.start();
       // SDK start() 在整个连接生命周期内保持 pending，不能直接 await。
       void runTask.catch((error) => {
         if (state === "stopping" || state === "stopped") return;
@@ -181,7 +196,7 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
           await Promise.allSettled(pluginTasks);
           await cleanups.run();
         } finally {
-          bot.stop();
+          client.stop();
           await runTask?.catch(() => undefined);
           connectedHandlers.clear();
           stateHandlers.clear();

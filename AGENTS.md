@@ -34,6 +34,7 @@ packages/
   config/              # nana.config.yaml 读写
   constants/           # 共享常量
   monitor/             # 直播监控 source/controller/event/sink 抽象
+  qq/                  # QQ 官方通信、独立消息类型、@全体编码及扫码授权
   storage/             # db/ 下 YAML + SQLite 存储（live-status / push-log / danmu）
   utils/               # 通用工具
   wordcloud/           # 弹幕分词、场次统计、词云 SVG/PNG 渲染（纯计算，无 NapCat 依赖）
@@ -51,10 +52,12 @@ packages/
 
 ## 运行时配置
 
-- 根目录 `nana.config.yaml`：直播监控配置与 `napcat.accounts` 账号列表，同时作为项目根目录标记（`@nana/config` 读取）。
+- 根目录 `nana.config.yaml`：直播监控配置与 `qq.accounts` 账号列表（全量示例 `nana.config.yaml.example`），同时作为项目根目录标记（`@nana/config` 读取）。
 - `apps/bot/.env`（参考 `.env.example`）：`NC_WS_URL`、`NC_ACCESS_TOKEN`、`ADM_GROUP`、`NC_DEBUG`、`BARK_KEY`，变量名收口在 `@nana/constants` 的 `ENV_KEYS`。
-- 多 QQ：`nana.config.yaml#napcat.accounts` 配置多个 NapCat WS 实例（每个实例一个 QQ），主播通过 `up[].qqAccount` 指定由哪个账号推送；未配置该段时回退旧版单账号环境变量。
-- 官方 QQ：`nana.config.yaml#qq.provider: official` 选择官方通道，账号放 `qq.accounts`，可沿用 `qqAccount` 标识。凭据通过 `QQ_BOT_APP_ID` / `QQ_BOT_APP_SECRET` 或账号指定的环境变量读取；`groups.<数字别名>.openid` 必须配置，不能直接用 QQ 群号。`qq:bind` 扫码写入 `.env`，`qq:discover` 获取群 openid。群主需授权主动发言；`{@all}` 在官方通道省略。未配置 `qq` 或指定 `provider: napcat` 时保留旧通道行为。
+- 多 QQ：`qq.accounts` 统一配置多账号，每项显式 `provider: official | napcat`，连接参数放同名子段；`qq.defaultAccount` 指定默认账号（省略选首项），主播通过 `up[].qqAccount` 选账号。允许两种通道同时运行；单账号失败不改发到其他账号。解析归一化在 `@nana/config`，凭据、路由、应用工厂及启动隔离在 `apps/bot/src/accounts/`。兼容旧 `napcat.accounts` 与单账号环境变量。
+- 官方 QQ：`qq.accounts[].provider: official` 选择官方通道，连接参数放 `official` 子段，可沿用 `qqAccount` 标识。凭据通过 `QQ_BOT_APP_ID` / `QQ_BOT_APP_SECRET` 或账号指定的环境变量读取；`groups.<数字别名>.openid` 必须配置，不能直接用 QQ 群号。`qq:bind` 扫码写入 `.env`，`qq:discover` 获取群 openid。群主需授权主动发言；`{@all}` 转为官方文本标记 `<qqbot-at-everyone />`，机器人需为群管理员且每群每天限一次（官方 2026-10-26 变更）。发送失败不得省略提醒后重发为普通群消息。未配置 `qq` 或旧全局 `qq.provider: napcat` 时保留旧通道行为；新混合列表以每项 `provider` 为准。
+- 群映射支持在 site「设置」中编辑，管理口令为 `apps/site/.env#NANA_SITE_CONFIG_TOKEN`（至少 16 位，或通过进程环境变量配置）。bot 自动记录群消息/入群事件中的 openid 到 `db/qq-group.sqlite`，按账号隔离供页面选择；未绑定群不阻止连接，只跳过推送。`@nana/config` 共享 QQ 配置解析与单群原子更新，保留 YAML 注释；群映射在每次发送时读取，保存无需重启 bot。接口只返回展示数据，不返回机器人密钥。
+- 官方 SDK 只由 `@nana/qq` 依赖：`QQClient` 统一连接事件、独立的 `QQMessagePart`、发送及 `QQSendError`；`@nana/qq/connect` 提供扫码授权。该包不依赖 NapCat、配置、存储或 bot。OneBot 消息段转换、群映射、发现群持久化和推送日志留在 `apps/bot/src/qq`。bot 与 `qq:discover` 统一使用该客户端，site 不建立 QQ 连接。
 - `db/*.sqlite`：运行时 SQLite（`live-status.sqlite` / `push-log.sqlite` / `danmu.sqlite`，已 gitignore）。
 - `apps/site/ecosystem.config.cjs`：site 的 PM2 配置，端口 `6364`（`PORT`），运行 `.output/server/index.mjs`。
 

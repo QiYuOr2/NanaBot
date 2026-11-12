@@ -3,16 +3,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { resolveProjectRoot } from "@nana/utils";
-import { ENV_KEYS, NANA_CONFIG_FILE } from "@nana/constants";
+import { ENV_KEYS, NANA_CONFIG_FILE, QQ_PROVIDER_LABELS } from "@nana/constants";
 import { readConfig } from "@nana/config";
-import {
-  createApp,
-  createLoggerManager,
-  RECONNECT_DELAY_MS,
-  UNLIMITED_RECONNECT_ATTEMPTS,
-  type BotApp,
-  type Logger,
-} from "./core";
+import { createLoggerManager, type BotApp, type Logger } from "./core";
 import {
   createMonitorFeature,
   loadMonitorConfig,
@@ -42,13 +35,13 @@ import {
   wordCloudFeature,
 } from "./danmu";
 import { publishLiveSummary, pushUnsentLiveSummaries } from "./summary";
-import { groupStreamersByAccount, resolveNapcatAccounts } from "./accounts";
 import {
-  createOfficialApp,
-  parseQQConfig,
-  resolveOfficialAccounts,
-  validateOfficialTargets,
-} from "./qq";
+  groupStreamersByAccount,
+  resolveQQAccounts,
+  createAccountApp,
+  startAccountApps,
+} from "./accounts";
+import { validateOfficialTargets } from "./qq";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
 const entryDir = dirname(fileURLToPath(import.meta.url));
@@ -92,17 +85,13 @@ interface AccountRuntime {
 
 async function main(): Promise<void> {
   const config = readConfig();
-  const qq = parseQQConfig(config);
-  const officialAccounts = qq.provider === "official" ? resolveOfficialAccounts(qq.accounts) : [];
-  const { accounts, unavailable } =
-    qq.provider === "official"
-      ? { accounts: officialAccounts, unavailable: [] }
-      : resolveNapcatAccounts(config);
-  appLogger.info(`[app] QQ 通道：${qq.provider}`);
+  const { provider, accounts, unavailable, defaultAccountId } = resolveQQAccounts(config);
+  const officialAccounts = accounts.filter((account) => account.provider === "official");
+  appLogger.info(`[app] QQ 通道：${provider}；默认账号：${defaultAccountId}`);
   const unavailableAccountIds = new Set(unavailable.map((account) => account.id));
   for (const account of unavailable) {
     appLogger.warn(
-      `[app] NapCat 账号 ${account.name}（${account.id}）暂不可用，已跳过：${account.error.message}`,
+      `[app] ${QQ_PROVIDER_LABELS[account.provider]} 账号 ${account.name}（${account.id}）暂不可用，已跳过：${account.error.message}`,
     );
   }
 
@@ -110,15 +99,23 @@ async function main(): Promise<void> {
   const wordCloudConfig = loadWordCloudConfig();
   const streamersByAccount = groupStreamersByAccount(monitorConfig.streamers, accounts, {
     skipAccountIds: unavailableAccountIds,
+    defaultAccountId,
   });
   for (const account of officialAccounts) {
-    validateOfficialTargets(
-      account,
-      (streamersByAccount.get(account.id) ?? []).flatMap((streamer) => [
-        ...(streamer.notifyEnabled ? streamer.notifyGroups : []),
-        ...(streamer.wordCloud.enabled ? streamer.wordCloud.notifyGroups : []),
-      ]),
-    );
+    try {
+      validateOfficialTargets(
+        account,
+        (streamersByAccount.get(account.id) ?? []).flatMap((streamer) => [
+          ...(streamer.notifyEnabled ? streamer.notifyGroups : []),
+          ...(streamer.wordCloud.enabled ? streamer.wordCloud.notifyGroups : []),
+        ]),
+      );
+    } catch (error) {
+      appLogger.warn(
+        `[app] ${account.name} 有群尚未绑定，bot 将继续连接以发现群标识；请在 site 设置中补齐。对应群暂不推送。`,
+        error,
+      );
+    }
   }
   const summaryApiKey = process.env[ENV_KEYS.DEEPSEEK_API_KEY];
   const showAccountLabel = accounts.length > 1;
@@ -139,32 +136,11 @@ async function main(): Promise<void> {
     } else {
       accountLogger.info(`上线 / 下线提示目标管理群：${account.adminGroupId}`);
     }
-    const app: BotApp =
-      "appId" in account
-        ? createOfficialApp({
-            account,
-            storage: { rootDir: projectRoot },
-            logger: accountLogger,
-          })
-        : createApp({
-            websocket: {
-              baseUrl: account.wsUrl,
-              accessToken: account.accessToken,
-              reconnection: {
-                enable: true,
-                // 不给库设重连预算：预算耗尽后它会永久停止重连，而且此时 connect() 会挂起而不是报错。
-                attempts: UNLIMITED_RECONNECT_ATTEMPTS,
-                delay: RECONNECT_DELAY_MS,
-              },
-            },
-            account: { id: account.id, name: account.name },
-            adminGroupId: account.adminGroupId,
-            logger: accountLogger,
-            // 推送记录也写入项目根的 db/，不再依赖 cwd。
-            storage: { rootDir: projectRoot },
-            // 多个 App 共用一次进程信号处理，避免每个账号都发一遍下线消息。
-            handleSignals: false,
-          });
+    accountLogger.info(`QQ 账号通道：${QQ_PROVIDER_LABELS[account.provider]}`);
+    const app = createAccountApp(account, {
+      storage: { rootDir: projectRoot },
+      logger: accountLogger,
+    });
 
     app.onConnected(() => {
       const text = showAccountLabel ? `我来了~（${account.name}）` : "我来了~";
@@ -250,7 +226,7 @@ async function main(): Promise<void> {
         // 其它账号各用一份状态文件，避免互相覆盖在线/离线状态机。
         store: createOfflineStateStore({
           rootDir: projectRoot,
-          accountId: account.id === accounts[0]?.id ? undefined : account.id,
+          accountId: account.id === defaultAccountId ? undefined : account.id,
         }),
       });
     }
@@ -259,27 +235,7 @@ async function main(): Promise<void> {
   }
 
   registerShutdown(runtimes.map((runtime) => runtime.app));
-  const startResults = await Promise.allSettled(runtimes.map((runtime) => runtime.app.start()));
-  const activeRuntimes: AccountRuntime[] = [];
-  const startErrors: unknown[] = [];
-  for (const [index, result] of startResults.entries()) {
-    const runtime = runtimes[index];
-    if (result.status === "fulfilled") {
-      activeRuntimes.push(runtime);
-      continue;
-    }
-
-    startErrors.push(result.reason);
-    runtime.logger.error(
-      `[app] QQ 账号 ${runtime.app.accountId ?? "unknown"} 启动失败`,
-      result.reason,
-    );
-    await runtime.app.stop();
-  }
-
-  if (activeRuntimes.length === 0) {
-    throw new AggregateError(startErrors, "所有 QQ 账号均启动失败");
-  }
+  const activeRuntimes = await startAccountApps(runtimes);
 
   try {
     await syncLiveStatus(monitorConfig.streamers, {
@@ -317,7 +273,7 @@ async function main(): Promise<void> {
   }
 }
 
-/** 给每个账号的离线告警加上账号名，便于同一收件箱区分是哪台 NapCat 掉线。 */
+/** 给离线告警加上账号名，便于同一收件箱区分哪个 QQ 账号掉线。 */
 function withAccountLabel(notifier: Notifier, account: { name: string }): Notifier {
   return {
     async send(message) {

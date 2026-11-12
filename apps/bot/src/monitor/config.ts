@@ -18,7 +18,7 @@ export interface MonitorStreamerConfig {
   uid: number;
   roomId: number;
   streamer: string;
-  /** 该主播的通知由哪个 NapCat 账号发送；缺省为第一个账号。 */
+  /** 该主播的通知由哪个 QQ 账号发送；缺省为配置的默认账号。 */
   qqAccount?: string;
   notifyEnabled: boolean;
   notifyGroups: number[];

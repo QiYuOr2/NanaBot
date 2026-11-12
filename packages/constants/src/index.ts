@@ -22,6 +22,7 @@ export const APP_STATE_FILE = "app-state.sqlite";
 
 /** 弹幕场次与逐条弹幕的 SQLite 数据库文件名。 */
 export const DANMU_FILE = "danmu.sqlite";
+export const QQ_GROUP_FILE = "qq-group.sqlite";
 
 /** 推送目的的事件名，用于标记一次推送的类型。 */
 export const PUSH_LOG_PURPOSES = [
@@ -50,6 +51,7 @@ export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
 
 /** NapCat WebSocket 的默认地址。 */
 export const DEFAULT_NC_WS_URL = "ws://127.0.0.1:1111";
+export const QQ_PROVIDER_LABELS = { official: "官方 API", napcat: "NapCat" } as const;
 
 /** 应用与环境文件使用的环境变量名。 */
 export const ENV_KEYS = {
@@ -60,6 +62,7 @@ export const ENV_KEYS = {
   NC_DEBUG: "NC_DEBUG",
   QQ_BOT_APP_ID: "QQ_BOT_APP_ID",
   QQ_BOT_APP_SECRET: "QQ_BOT_APP_SECRET",
+  NANA_SITE_CONFIG_TOKEN: "NANA_SITE_CONFIG_TOKEN",
   SERVER_EMAIL: "SERVER_EMAIL",
   SERVER_EMAIL_PASSWORD: "SERVER_EMAIL_PASSWORD",
   /** DeepSeek 直播摘要。机器人与站点补生成都读这个变量。 */

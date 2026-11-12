@@ -26,6 +26,7 @@ packages/
   config/              # nana.config.yaml 读写
   constants/           # 共享常量
   monitor/             # 直播监控抽象
+  qq/                  # QQ 官方通信、消息类型、发送校验与扫码授权
   storage/             # db/ 下的 YAML 与 SQLite 存储
   utils/               # 通用工具
 nana.config.yaml       # 直播监控配置
@@ -49,7 +50,7 @@ pnpm install
 ### 运行 Bot
 
 1. 参考 `apps/bot/.env.example` 配置 `.env`
-2. 在 `nana.config.yaml` 配置要监控的主播
+2. 复制 `nana.config.yaml.example` 为 `nana.config.yaml`，配置账号与要监控的主播（已有配置可直接沿用）
 3. 构建并启动：
 
 ```bash
@@ -126,6 +127,43 @@ tail -n 200 logs/accounts/2227511984.log
 
 ## 配置
 
+全量配置见 [`nana.config.yaml.example`](./nana.config.yaml.example)，包含两种 QQ 通道、多账号、
+群映射、直播通知、词云与离线告警。敏感凭据放 `apps/bot/.env`，site 管理口令放 `apps/site/.env`。
+
+### 账号与通道
+
+账号统一放在 `qq.accounts`，每个账号用 `provider` 选择自己的服务，可同时运行官方机器人和
+NapCat。公共字段为 `id`、`name`、`adminGroup`；连接参数放在同名的 `official` / `napcat` 子段中。
+`groups` 是官方账号自己的群映射，NapCat 直接使用 QQ 群号，无需这个字段。
+
+```yaml
+qq:
+  defaultAccount: main
+  accounts:
+    - id: main
+      provider: napcat
+      napcat:
+        wsUrlEnv: NC_WS_URL
+        accessTokenEnv: NC_ACCESS_TOKEN
+    - id: live
+      provider: official
+      official:
+        appIdEnv: QQ_BOT_APP_ID
+        appSecretEnv: QQ_BOT_APP_SECRET
+      groups: {} # 启动后在 site 绑定
+```
+
+- `up[].qqAccount` 指定发送账号，其开播、词云、摘要均由这个账号发送；不填写时使用
+  `qq.defaultAccount`，省略默认账号则使用配置列表中的第一个。
+- 服务选择只看该账号的 `provider`，不会根据 AppID 是否存在或连接是否成功切换通道。
+- 新账号列表中，单个账号缺少凭据或启动失败只影响自己；其他账号继续运行。默认账号不可用时，
+  它负责的主播暂时跳过，不会转给其他账号。全部账号不可用时启动失败。
+- 每个账号独立连接、独立管理群与日志。多个 NapCat 账号需要不同实例 / 端口；多个官方机器人
+  必须使用独立的 AppID 和凭据环境变量。
+- 修改账号通道、凭据或主播归属后重新部署 bot；群映射在 site 保存后下次推送生效。
+
+### 主播
+
 `nana.config.yaml` 中，只有 `live: true` 的主播会被监控：
 
 ```yaml
@@ -134,6 +172,7 @@ up:
     uid: 145149047
     liveRoomId: 4629447
     uname: 饭总
+    qqAccount: live
     liveMonitorConfig:
       enableNotify: true
       notifyGroups:
@@ -152,14 +191,17 @@ up:
 
 ### QQ 官方机器人（推荐用于新接入）
 
-使用腾讯维护的 [`@tencent-connect/qqbot-nodejs`](https://github.com/tencent-connect/qqbot-nodejs)
-连接官方 WebSocket Gateway，SDK 负责 access token 刷新、心跳与重连。无需部署 NapCat 或公网回调服务。
+通过项目的 [`@nana/qq`](packages/qq/README.md) 通信包使用腾讯维护的
+[`@tencent-connect/qqbot-nodejs`](https://github.com/tencent-connect/qqbot-nodejs)
+连接官方 WebSocket Gateway，SDK 负责 access token 刷新、心跳与重连。消息编码、@全体标记及
+发送结果校验集中在通信包，账号路由、群映射与推送记录由 bot 适配层处理。无需部署 NapCat 或公网回调服务。
 原有 NapCat 代码和配置继续保留；没有 `qq` 配置时保持旧行为。
 
 1. 在 [QQ 开放平台](https://q.qq.com/)创建机器人，或通过
    [官方 Agent 接入入口](https://bot.q.qq.com/wiki/agent-qqbot/)快捷创建。
 2. 在 `nana.config.yaml` 增加下方 `qq` 配置；`id` 可以沿用原来的 NapCat 账号标识，
-   这样 `up[].qqAccount`、开播通知群与词云群均不用改。启用官方通道后只读取 `qq.accounts`。
+   这样 `up[].qqAccount`、开播通知群与词云群均不用改。设置该账号的 `provider: official`，
+   AppID / AppSecret 的变量名放在该账号的 `official` 子段；完整结构见全量示例。
 3. 在 `apps/bot/.env` 填写 `QQ_BOT_APP_ID` / `QQ_BOT_APP_SECRET`，或在仓库根目录扫码绑定：
 
 ```bash
@@ -167,35 +209,19 @@ vp run @nana/bot#qq:bind 2227511984
 ```
 
 扫码使用官方 `@tencent-connect/qqbot-connector`，凭据直接写入 `apps/bot/.env`，不打印密钥。
-命令缺省选择 `qq.accounts` 中第一个账号，Ctrl+C 可取消。多个机器人需分别配置不同的
-`appIdEnv` / `appSecretEnv`，再按账号 ID 分别绑定。
+命令缺省选择 `qq.accounts` 中第一个**官方账号**，Ctrl+C 可取消；指定 NapCat 账号会明确报错。
+多个机器人需在各自的 `official` 子段配置不同的 `appIdEnv` / `appSecretEnv`，再按账号 ID 分别绑定。
 
-```yaml
-qq:
-  provider: official # 改为 napcat 可切回原通道
-  accounts:
-    - id: "2227511984" # 本地路由标识，不是 AppID
-      name: 饭总机器人
-      appIdEnv: QQ_BOT_APP_ID
-      appSecretEnv: QQ_BOT_APP_SECRET
-      sandbox: false # 开发沙箱可设 true
-      # 获取映射前可以不写 adminGroup，groups 留空，先运行 qq:discover。
-      adminGroup: 1101365727
-      groups:
-        "1101365727":
-          openid: "此机器人收到的该群 group_openid"
-          name: 饭友群
-        "511731882":
-          openid: "另一个目标群的 group_openid"
-          name: 直播通知群
-        # 为该账号负责的所有通知群、词云群、管理群补齐映射。
-```
+账号中的 `adminGroup` 仍填写数字群别名，`groups` 可先留空；获取映射后按全量示例填写，
+或在 site 中保存。该账号负责的通知群、词云群和管理群均需各自绑定。
 
 官方 API 的 `group_openid` 是字符串，与 QQ 群号不同，也不能跨机器人复用。
 `groups` 的数字键仅作为本地别名，可以继续使用现有群号；实际请求与推送记录中的
 `target_id` 使用官方 openid，群展示名取 `name`，未填写时显示「群+别名」。
 
-4. 获取群标识（无需提前填写映射，不启动 B 站监控，也不主动发消息）：
+4. 推荐通过 site「设置 → QQ 群映射」获取并保存群标识，操作见下节。机器人在线时，在群内
+   @机器人发一条消息，刷新页面后选择对应候选并保存即可，无需停止或重启 bot。
+   也可以使用命令行工具（无需提前填写映射，不启动 B 站监控，也不主动发消息）：
 
 ```bash
 vp run @nana/bot#qq:discover 2227511984
@@ -215,9 +241,14 @@ vp run @nana/bot#qq:discover 2227511984
 离线告警。词云通过官方媒体 API 上传本地图片，再发送带正文的媒体消息；失败沿用纯文字降级。
 平台返回的发送失败会写入失败记录并向业务层抛出，不会当作送达成功。
 
-启动前会检查账号归属和所有群映射；缺少凭据 / 映射会明确报错，不会回退发到其他通道或群。
+启动前会检查账号归属和凭据；缺少凭据的账号会记录原因并跳过。尚未映射的群会告警并跳过推送，机器人继续
+连接以发现群标识；在 site 补齐映射后，下次推送自动读取，不会回退发到其他通道或群。
 官方 SDK 的 READY / RESUMED 表示连接可用，持续断连 90 秒后触发离线告警；NapCat 原有心跳
-检测保持原样。官方群消息接口没有 OneBot 的 @全体成员消息段，`{@all}` 会被省略并写入日志。
+检测保持原样。开播模板中的 `{@all}` 会转为官方发送标记 `<qqbot-at-everyone />`，
+机器人必须是该群管理员，且**每群每天仅能 @全体一次**。权限不足或额度耗尽时，该次推送记录为
+失败并向业务层抛出错误，不会去掉 @全体后重发为普通群消息；多次开播无法保证每次都 @全体。
+现有管理群通知沿用不 @全体的行为。接收事件里的 `<@all>` 是接收端表示，不用于发送。
+此能力见 [官方 2026-10-26 变更记录](https://bot.q.qq.com/wiki/develop/api-v2/changelog.html#_20261026)。
 主动消息最终能否送达仍取决于群授权、机器人权限与平台频率限制。
 
 参照：[官方 API 准备工作](https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/getting-started.html)、
@@ -226,48 +257,43 @@ vp run @nana/bot#qq:discover 2227511984
 旧版 API 文档曾公告停止主动推送，当前 Agent 文档已说明群主可授权主动发言，部署应以
 当前机器人实际开放权限为准。
 
-### 多 QQ 号（多个 NapCat 实例）
+### 在 site 配置 QQ 群映射
 
-NapCat 一个实例只能登录一个 QQ 号，所以两个 QQ 号需要两个 NapCat 实例、两个 WebSocket
-端口。NanaBot 仍然只跑一个进程，通过 `nana.config.yaml#napcat.accounts` 同时连接它们：
+首次更新后执行 `pnpm app deploy all`，同时更新 bot 与 site；后续编辑群映射无需重新部署。
+两者需要使用同一项目根目录的配置与 `db/`，与当前 PM2 部署方式一致。
 
-```yaml
-napcat:
-  accounts:
-    - id: main
-      name: 主号
-      wsUrl: ws://127.0.0.1:1111
-      accessTokenEnv: NC_ACCESS_TOKEN
-      adminGroup: 1111111
-    - id: second
-      name: 副号
-      wsUrl: ws://127.0.0.1:2222
-      accessTokenEnv: NC_ACCESS_TOKEN_2
-      adminGroup: 2222222
+1. 参考 `apps/site/.env.example` 创建 `apps/site/.env`，设置独立的管理口令：
 
-up:
-  - live: true
-    uid: 145149047
-    liveRoomId: 4629447
-    uname: 饭总
-    qqAccount: second # 该主播的开播、词云、摘要都走副号
-    liveMonitorConfig:
-      enableNotify: true
-      notifyGroups:
-        - 123456789
-```
+   ```dotenv
+   NANA_SITE_CONFIG_TOKEN=填写至少16位的随机管理口令
+   ```
 
-- `id` 只能包含字母、数字、`_`、`-`，用于 `up[].qqAccount` 引用。
-- `wsUrl` 可以直接写地址，也可以用 `wsUrlEnv` 指向 `.env` 变量；配置了 `wsUrlEnv` 时不会回退 `NC_WS_URL`。
-- `accessTokenEnv` 指向 `.env` 中的变量名；也可以直接写 `accessToken`（不推荐）。
-- 账号省略 `wsUrl` 时沿用 `NC_WS_URL`；`adminGroup` 不继承全局 `ADM_GROUP`，多账号必须各自配置管理群。
-- 第一个账号是主账号，必须能解析出连接变量；后续账号缺少变量时只跳过该账号，不阻塞主账号启动。
-- NapCat 实例暂时未启动时会在后台持续重连；某个账号启动失败也只会停用它自己，其它账号照常运行。
-- `up[].qqAccount` 不写时使用第一个账号，已有单账号配置可以原样运行。
-- 不写 `napcat.accounts` 时继续读取旧的 `NC_WS_URL` / `NC_ACCESS_TOKEN` / `ADM_GROUP`。
-- 每个账号有独立的连接看门狗；离线告警邮件会在标题前加 `[账号名]`。
-- 每个账号的上线 / 下线群提示发送到该账号自己的 `adminGroup`，不会共用全局群。
-- 推送记录会写入 `account` 列，便于区分是哪个 QQ 发出的。
+   可用 `openssl rand -hex 24` 生成。站点按请求读取该文件，保存后刷新设置页即可，无需
+   重启 site。也可通过进程环境变量提供；修改进程环境变量时按 PM2 的方式更新环境。
+
+2. 打开 site「设置」，输入口令解锁。群映射的读取与修改接口均需认证；口令仅保留在当前
+   页面内存，刷新或锁定后需重新输入。页面不会读取或返回机器人 AppSecret。
+3. 页面按 `qq.accounts` 列出每个官方机器人自己的管理群、主播通知群及词云群，NapCat 账号单独显示，
+   无需绑定 openid。未填写 openid
+   的群也会显示。先按原方式配置账号、AppID / AppSecret 和主播目标群即可，`groups` 可先留空。
+4. 保持 bot 在线，在需要绑定的群里 @对应机器人发送一条消息。返回页面点击刷新，根据
+   最近发现时间选择该账号收到的候选 `group_openid`，填写群名称并保存；也支持手动粘贴标识。
+5. 保存只更新这个账号的这个群，保留 YAML 注释与其他配置，下次推送自动生效，无需构建或
+   重启 bot。修改凭据、账号归属、通知群列表或通道类型仍需重启 bot。
+
+bot 只持久化发现的群标识及最近发现时间，不存储 QQ 群聊正文。候选存于 `db/qq-group.sqlite`，
+按账号隔离；更换账号绑定的 AppID 后，bot 启动时会清理该账号的旧应用候选。
+
+### 旧配置兼容
+
+已有 `napcat.accounts`、旧版 `qq.provider: official` 搭配平铺的 `qq.accounts`，以及单账号
+环境变量 `NC_WS_URL` / `NC_ACCESS_TOKEN` / `ADM_GROUP` 均可继续读取，无需一次性迁移。
+旧版全局 `qq.provider: napcat` 切换行为仍读取 `napcat.accounts`；混合使用请改为上面的
+账号级 `provider`，以全量示例为准。
+
+旧 `napcat.accounts` 保留原有的「首个账号缺少凭据则启动失败，后续账号缺少凭据只跳过自己」
+行为。新 `qq.accounts` 列表统一按账号隔离失败。`ADM_GROUP` 仅适用于旧单账号模式，
+多账号请分别填写 `adminGroup`。
 
 ## 变更记录
 

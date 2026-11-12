@@ -44,6 +44,7 @@ const generatedLabel = computed(() => {
 
 <template>
   <AppHeader :trail="[{ label: 'NanaBot', to: '/' }, { label: '直播监控' }]">
+    <NuxtLink to="/settings" class="btn-ghost">群配置</NuxtLink>
     <AppRefreshButton :pending="pending" @click="refresh" />
   </AppHeader>
 

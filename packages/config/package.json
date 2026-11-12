@@ -33,7 +33,9 @@
   "dependencies": {
     "@nana/constants": "workspace:*",
     "@nana/utils": "workspace:*",
-    "js-yaml": "catalog:"
+    "js-yaml": "catalog:",
+    "yaml": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

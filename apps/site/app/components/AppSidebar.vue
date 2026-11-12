@@ -13,7 +13,7 @@ const nav: NavItem[] = [
   { id: "danmu", label: "弹幕词云", icon: "cloud", to: "/danmu" },
   { id: "alerts", label: "告警", icon: "bell", to: "/alerts" },
   { id: "pushes", label: "推送活动", icon: "activity", to: "/pushes" },
-  { id: "settings", label: "设置", icon: "settings" },
+  { id: "settings", label: "设置", icon: "settings", to: "/settings" },
 ];
 
 const route = useRoute();
