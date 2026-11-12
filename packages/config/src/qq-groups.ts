@@ -57,7 +57,7 @@ export function describeQQGroups(config: unknown): QQAccountGroups[] {
       for (const id of Object.keys(account.groups)) add(id);
       if (account.adminGroup) add(String(account.adminGroup), "管理群");
       for (const streamer of up) {
-        if ((streamer.qqAccount ?? qq.defaultAccountId) !== account.id) continue;
+        if (streamer.qqAccount !== account.id) continue;
         for (const id of streamer.liveMonitorConfig?.notifyGroups ?? [])
           add(String(id), `${streamer.uname} · 开播通知`);
         for (const id of streamer.wordcloud?.notifyGroups ?? [])

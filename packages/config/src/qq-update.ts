@@ -55,14 +55,15 @@ export function saveQQGroupMapping(input: unknown, rootDir?: string): void {
   ) {
     throw new Error("该 group_openid 已绑定当前账号的另一个群，请核对后再保存。");
   }
-  const groupsNode = doc.getIn(["qq", "accounts", index, "groups"], true);
+  const groupsPath = ["accounts", index, "groups"];
+  const groupsNode = doc.getIn(groupsPath, true);
   const existingKey = isMap(groupsNode)
     ? groupsNode.items.find(
         (item) => isScalar(item.key) && String(item.key.value) === value.groupId,
       )?.key
     : undefined;
   const groupKey = isScalar(existingKey) ? existingKey.value : value.groupId;
-  const path = ["qq", "accounts", index, "groups", groupKey];
+  const path = [...groupsPath, groupKey];
   doc.setIn([...path, "openid"], value.openid);
   if (value.name) doc.setIn([...path, "name"], value.name);
   else doc.deleteIn([...path, "name"]);

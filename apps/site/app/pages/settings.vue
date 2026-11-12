@@ -121,7 +121,7 @@ function lock() {
         v-if="!settings.accounts.length"
         class="card mt-4 p-5 text-[13px] leading-relaxed text-ink-secondary"
       >
-        当前没有启用官方机器人。可在 nana.config.yaml 的 qq.accounts 中添加 provider: official
+        当前没有启用官方机器人。可在 nana.config.yaml 的 accounts 中添加 provider: official
         的账号，并设置 AppID 与 AppSecret；群映射可以随后在这里填写。
       </section>
       <section v-if="settings.napcatAccounts.length" class="card mt-6 p-5">

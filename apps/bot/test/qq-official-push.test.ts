@@ -53,14 +53,14 @@ function harness(
   );
   const [account] = resolveOfficialAccounts(
     parseQQConfig({
-      qq: {
-        accounts: [
-          {
-            id: "official",
-            groups: { 123: { openid: "GROUP_OPENID", name: "直播群" } },
-          },
-        ],
-      },
+      accounts: [
+        {
+          id: "official",
+          provider: "official",
+          official: {},
+          groups: { 123: { openid: "GROUP_OPENID", name: "直播群" } },
+        },
+      ],
     }).accounts,
     { QQ_BOT_APP_ID: "123456", QQ_BOT_APP_SECRET: "test-secret" },
   );
@@ -175,10 +175,14 @@ test("site 保存映射后同一个发送客户端立即使用新目标，不沿
   writeFileSync(
     join(rootDir, "nana.config.yaml"),
     JSON.stringify({
-      qq: {
-        provider: "official",
-        accounts: [{ id: "official", groups: { 123: { openid: "GROUP_OLD" } } }],
-      },
+      accounts: [
+        {
+          id: "official",
+          provider: "official",
+          official: {},
+          groups: { 123: { openid: "GROUP_OLD" } },
+        },
+      ],
     }),
   );
   const client = new OfficialPushClient(transport, account, { rootDir }, logger, () =>
@@ -204,7 +208,7 @@ test("site 保存映射后同一个发送客户端立即使用新目标，不沿
   ]);
   writeFileSync(
     join(rootDir, "nana.config.yaml"),
-    JSON.stringify({ qq: { provider: "official", accounts: [{ id: "official" }] } }),
+    JSON.stringify({ accounts: [{ id: "official", provider: "official", official: {} }] }),
   );
   await expect(
     client.sendGroupMsg(123, { purpose: "notification" }, [Structs.text("第三条")]),

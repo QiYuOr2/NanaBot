@@ -6,21 +6,32 @@ import {
 } from "../src/qq/config.ts";
 import { groupStreamersByAccount } from "../src/accounts.ts";
 
-test("旧配置仍使用 NapCat；官方模式必须显式提供账号", () => {
-  expect(parseQQConfig({ napcat: {} }).provider).toBe("napcat");
-  expect(() => parseQQConfig({ qq: { provider: "other" } })).toThrow();
-  expect(() => parseQQConfig({ qq: { provider: "official" } })).toThrow("qq.accounts");
+test("官方账号必须显式提供 provider 与 official 子段", () => {
+  expect(() => parseQQConfig({ accounts: [{ id: "main" }] })).toThrow();
+  expect(() => parseQQConfig({ accounts: [{ id: "main", provider: "official" }] })).toThrow();
+  expect(() =>
+    parseQQConfig({
+      accounts: [{ id: "main", provider: "official", appIdEnv: "APP", official: {} }],
+    }),
+  ).toThrow();
 });
 
-test("官方多账号独立解析环境变量，沿用主播归属与数字群别名", () => {
+test("官方多账号独立解析环境变量，主播显式指定账号与群别名", () => {
   const qq = parseQQConfig({
-    qq: {
-      provider: "official",
-      accounts: [
-        { id: "main", adminGroup: 123, groups: { 123: { openid: "GROUP_A", name: "管理群" } } },
-        { id: "second", appIdEnv: "APP2", appSecretEnv: "SECRET2", sandbox: true },
-      ],
-    },
+    accounts: [
+      {
+        id: "main",
+        provider: "official",
+        official: {},
+        adminGroup: 123,
+        groups: { 123: { openid: "GROUP_A", name: "管理群" } },
+      },
+      {
+        id: "second",
+        provider: "official",
+        official: { appIdEnv: "APP2", appSecretEnv: "SECRET2", sandbox: true },
+      },
+    ],
   });
   const accounts = resolveOfficialAccounts(qq.accounts, {
     QQ_BOT_APP_ID: " app1 ",
@@ -38,9 +49,12 @@ test("官方多账号独立解析环境变量，沿用主播归属与数字群�
 });
 
 test("缺少凭据、重复账号、同一机器人冒充多个账号时明确失败", () => {
-  const entries = [{ id: "a" }, { id: "b", appIdEnv: "APP2", appSecretEnv: "SECRET2" }];
-  const qq = parseQQConfig({ qq: { accounts: entries } });
-  expect(() => resolveOfficialAccounts(qq.accounts, { NC_ACCESS_TOKEN: "legacy" })).toThrow(
+  const entries = [
+    { id: "a", provider: "official", official: {} },
+    { id: "b", provider: "official", official: { appIdEnv: "APP2", appSecretEnv: "SECRET2" } },
+  ];
+  const qq = parseQQConfig({ accounts: entries });
+  expect(() => resolveOfficialAccounts(qq.accounts, { NC_ACCESS_TOKEN: "unused" })).toThrow(
     "QQ_BOT_APP_ID",
   );
   expect(() =>
@@ -51,8 +65,8 @@ test("缺少凭据、重复账号、同一机器人冒充多个账号时明确�
       SECRET2: "secret2",
     }),
   ).toThrow("相同 AppID");
-  expect(() => parseQQConfig({ qq: { accounts: [entries[0], entries[0]] } })).toThrow("重复");
+  expect(() => parseQQConfig({ accounts: [entries[0], entries[0]] })).toThrow("重复");
   expect(() =>
-    parseQQConfig({ qq: { accounts: [{ id: "a", groups: { abc: { openid: "x" } } }] } }),
+    parseQQConfig({ accounts: [{ ...entries[0], groups: { abc: { openid: "x" } } }] }),
   ).toThrow();
 });

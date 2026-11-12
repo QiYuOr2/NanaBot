@@ -31,11 +31,7 @@ test("全量示例通过实际业务配置加载器，账号、通知、词云�
   expect(result.accounts).toHaveLength(4);
   const { streamers } = loadMonitorConfig();
   expect(streamers).toHaveLength(1);
-  expect(
-    groupStreamersByAccount(streamers, result.accounts, {
-      defaultAccountId: result.defaultAccountId,
-    }).get("live"),
-  ).toEqual([
+  expect(groupStreamersByAccount(streamers, result.accounts).get("live")).toEqual([
     expect.objectContaining({
       notifyEnabled: true,
       notifyGroups: [100000003],

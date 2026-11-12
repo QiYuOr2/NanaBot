@@ -1,7 +1,6 @@
 export { readConfig, writeConfig, updateConfig, resolveConfigPath, type NanaConfig } from "./io.ts";
 export {
   parseQQConfig,
-  parseNapcatAccountConfigs,
   selectOfficialAccount,
   type OfficialAccountConfig,
   type NapcatAccountConfig,

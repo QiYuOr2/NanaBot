@@ -46,7 +46,7 @@ function harness(readyOnStart = true) {
     sendGroupMessage: vi.fn(),
   };
   const [account] = resolveOfficialAccounts(
-    parseQQConfig({ qq: { accounts: [{ id: "official" }] } }).accounts,
+    parseQQConfig({ accounts: [{ id: "official", provider: "official", official: {} }] }).accounts,
     { QQ_BOT_APP_ID: "test-app", QQ_BOT_APP_SECRET: "test-secret" },
   );
   const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };

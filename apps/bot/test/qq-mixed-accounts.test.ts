@@ -12,50 +12,52 @@ import type { BotApp } from "../src/core/app.ts";
 vi.mock("../src/core/createApp.ts", () => ({ createApp: vi.fn() }));
 vi.mock("../src/qq/app.ts", () => ({ createOfficialApp: vi.fn() }));
 const configuration = {
-  qq: {
-    defaultAccount: "api",
-    accounts: [
-      { id: "nc", provider: "napcat", napcat: { wsUrlEnv: "NC_URL", accessTokenEnv: "NC_TOKEN" } },
-      { id: "api", provider: "official", official: { appIdEnv: "APP", appSecretEnv: "SECRET" } },
-    ],
-  },
+  accounts: [
+    { id: "nc", provider: "napcat", napcat: { wsUrlEnv: "NC_URL", accessTokenEnv: "NC_TOKEN" } },
+    { id: "api", provider: "official", official: { appIdEnv: "APP", appSecretEnv: "SECRET" } },
+  ],
 };
 const env = { NC_URL: "ws://localhost:1111", NC_TOKEN: "token", APP: "appid", SECRET: "secret" };
 const logger = { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-test("两类账号在同一列表解析，主播按账号路由，默认账号可显式指定", () => {
+test("两类账号在顶层列表解析，只有指定账号的主播参与路由", () => {
   const result = resolveQQAccounts(configuration, env);
   expect(result.accounts.map((account) => [account.id, account.provider])).toEqual([
     ["nc", "napcat"],
     ["api", "official"],
   ]);
   const grouped = groupStreamersByAccount(
-    [{ streamer: "默认主播" }, { streamer: "NC主播", qqAccount: "nc" }],
+    [
+      { streamer: "未指定账号主播" },
+      { streamer: "官方主播", qqAccount: "api" },
+      { streamer: "NC主播", qqAccount: "nc" },
+    ],
     result.accounts,
-    { defaultAccountId: result.defaultAccountId },
   );
-  expect(grouped.get("api")?.map((item) => item.streamer)).toEqual(["默认主播"]);
+  expect(grouped.get("api")?.map((item) => item.streamer)).toEqual(["官方主播"]);
   expect(grouped.get("nc")?.map((item) => item.streamer)).toEqual(["NC主播"]);
 });
 
-test.each(["api", "nc"])("账号 %s 缺少凭据时隔离，默认主播不会改发到另一个通道", (missing) => {
+test.each(["api", "nc"])("账号 %s 缺少凭据时隔离，主播不会改发到另一个通道", (missing) => {
   const availableEnv =
     missing === "api"
       ? { NC_URL: env.NC_URL, NC_TOKEN: env.NC_TOKEN }
       : { APP: env.APP, SECRET: env.SECRET };
   const result = resolveQQAccounts(configuration, availableEnv);
   expect(result.unavailable[0].id).toBe(missing);
-  expect(result.defaultAccountId).toBe("api");
   const grouped = groupStreamersByAccount(
-    [{ streamer: "默认主播" }, { streamer: "NC主播", qqAccount: "nc" }],
+    [
+      { streamer: "未指定账号主播" },
+      { streamer: "官方主播", qqAccount: "api" },
+      { streamer: "NC主播", qqAccount: "nc" },
+    ],
     result.accounts,
     {
-      defaultAccountId: result.defaultAccountId,
       skipAccountIds: new Set(result.unavailable.map((account) => account.id)),
     },
   );
   expect([...grouped.values()].flat().map((item) => item.streamer)).toEqual(
-    missing === "api" ? ["NC主播"] : ["默认主播"],
+    missing === "api" ? ["NC主播"] : ["官方主播"],
   );
 });
 
@@ -64,20 +66,18 @@ test("所有账号缺少凭据、重复官方 AppID 或路由错误会明确失�
   expect(() =>
     resolveQQAccounts(
       {
-        qq: {
-          accounts: [
-            {
-              id: "a",
-              provider: "official",
-              official: { appIdEnv: "APP", appSecretEnv: "SECRET" },
-            },
-            {
-              id: "b",
-              provider: "official",
-              official: { appIdEnv: "APP2", appSecretEnv: "SECRET2" },
-            },
-          ],
-        },
+        accounts: [
+          {
+            id: "a",
+            provider: "official",
+            official: { appIdEnv: "APP", appSecretEnv: "SECRET" },
+          },
+          {
+            id: "b",
+            provider: "official",
+            official: { appIdEnv: "APP2", appSecretEnv: "SECRET2" },
+          },
+        ],
       },
       { ...env, APP2: "appid", SECRET2: "second" },
     ),

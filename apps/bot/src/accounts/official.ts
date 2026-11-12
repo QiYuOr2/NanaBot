@@ -49,7 +49,7 @@ export function validateOfficialTargets(
   ])) {
     if (!account.groups[String(id)]) {
       throw new Error(
-        `官方 QQ 账号 "${account.id}" 缺少群 ${id} 的映射：请配置 qq.accounts[].groups.${id}.openid（group_openid，非 QQ 群号）。`,
+        `官方 QQ 账号 "${account.id}" 缺少群 ${id} 的映射：请配置 accounts[].groups.${id}.openid（group_openid，非 QQ 群号）。`,
       );
     }
   }

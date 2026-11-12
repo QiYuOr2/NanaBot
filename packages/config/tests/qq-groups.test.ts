@@ -9,7 +9,38 @@ const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
-const source = `# 顶部注释\nnapcat:\n  accounts: [{ id: legacy, accessToken: keep-this }]\nqq:\n  provider: official\n  accounts:\n    - id: main\n      adminGroup: 123\n      groups:\n        123: # 保留群注释\n          openid: OLD\n          name: 旧群名\n    - id: second\n      appIdEnv: APP2\n      appSecretEnv: SECRET2\nup:\n  - uname: 饭总\n    qqAccount: main\n    liveMonitorConfig:\n      notifyGroups: [123, 456]\n    wordcloud:\n      notifyGroups: [456]\n  - uname: 另一位\n    qqAccount: second\n    liveMonitorConfig:\n      notifyGroups: [789]\n`;
+const source = `# 顶部注释
+accounts:
+  - id: main
+    provider: official
+    official: {}
+    adminGroup: 123
+    groups:
+      123: # 保留群注释
+        openid: OLD
+        name: 旧群名
+  - id: second
+    provider: official
+    official:
+      appIdEnv: APP2
+      appSecretEnv: SECRET2
+  - id: nc
+    provider: napcat
+    napcat:
+      wsUrl: ws://localhost:1111
+      accessToken: keep-this
+up:
+  - uname: 饭总
+    qqAccount: main
+    liveMonitorConfig:
+      notifyGroups: [123, 456]
+    wordcloud:
+      notifyGroups: [456]
+  - uname: 另一位
+    qqAccount: second
+    liveMonitorConfig:
+      notifyGroups: [789]
+`;
 function root() {
   const rootDir = mkdtempSync(join(tmpdir(), "nana-qq-config-"));
   roots.push(rootDir);
@@ -28,7 +59,7 @@ test("列出各账号业务目标，包含未映射的通知群与词云群，�
   expect(JSON.stringify(accounts)).not.toContain("keep-this");
 });
 
-test("单群更新保留注释、数值 YAML 键和其它账号配置，运行中读取立即生效", () => {
+test("单群更新保留注释和其它账号，运行中读取立即生效", () => {
   const { rootDir, file } = root();
   saveQQGroupMapping(
     { accountId: "main", groupId: "123", openid: "NEW", name: "新群名", expectedOpenid: "OLD" },

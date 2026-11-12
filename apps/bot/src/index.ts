@@ -85,9 +85,9 @@ interface AccountRuntime {
 
 async function main(): Promise<void> {
   const config = readConfig();
-  const { provider, accounts, unavailable, defaultAccountId } = resolveQQAccounts(config);
+  const { provider, accounts, unavailable, statusAccountId } = resolveQQAccounts(config);
   const officialAccounts = accounts.filter((account) => account.provider === "official");
-  appLogger.info(`[app] QQ 通道：${provider}；默认账号：${defaultAccountId}`);
+  appLogger.info(`[app] QQ 通道：${provider}`);
   const unavailableAccountIds = new Set(unavailable.map((account) => account.id));
   for (const account of unavailable) {
     appLogger.warn(
@@ -99,8 +99,13 @@ async function main(): Promise<void> {
   const wordCloudConfig = loadWordCloudConfig();
   const streamersByAccount = groupStreamersByAccount(monitorConfig.streamers, accounts, {
     skipAccountIds: unavailableAccountIds,
-    defaultAccountId,
   });
+  for (const streamer of monitorConfig.streamers) {
+    if (!streamer.qqAccount)
+      appLogger.warn(
+        `[app] 主播 ${streamer.streamer} 未配置 qqAccount，已跳过账号推送与监控功能。`,
+      );
+  }
   for (const account of officialAccounts) {
     try {
       validateOfficialTargets(
@@ -159,7 +164,7 @@ async function main(): Promise<void> {
     // 每个主播只建一条 blive 长连接：开播通知与弹幕录制共用同一条连接的事件流。
     // 录制器要等监控 setup 才创建，轮询/停机必须拿这张 Map 的引用，不能提前拷贝。
     const recorders = new Map<number, DanmuRecorder>();
-    // 词云发到该主播自己配置的群，不再回落到 ADM_GROUP。
+    // 词云发到该主播自己配置的群。
     const sendWordCloud = toWordCloudSender(app);
     const wordCloudEnabled = streamers.some((streamer) => streamer.wordCloud.enabled);
     const onSessionClosed: SessionClosedHandler | undefined = wordCloudEnabled
@@ -222,11 +227,11 @@ async function main(): Promise<void> {
         confirmCount: offlineConfig.confirmCount,
         notifyRecovery: offlineConfig.notifyRecovery,
         storage: { rootDir: projectRoot },
-        // 默认账号继续用旧文件，站点「告警」页仍能看到主号状态；
+        // 首个配置账号的状态供站点「告警」页展示；
         // 其它账号各用一份状态文件，避免互相覆盖在线/离线状态机。
         store: createOfflineStateStore({
           rootDir: projectRoot,
-          accountId: account.id === defaultAccountId ? undefined : account.id,
+          accountId: account.id === statusAccountId ? undefined : account.id,
         }),
       });
     }

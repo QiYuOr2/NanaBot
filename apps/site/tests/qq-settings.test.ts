@@ -20,7 +20,7 @@ async function withSite(
   writeFileSync(
     join(rootDir, "nana.config.yaml"),
     configuration ??
-      `# 保留配置注释\nnapcat:\n  accessToken: never-return-this\nqq:\n  provider: official\n  accounts:\n    - id: main\n      adminGroup: 123\nup: []\n`,
+      `# 保留配置注释\naccounts:\n  - id: main\n    provider: official\n    official: {}\n    adminGroup: 123\n  - id: nc\n    provider: napcat\n    napcat:\n      wsUrl: ws://localhost:1111\n      accessToken: never-return-this\nup: []\n`,
   );
   if (configured)
     writeFileSync(
@@ -64,25 +64,22 @@ test("未解锁时配置读写均被拒绝，公开状态不包含口令", async
   });
 });
 
-test("混合通道只为官方账号显示与保存映射，默认主播归属保持一致", async () => {
+test("顶层混合账号只为官方账号保存映射，未指定账号的主播不绑定群", async () => {
   const config = {
-    qq: {
-      defaultAccount: "nc",
-      accounts: [
-        {
-          id: "api",
-          name: "官方号",
-          provider: "official",
-          official: { appIdEnv: "APP", appSecretEnv: "SECRET" },
-        },
-        {
-          id: "nc",
-          name: "NapCat号",
-          provider: "napcat",
-          napcat: { accessToken: "DO_NOT_EXPOSE" },
-        },
-      ],
-    },
+    accounts: [
+      {
+        id: "api",
+        name: "官方号",
+        provider: "official",
+        official: { appIdEnv: "APP", appSecretEnv: "SECRET" },
+      },
+      {
+        id: "nc",
+        name: "NapCat号",
+        provider: "napcat",
+        napcat: { wsUrl: "ws://localhost:1111", accessToken: "DO_NOT_EXPOSE" },
+      },
+    ],
     up: [
       { uname: "默认主播", liveMonitorConfig: { notifyGroups: [123] } },
       { uname: "官方主播", qqAccount: "api", liveMonitorConfig: { notifyGroups: [456] } },
@@ -126,7 +123,9 @@ test("混合通道只为官方账号显示与保存映射，默认主播归属�
           })
         ).status,
       ).toBe(400);
-      expect(readFileSync(join(rootDir, "nana.config.yaml"), "utf8")).toContain("DO_NOT_EXPOSE");
+      const content = readFileSync(join(rootDir, "nana.config.yaml"), "utf8");
+      expect(content).toContain("DO_NOT_EXPOSE");
+      expect(content).not.toContain("qq:");
     },
     true,
     JSON.stringify(config),

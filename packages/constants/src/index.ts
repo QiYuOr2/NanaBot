@@ -49,13 +49,11 @@ export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
   notification: "通知",
 };
 
-/** NapCat WebSocket 的默认地址。 */
-export const DEFAULT_NC_WS_URL = "ws://127.0.0.1:1111";
+/** QQ 连接通道的展示名称。 */
 export const QQ_PROVIDER_LABELS = { official: "官方 API", napcat: "NapCat" } as const;
 
 /** 应用与环境文件使用的环境变量名。 */
 export const ENV_KEYS = {
-  ADM_GROUP: "ADM_GROUP",
   BARK_KEY: "BARK_KEY",
   NC_WS_URL: "NC_WS_URL",
   NC_ACCESS_TOKEN: "NC_ACCESS_TOKEN",

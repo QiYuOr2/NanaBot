@@ -1,62 +1,59 @@
 # NanaBot 全量配置示例。复制为 nana.config.yaml，并按实际情况填写。
 # 敏感凭据放在 apps/bot/.env；site 管理口令放在 apps/site/.env。
 # 同一进程可同时连接多个官方机器人和多个 NapCat 实例。
-qq:
-  # 主播没有填写 qqAccount 时使用的账号；省略则选择列表中的第一个。
-  # 默认账号暂不可用时，其主播暂不推送，不会改发到其他账号。
-  defaultAccount: main
-  accounts:
-    - id: main
-      name: 主号（NapCat）
-      provider: napcat
-      adminGroup: 100000001
-      napcat:
-        # wsUrlEnv 指定的变量必须存在；也可以直接填 wsUrl。
-        wsUrlEnv: NC_WS_URL
-        accessTokenEnv: NC_ACCESS_TOKEN
-        # 以下为直接配置地址的可选形式；与环境变量同时存在时优先用直接值。
-        # wsUrl: ws://127.0.0.1:1111
-        # accessToken: 不建议直接填写密钥
+accounts:
+  - id: main
+    name: 主号（NapCat）
+    provider: napcat
+    adminGroup: 100000001
+    napcat:
+      # wsUrlEnv 指定的变量必须存在；也可以直接填 wsUrl。
+      wsUrlEnv: NC_WS_URL
+      accessTokenEnv: NC_ACCESS_TOKEN
+      # 以下为直接配置地址的可选形式；与环境变量同时存在时优先用直接值。
+      # wsUrl: ws://127.0.0.1:1111
+      # accessToken: 不建议直接填写密钥
 
-    - id: live
-      name: 直播通知（官方 API）
-      provider: official
-      adminGroup: 100000002
-      official:
-        appIdEnv: QQ_BOT_APP_ID
-        appSecretEnv: QQ_BOT_APP_SECRET
-        sandbox: false
-      # 数字键为本地群别名，可直接沿用 QQ 群号。openid 必须使用本机器人收到的值。
-      # 初次接入可写 groups: {}，运行 bot 后在 site 设置中选择发现的群并保存。
-      groups:
-        "100000002":
-          openid: REPLACE_WITH_ADMIN_GROUP_OPENID
-          name: 官方机器人管理群
-        "100000003":
-          openid: REPLACE_WITH_NOTIFY_GROUP_OPENID
-          name: 直播通知群
-        "100000004":
-          openid: REPLACE_WITH_WORDCLOUD_GROUP_OPENID
-          name: 弹幕词云群
+  - id: live
+    name: 直播通知（官方 API）
+    provider: official
+    adminGroup: 100000002
+    official:
+      appIdEnv: QQ_BOT_APP_ID
+      appSecretEnv: QQ_BOT_APP_SECRET
+      sandbox: false
+    # 数字键为本地群别名，可直接沿用 QQ 群号。openid 必须使用本机器人收到的值。
+    # 初次接入可写 groups: {}，运行 bot 后在 site 设置中选择发现的群并保存。
+    groups:
+      "100000002":
+        openid: REPLACE_WITH_ADMIN_GROUP_OPENID
+        name: 官方机器人管理群
+      "100000003":
+        openid: REPLACE_WITH_NOTIFY_GROUP_OPENID
+        name: 直播通知群
+      "100000004":
+        openid: REPLACE_WITH_WORDCLOUD_GROUP_OPENID
+        name: 弹幕词云群
 
-    - id: backup
-      name: 备用 NapCat
-      provider: napcat
-      adminGroup: 100000005
-      napcat:
-        wsUrlEnv: NC_WS_URL_2
-        accessTokenEnv: NC_ACCESS_TOKEN_2
+  - id: backup
+    name: 备用 NapCat
+    provider: napcat
+    adminGroup: 100000005
+    napcat:
+      wsUrlEnv: NC_WS_URL_2
+      accessTokenEnv: NC_ACCESS_TOKEN_2
 
-    - id: official-second
-      name: 第二个官方机器人
-      provider: official
-      official:
-        # 每个官方机器人使用独立的变量名与 AppID。
-        appIdEnv: QQ_BOT_APP_ID_2
-        appSecretEnv: QQ_BOT_APP_SECRET_2
-        sandbox: true
-      groups: {}
+  - id: official-second
+    name: 第二个官方机器人
+    provider: official
+    official:
+      # 每个官方机器人使用独立的变量名与 AppID。
+      appIdEnv: QQ_BOT_APP_ID_2
+      appSecretEnv: QQ_BOT_APP_SECRET_2
+      sandbox: true
+    groups: {}
 
+# 主播需要显式指定 qqAccount；未填写时不参与账号推送。
 up:
   - uname: 示例主播（官方推送）
     uid: 145149047

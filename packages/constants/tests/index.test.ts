@@ -5,7 +5,6 @@ import {
   APP_STATE_FILE,
   DANMU_FILE,
   DATABASE_DIRECTORY,
-  DEFAULT_NC_WS_URL,
   ENV_KEYS,
   LIVE_STATUS_FILE,
   NANA_CONFIG_FILE,
@@ -21,9 +20,7 @@ test("项目文件与目录常量与目录结构一致", () => {
   expect(DANMU_FILE).toBe("danmu.sqlite");
 });
 
-test("默认网络地址", () => {
-  expect(DEFAULT_NC_WS_URL).toBe("ws://127.0.0.1:1111");
-});
+test("默认网络地址", () => {});
 
 test("Bark 常量", () => {
   expect(BARK_BASE_URL).toBe("https://api.day.app/");
@@ -31,7 +28,6 @@ test("Bark 常量", () => {
 });
 
 test("环境变量名统一", () => {
-  expect(ENV_KEYS.ADM_GROUP).toBe("ADM_GROUP");
   expect(ENV_KEYS.BARK_KEY).toBe("BARK_KEY");
   expect(ENV_KEYS.NC_WS_URL).toBe("NC_WS_URL");
   expect(ENV_KEYS.NC_ACCESS_TOKEN).toBe("NC_ACCESS_TOKEN");
