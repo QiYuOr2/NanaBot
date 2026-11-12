@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import { QQSendError } from "./errors.ts";
 import type { QQImageSource, QQMessagePart, QQSentMessage } from "./types.ts";
 
@@ -39,7 +38,7 @@ export function toSDKImageSource(source: QQImageSource): {
   if (typeof source !== "string") return { buffer: Buffer.from(source) };
   if (/^https?:\/\//.test(source)) return { url: source };
   if (source.startsWith("base64://")) return { buffer: Buffer.from(source.slice(9), "base64") };
-  return { localPath: source.startsWith("file://") ? fileURLToPath(source) : source };
+  return { localPath: source.startsWith("file://") ? new URL(source).pathname : source };
 }
 
 /** SDK 对 HTTP 200 的业务失败不作校验，只有返回消息 ID 才视为已发送。 */

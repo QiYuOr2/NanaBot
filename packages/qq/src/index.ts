@@ -1,5 +1,6 @@
 export { QQClient } from "./client.ts";
 export { QQSendError } from "./errors.ts";
+export type { QQSendErrorKind } from "./errors.ts";
 export type {
   QQClientOptions,
   QQClientPort,
@@ -12,4 +13,5 @@ export type {
   QQLogger,
   QQMessagePart,
   QQSentMessage,
+  QQIncomingMessage,
 } from "./types.ts";

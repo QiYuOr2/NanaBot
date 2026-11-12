@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vp dev",
     "test": "vp test",
-    "test:email": "node scripts/send-test-email.mjs",
-    "probe:reconnect": "node scripts/probe-napcat-reconnect.ts"
+    "test:email": "node scripts/send-test-email.mjs"
   },
   "dependencies": {
     "@nana/bilibili-api": "workspace:*",
@@ -15,6 +14,7 @@
     "@nana/constants": "workspace:*",
     "@nana/live-summary": "workspace:*",
     "@nana/monitor": "workspace:*",
+    "@nana/napcat": "workspace:*",
     "@nana/notify": "workspace:*",
     "@nana/offline-detector": "workspace:*",
     "@nana/qq": "workspace:*",
@@ -24,7 +24,7 @@
     "@node-rs/jieba": "catalog:",
     "@resvg/resvg-js": "catalog:",
     "dotenv": "^17.4.2",
-    "node-napcat-ts": "^0.4.25",
+    "re2js": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

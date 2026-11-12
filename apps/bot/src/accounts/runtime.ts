@@ -1,6 +1,5 @@
 import type { StorageOptions } from "@nana/storage";
 import { createApp } from "../core/createApp.ts";
-import { RECONNECT_DELAY_MS, UNLIMITED_RECONNECT_ATTEMPTS } from "../core/connection.ts";
 import type { BotApp } from "../core/app.ts";
 import type { Logger } from "../core/logger.ts";
 import { createOfficialApp } from "../qq/app.ts";
@@ -15,11 +14,6 @@ export function createAccountApp(
     websocket: {
       baseUrl: account.wsUrl,
       accessToken: account.accessToken,
-      reconnection: {
-        enable: account.watchdog ?? false,
-        attempts: UNLIMITED_RECONNECT_ATTEMPTS,
-        delay: RECONNECT_DELAY_MS,
-      },
     },
     account: { id: account.id, name: account.name },
     adminGroupId: account.adminGroupId,

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 import { expect, test, vi } from "vite-plus/test";
-import { readConfig, type NanaConfig } from "@nana/config";
+import { parseQQConfig, readConfig, type NanaConfig } from "@nana/config";
 import { resolveQQAccounts, groupStreamersByAccount } from "../src/accounts.ts";
 import { loadMonitorConfig } from "../src/monitor/config.ts";
 import { loadWordCloudConfig } from "../src/danmu/config.ts";
@@ -29,6 +29,7 @@ test("全量示例通过实际业务配置加载器，账号、通知、词云�
   });
   expect(result.unavailable).toEqual([]);
   expect(result.accounts).toHaveLength(4);
+  expect(parseQQConfig(config).accounts).toHaveLength(4);
   const { streamers } = loadMonitorConfig();
   expect(streamers).toHaveLength(1);
   expect(groupStreamersByAccount(streamers, result.accounts).get("live")).toEqual([
@@ -44,4 +45,19 @@ test("全量示例通过实际业务配置加载器，账号、通知、词云�
     confirmCount: 3,
     notifyRecovery: true,
   });
+});
+
+test("根级 message 非法配置由 parseQQConfig 明确拒绝", () => {
+  expect(() =>
+    parseQQConfig({
+      message: { rules: { items: [{ id: "bad", type: "regex", pattern: "(", response: "x" }] } },
+      accounts: [
+        {
+          id: "main",
+          provider: "napcat",
+          napcat: { wsUrl: "ws://localhost", accessToken: "token" },
+        },
+      ],
+    }),
+  ).toThrow(/message.*正则表达式无效|正则表达式无效/);
 });

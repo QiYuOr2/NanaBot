@@ -1,5 +1,5 @@
 import type { QQClientPort, QQMessagePart } from "@nana/qq";
-import type { SendMessageSegment } from "node-napcat-ts";
+import type { MessagePart } from "../message/parts.ts";
 import { PUSH_PURPOSE_LABELS } from "@nana/constants";
 import { writePushLog, type StorageOptions } from "@nana/storage";
 import type { GroupPushOptions } from "../core/napcat";
@@ -34,7 +34,7 @@ export class OfficialPushClient {
   async sendGroupMsg(
     groupId: number,
     options: GroupPushOptions,
-    messages: SendMessageSegment[],
+    messages: MessagePart[],
   ): Promise<string> {
     let target = `群${groupId}`;
     const base = {
@@ -68,18 +68,17 @@ export class OfficialPushClient {
   }
 
   /** OneBot 消息段只存在于 bot 兼容层，不进入官方通信包。 */
-  private toQQParts(messages: SendMessageSegment[]): QQMessagePart[] {
+  private toQQParts(messages: MessagePart[]): QQMessagePart[] {
     return messages.map((message): QQMessagePart => {
       switch (message.type) {
         case "text":
-          return { type: "text", text: message.data.text };
+          return { type: "text", text: message.text || message.data.text };
         case "image":
-          return { type: "image", source: message.data.file };
-        case "at":
-          if (message.data.qq === "all") return { type: "atAll" };
-          break;
+          return { type: "image", source: message.source || message.data.file };
+        case "atAll":
+          return { type: "atAll" };
       }
-      throw new Error(`官方 QQ 通道不支持消息段 ${message.type}。`);
+      throw new Error("官方 QQ 通道不支持该消息段。");
     });
   }
 

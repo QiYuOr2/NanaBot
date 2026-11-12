@@ -35,6 +35,8 @@ export const PUSH_LOG_PURPOSES = [
   "live.summary",
   "notification",
   "message.test",
+  "message.command",
+  "message.auto-reply",
 ] as const;
 
 /** 推送目的的类型。 */
@@ -50,6 +52,8 @@ export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
   "live.summary": "直播摘要",
   notification: "通知",
   "message.test": "测试消息",
+  "message.command": "命令回复",
+  "message.auto-reply": "自动回复",
 };
 
 /** QQ 连接通道的展示名称。 */

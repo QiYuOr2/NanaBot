@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
@@ -7,7 +7,7 @@ import { readConfig, resolveConfigPath, updateConfig } from "../src/index.ts";
 
 test("从子目录启动时定位项目根目录配置", () => {
   const rootDir = mkdtempSync(join(tmpdir(), "nana-config-"));
-  const configPath = join(rootDir, NANA_CONFIG_FILE);
+  const configPath = join(realpathSync(rootDir), NANA_CONFIG_FILE);
   mkdirSync(join(rootDir, "apps", "bot"), { recursive: true });
   writeFileSync(configPath, "up:\n  live: false\n", "utf8");
   const originalCwd = process.cwd();

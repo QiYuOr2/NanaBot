@@ -57,6 +57,13 @@ function harness() {
       sent.push({ openid, parts });
       return { id: "message-1" };
     },
+    async sendPrivateMessage(openid, parts) {
+      sent.push({ openid, parts });
+      return { id: "private-message-1" };
+    },
+    async replyMessage() {
+      return { id: "reply-1" };
+    },
   };
   const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const app = createOfficialApp({ account, client, storage: { rootDir }, logger });
@@ -249,6 +256,12 @@ test("发送失败返回 502，且响应与推送记录不泄露机器人密钥"
     start: async () => {},
     stop: () => {},
     async sendGroupMessage() {
+      throw new Error("invalid super-secret");
+    },
+    async sendPrivateMessage() {
+      throw new Error("invalid super-secret");
+    },
+    async replyMessage() {
       throw new Error("invalid super-secret");
     },
   };

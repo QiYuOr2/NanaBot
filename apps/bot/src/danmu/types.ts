@@ -1,5 +1,5 @@
 import type { PushLogPurpose } from "@nana/constants";
-import type { SendMessageSegment } from "node-napcat-ts";
+import type { MessagePart } from "../message/parts.ts";
 import type { DanmuSessionCloseReason, StorageOptions } from "@nana/storage";
 import type { FeatureContext } from "../core";
 import type { Logger } from "../core/logger.ts";
@@ -11,7 +11,7 @@ export type DanmuCloseReason = DanmuSessionCloseReason;
 /** 把词云发到某个群。目标群来自对应主播的配置，测试时可以直接桩掉。 */
 export type WordCloudSender = (
   groupId: number,
-  messages: SendMessageSegment[],
+  messages: MessagePart[],
   purpose?: { purpose: PushLogPurpose; label?: string; content?: string; subject?: string },
 ) => Promise<void>;
 

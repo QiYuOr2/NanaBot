@@ -68,6 +68,53 @@ botNotifications:
     enabled: true
     messageTemplate: "我溜了~"
 
+# 消息命令默认开启，自动回复规则默认关闭；配置可放在顶层共享，
+# 也可放到 accounts[].message 按账号覆盖。
+message:
+  enabled: true
+  commands:
+    enabled: true
+    prefix: "/"
+  # 内置别名已有「状态 / 帮助 / 直播」；这里演示新增且不冲突的别名。
+  commandAliases:
+    status: [state]
+    help: [usage]
+    live: [rooms]
+  # 账号级 message 可覆盖这里的顶层字段；深浅层配置均按字段合并。
+  rules:
+    enabled: false
+    stopOnFirstMatch: true
+    items:
+      - id: greeting
+        enabled: true
+        type: exact
+        pattern: "你好"
+        response: ["你好呀！", "欢迎回来！"]
+        ignoreCase: true
+      - id: live-query
+        enabled: true
+        type: contains
+        pattern: "开播了吗"
+        response: "可以发送 /live 查看当前直播状态。"
+        ignoreCase: true
+  admins:
+    users: []
+    groups: []
+  scopes:
+    group:
+      enabled: true
+      allow: []
+      deny: []
+    private:
+      enabled: true
+      allow: []
+      deny: []
+  cooldown:
+    enabled: true
+    commandUserMs: 3000
+    ruleUserMs: 3000
+    ruleConversationMs: 1000
+
 # 主播需要显式指定 qqAccount；未填写时不参与账号推送。
 up:
   - uname: 示例主播（官方推送）

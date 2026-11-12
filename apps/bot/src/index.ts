@@ -51,6 +51,7 @@ import { validateOfficialTargets } from "./qq";
 import { startBotControlServer, type BotControlServer } from "./control";
 import { parseBotNotifications, renderBotNotice } from "./config/notifications.ts";
 import { registerStartupNotice } from "./core/startupNotice.ts";
+import { createMessageFeature } from "./message/index.ts";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
 const entryDir = dirname(fileURLToPath(import.meta.url));
@@ -92,10 +93,13 @@ interface AccountRuntime {
   onSessionClosed?: SessionClosedHandler;
   logger: Logger;
 }
+const processStartedAt = Date.now();
+const connectionStates = new Map<string, () => boolean>();
 
 async function main(): Promise<void> {
   const config = readConfig();
-  const { provider, accounts, unavailable, disabled, statusAccountId } = resolveQQAccounts(config);
+  const { provider, accounts, unavailable, disabled, statusAccountId, configuredCount } =
+    resolveQQAccounts(config);
   const notices = parseBotNotifications(config);
   const officialAccounts = accounts.filter((account) => account.provider === "official");
   appLogger.info(`[app] QQ 通道：${provider}`);
@@ -156,6 +160,25 @@ async function main(): Promise<void> {
     accountLogger.info(`QQ 账号通道：${QQ_PROVIDER_LABELS[account.provider]}`);
     const app = createAccountApp(account, {
       storage: { rootDir: projectRoot },
+      logger: accountLogger,
+    });
+
+    app.use(createMessageFeature(), {
+      config: config.message,
+      accountConfig: account.message,
+      runtime: {
+        accountId: account.id,
+        accountName: account.name,
+        provider: account.provider,
+        connected: () => connectionStates.get(account.id)?.() ?? false,
+        configuredStreamers: streamers.length,
+        configuredAccounts: configuredCount,
+        connectedAccounts: () =>
+          accounts.filter((entry) => connectionStates.get(entry.id)?.() ?? false).length,
+        startedAt: processStartedAt,
+        rootDir: projectRoot,
+        roomIds: streamers.map((streamer) => streamer.roomId),
+      },
       logger: accountLogger,
     });
 
@@ -244,6 +267,7 @@ async function main(): Promise<void> {
       onSessionClosed,
       logger: accountLogger,
     });
+    connectionStates.set(account.id, () => app.connected);
   }
 
   let controlServer: BotControlServer | undefined;

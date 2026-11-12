@@ -1,4 +1,5 @@
-import type { NCWebsocket, SendMessageSegment } from "node-napcat-ts";
+import type { NapcatClientPort, NapcatMessagePart } from "@nana/napcat";
+import { imagePart, textPart, atAllPart, type MessagePart } from "../message/parts.ts";
 import { writePushLog, type StorageOptions } from "@nana/storage";
 import { PUSH_PURPOSE_LABELS, type PushLogPurpose } from "@nana/constants";
 import { consoleLogger, type Logger } from "./logger";
@@ -38,14 +39,14 @@ export interface NapcatPushClientOptions extends StorageOptions {
  * - 每次发送后都写入一条推送记录，无论成功还是失败。
  */
 export class NapcatPushClient {
-  private readonly ws: NCWebsocket;
+  private readonly ws: NapcatClientPort;
   private readonly account?: string;
   private readonly groupNames: Map<number, string>;
   private readonly groupNameTimeoutMs: number;
   private readonly storageOptions: StorageOptions;
   private readonly logger: Logger;
 
-  constructor(ws: NCWebsocket, options: NapcatPushClientOptions = {}) {
+  constructor(ws: NapcatClientPort, options: NapcatPushClientOptions = {}) {
     this.ws = ws;
     this.account = options.account;
     this.groupNames = options.groupNames ?? new Map();
@@ -63,10 +64,10 @@ export class NapcatPushClient {
 
     try {
       const info = await withTimeout(
-        this.ws.get_group_info({ group_id: groupId }),
+        this.ws.getGroupInfo(String(groupId)),
         this.groupNameTimeoutMs,
       );
-      const name = info.group_name || `群${groupId}`;
+      const name = info.groupName || `群${groupId}`;
       this.groupNames.set(groupId, name);
       return name;
     } catch (error) {
@@ -82,7 +83,7 @@ export class NapcatPushClient {
   async sendGroupMsg(
     groupId: number,
     options: GroupPushOptions,
-    messages: SendMessageSegment[],
+    messages: MessagePart[],
   ): Promise<string> {
     const target = await this.resolveGroupName(groupId);
     const purposeLabel = options.label ?? PUSH_PURPOSE_LABELS[options.purpose];
@@ -98,7 +99,7 @@ export class NapcatPushClient {
     };
 
     try {
-      await this.ws.send_group_msg({ group_id: groupId, message: messages });
+      await this.ws.sendGroupMessage(String(groupId), toNapcatParts(messages));
       this.record({ ...base, success: true });
     } catch (error) {
       this.record({
@@ -130,5 +131,18 @@ function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
     }),
   ]).finally(() => {
     clearTimeout(timer);
+  });
+}
+
+function toNapcatParts(messages: MessagePart[]): NapcatMessagePart[] {
+  return messages.map((message) => {
+    switch (message.type) {
+      case "text":
+        return textPart(message.text);
+      case "image":
+        return imagePart(message.source);
+      case "atAll":
+        return atAllPart();
+    }
   });
 }

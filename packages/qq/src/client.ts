@@ -8,6 +8,7 @@ import type {
   QQEventListener,
   QQMessagePart,
   QQSentMessage,
+  QQIncomingMessage,
 } from "./types.ts";
 
 /** 官方通信边界：不读取配置文件，不写数据库，也不依赖业务应用。 */
@@ -18,6 +19,7 @@ export class QQClient implements QQClientPort {
     disconnected: new Set(),
     groupDiscovered: new Set(),
     error: new Set(),
+    message: new Set(),
   };
   private running = false;
   private runId = 0;
@@ -44,9 +46,39 @@ export class QQClient implements QQClientPort {
       if (this.running) this.emit("error", error);
     });
     this.bot.on("message", (_context, message) => {
-      if (this.running && message.kind === "group" && message.groupOpenid) {
-        this.emit("groupDiscovered", { openid: message.groupOpenid, source: "message" });
+      if (
+        !this.running ||
+        (message.kind !== "group" && message.kind !== "c2c") ||
+        !message.replyTarget
+      ) {
+        return;
       }
+      if (message.senderIsBot) return;
+      const incoming: QQIncomingMessage = {
+        id: message.messageId,
+        eventType: message.rawEventType,
+        kind: message.kind === "group" ? "group" : "private",
+        content: message.content,
+        senderId: message.senderId,
+        ...(message.senderName ? { senderName: message.senderName } : {}),
+        ...(message.groupOpenid ? { groupOpenid: message.groupOpenid } : {}),
+        ...(message.timestamp ? { timestamp: message.timestamp } : {}),
+        isAtBot:
+          message.kind === "group" &&
+          (message.rawEventType === "GROUP_AT_MESSAGE_CREATE" ||
+            message.mentions?.some((mention) => mention.is_you) === true),
+        ...(message.raw && "event_id" in message.raw && typeof message.raw.event_id === "string"
+          ? { eventId: message.raw.event_id }
+          : {}),
+        replyTarget: {
+          scope: message.replyTarget.scope,
+          targetId: message.replyTarget.targetId,
+          msgId: message.messageId,
+        },
+      };
+      if (incoming.groupOpenid)
+        this.emit("groupDiscovered", { openid: incoming.groupOpenid, source: "message" });
+      this.emit("message", incoming);
     });
     this.bot.on("rawEvent", (event) => {
       if (!this.running || event.eventType !== "GROUP_ADD_ROBOT") return;
@@ -99,7 +131,44 @@ export class QQClient implements QQClientPort {
     }
   }
 
+  async sendPrivateMessage(
+    openid: string,
+    parts: readonly QQMessagePart[],
+  ): Promise<QQSentMessage> {
+    try {
+      if (!openid.trim()) throw new QQSendError("官方 QQ 用户 openid 不能为空。");
+      const message = encodeQQMessage(parts);
+      if (message.image !== undefined) throw new QQSendError("官方 QQ 私聊回复暂不支持图片。");
+      return readSentMessage(
+        await this.bot.sendText({ scope: "c2c", targetId: openid }, message.text),
+      );
+    } catch (error) {
+      throw toQQSendError(error);
+    }
+  }
+
+  async replyMessage(
+    message: QQIncomingMessage,
+    parts: readonly QQMessagePart[],
+  ): Promise<QQSentMessage> {
+    try {
+      const encoded = encodeQQMessage(parts);
+      if (encoded.image !== undefined) throw new QQSendError("官方 QQ 被动回复暂不支持图片。");
+      return readSentMessage(await this.bot.sendText(message.replyTarget, encoded.text));
+    } catch (error) {
+      throw toQQSendError(error);
+    }
+  }
+
   private emit<T extends keyof QQClientEvents>(event: T, ...args: QQClientEvents[T]): void {
-    for (const listener of this.listeners[event]) listener(...args);
+    for (const listener of this.listeners[event]) {
+      const result = listener(...args) as unknown;
+      if (result && typeof (result as Promise<void>).catch === "function") {
+        void (result as Promise<void>).catch((error: unknown) => {
+          if (this.running)
+            this.emit("error", error instanceof Error ? error : new Error(String(error)));
+        });
+      }
+    }
   }
 }

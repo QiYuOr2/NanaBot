@@ -1,5 +1,5 @@
 import { loadOfficialGroups } from "@nana/config";
-import { Structs } from "node-napcat-ts";
+import { atAllPart, textPart } from "../message/parts.ts";
 import { z } from "zod";
 import type { QQRuntimeAccount } from "../accounts/resolve.ts";
 import type { BotApp } from "../core/app.ts";
@@ -70,7 +70,7 @@ export async function sendTestMessage(
 
   const atAll = input.kind === "atAll";
   const text = TEST_TEXT[input.kind];
-  const messages = atAll ? [Structs.at("all"), Structs.text(text)] : [Structs.text(text)];
+  const messages = atAll ? [atAllPart(), textPart(text)] : [textPart(text)];
   try {
     const target = await runtime.app.sendGroupMsg(
       groupId,

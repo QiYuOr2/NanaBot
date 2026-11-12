@@ -5,6 +5,7 @@ export interface OfficialAccount extends OfficialAccountConfig {
   appId: string;
   appSecret: string;
   adminGroupId?: number;
+  message?: NonNullable<OfficialAccountConfig["message"]>;
 }
 
 /** 官方通道不回退 NapCat，也不将真实群号当作 openid。 */
@@ -34,6 +35,7 @@ export function resolveOfficialAccounts(
         appId,
         appSecret,
         adminGroupId: entry.adminGroup,
+        ...(entry.message ? { message: entry.message } : {}),
       };
     });
 }

@@ -71,10 +71,13 @@ function textsOf(segments: { data?: { text?: string } }[]): string {
 
 function createContext(sent: Sent): FeatureContext {
   return {
-    ws: {} as never,
+    accountId: "test",
     adminGroupId: 1101365727,
     logger: consoleLogger,
-    on: () => () => {},
+    onConnectionState: () => () => {},
+    onMessage: () => () => {},
+    replyMessage: async () => {},
+    sendMessage: async () => {},
     onCleanup: () => {},
     sendAdminText: async (text) => {
       sent.admins.push({ purpose: "notification", text });

@@ -1,16 +1,9 @@
-import {
-  NCWebsocket,
-  type SendMessageSegment,
-  Structs,
-  type EventHandleMap,
-  type EventKey,
-  type NCWebsocketOptions,
-} from "node-napcat-ts";
-import { createCleanupManager, type Cleanup } from "./event";
-import type { FeatureContext, FeatureDefinition } from "./feature";
+import { NapcatClient, type NapcatClientPort } from "@nana/napcat";
 import { readOptionalNumberEnv } from "@nana/utils";
 import { ENV_KEYS } from "@nana/constants";
 import type { StorageOptions } from "@nana/storage";
+import { createCleanupManager, type Cleanup } from "./event";
+import type { FeatureContext, FeatureDefinition } from "./feature";
 import { NapcatPushClient, type GroupPushOptions, type PushPurposeInput } from "./napcat";
 import {
   CONNECT_TIMEOUT_MS,
@@ -19,23 +12,20 @@ import {
   type ConnectionSupervisorOptions,
 } from "./connection";
 import { consoleLogger, type Logger } from "./logger";
+import type { IncomingMessage, MessageTarget, OutgoingMessage } from "../message/types.ts";
+import { NapcatMessageAdapter } from "../message/platform.ts";
+import { textPart } from "../message/parts.ts";
+import type { PlatformConnectionState } from "../message/types.ts";
 
 export interface CreateAppOptions {
-  websocket: NCWebsocketOptions;
-  /** 当前连接对应的 NapCat 账号；多账号部署时每个 App 传一个。 */
-  account?: {
-    id: string;
-    name?: string;
-  };
+  websocket: { baseUrl: string; accessToken?: string };
+  account?: { id: string; name?: string };
   adminGroupId?: number;
-  /** 推送记录的存储配置（测试时可传 rootDir 隔离）。 */
   storage?: StorageOptions;
-  /** 连接看门狗的配置，缺省即启用默认值。 */
   connection?: ConnectionSupervisorOptions;
-  /** 当前账号的日志出口；缺省只写控制台。 */
   logger?: Logger;
-  /** 是否由 App 自己注册 SIGINT / SIGTERM；多 App 启动时由入口统一处理。 */
   handleSignals?: boolean;
+  client?: NapcatClientPort;
 }
 
 export interface StopOptions {
@@ -43,156 +33,149 @@ export interface StopOptions {
 }
 
 export interface App {
-  ws: NCWebsocket;
-  /** 当前连接对应的 NapCat 账号 id。 */
-  accountId?: string;
-  /** 连接看门狗，可用 `isConnected` 观察当前连接状态。 */
-  connection: ConnectionSupervisor;
+  accountId: string;
   adminGroupId?: number;
+  readonly connected: boolean;
   use<TOptions>(feature: FeatureDefinition<TOptions>, options: TOptions): App;
-  on<T extends EventKey>(event: T, handler: EventHandleMap[T]): () => void;
   onConnected(handler: () => void): () => void;
+  onConnectionState(handler: (state: PlatformConnectionState) => void): () => void;
+  onMessage(handler: (message: IncomingMessage) => void | Promise<void>): () => void;
+  replyMessage(message: IncomingMessage, response: OutgoingMessage): Promise<void>;
+  sendMessage(target: MessageTarget, message: OutgoingMessage): Promise<void>;
   onCleanup(cleanup: Cleanup): void;
   sendAdminText(text: string, purpose?: PushPurposeInput): Promise<void>;
-  sendAdminMsg(messages: SendMessageSegment[], purpose?: PushPurposeInput): Promise<void>;
+  sendAdminMsg(
+    messages: Parameters<FeatureContext["sendAdminMsg"]>[0],
+    purpose?: PushPurposeInput,
+  ): Promise<void>;
   sendGroupMsg(
     groupId: number,
     options: GroupPushOptions,
-    messages: SendMessageSegment[],
+    messages: Parameters<FeatureContext["sendGroupMsg"]>[2],
   ): Promise<string>;
   start(): Promise<void>;
   stop(options?: StopOptions): Promise<void>;
 }
 
-type AppState = "idle" | "starting" | "started" | "stopping" | "stopped";
-
-const SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
-const DEFAULT_ADMIN_PURPOSE: PushPurposeInput = { purpose: "notification" };
-const BOT_NAME = "NanaBot";
-
 export function createApp(options: CreateAppOptions): App {
   const logger = options.logger ?? consoleLogger;
-  const isOpenDebug = readOptionalNumberEnv(ENV_KEYS.NC_DEBUG) === 1;
-  // oxlint-disable-next-line no-unused-expressions
-  isOpenDebug && logger.debug("调试模式");
-
-  const napcat = new NCWebsocket(options.websocket, isOpenDebug);
-  logger.info(`NapCat WebSocket: ${(options.websocket as any)["baseUrl"]}`);
-  const pushClient = new NapcatPushClient(napcat, {
+  const accountId = options.account?.id ?? "default";
+  const client =
+    options.client ??
+    new NapcatClient({
+      url: options.websocket.baseUrl,
+      accessToken: options.websocket.accessToken,
+      accountId,
+      logger,
+      debug: readOptionalNumberEnv(ENV_KEYS.NC_DEBUG) === 1,
+      reconnect: options.connection?.enabled,
+    });
+  const pushClient = new NapcatPushClient(client, {
     ...options.storage,
-    account: options.account?.id,
+    account: accountId,
     logger,
   });
-  const connection = new ConnectionSupervisor(napcat, {
+  const connection = new ConnectionSupervisor(client, {
     ...options.connection,
     logger: options.connection?.logger ?? logger,
   });
-
   const cleanupManager = createCleanupManager();
   const pluginTasks: Promise<void>[] = [];
-  let state: AppState = "idle";
+  const adapter = new NapcatMessageAdapter(client, accountId);
+  const stateHandlers = new Set<(state: PlatformConnectionState) => void>();
+  const connectedHandlers = new Set<() => void>();
+  let state: "idle" | "starting" | "started" | "stopping" | "stopped" = "idle";
   let stopTask: Promise<void> | undefined;
 
+  cleanupManager.add(
+    adapter.onConnectionState((state) => {
+      for (const handler of stateHandlers) handler(state);
+      if (state.connected) for (const handler of connectedHandlers) handler();
+    }),
+  );
+
   const featureContext: FeatureContext = {
-    ws: napcat,
-    accountId: options.account?.id,
+    accountId,
     adminGroupId: options.adminGroupId,
     logger,
-    on(event, handler) {
-      const unsubscribe = napcat.subscribe(event, handler);
+    onCleanup: (cleanup) => cleanupManager.add(cleanup),
+    onMessage: (handler) => {
+      const unsubscribe = adapter.onMessage(handler);
       cleanupManager.add(() => {
         unsubscribe();
       });
       return unsubscribe;
     },
-    onCleanup(cleanup) {
-      cleanupManager.add(cleanup);
+    replyMessage: async (message, response) => {
+      await adapter.reply(message, response);
     },
-    async sendAdminText(text, purpose = DEFAULT_ADMIN_PURPOSE) {
-      if (!options.adminGroupId) {
-        return;
-      }
-
+    sendMessage: async (target, message) => {
+      await adapter.send(target, message);
+    },
+    onHeartbeat: (handler) => {
+      const unsubscribe = adapter.onHeartbeat(handler);
+      cleanupManager.add(unsubscribe);
+      return unsubscribe;
+    },
+    onConnectionState(handler) {
+      stateHandlers.add(handler);
+      const unsubscribe = () => stateHandlers.delete(handler);
+      cleanupManager.add(() => {
+        unsubscribe();
+      });
+      return unsubscribe;
+    },
+    async sendAdminText(text, purpose = { purpose: "notification" }) {
+      if (!options.adminGroupId) return;
       await pushClient.sendGroupMsg(
         options.adminGroupId,
-        { ...purpose, content: text, subject: BOT_NAME },
-        [Structs.text(text)],
+        { ...purpose, content: text, subject: "NanaBot" },
+        [textPart(text)],
       );
     },
-    async sendAdminMsg(messages, purpose = DEFAULT_ADMIN_PURPOSE) {
-      if (!options.adminGroupId) {
-        return;
-      }
-
+    async sendAdminMsg(messages, purpose = { purpose: "notification" }) {
+      if (!options.adminGroupId) return;
       await pushClient.sendGroupMsg(
         options.adminGroupId,
-        { ...purpose, subject: BOT_NAME },
+        { ...purpose, subject: "NanaBot" },
         messages,
       );
     },
-    async sendGroupMsg(groupId, groupOptions, messages) {
-      return pushClient.sendGroupMsg(groupId, groupOptions, messages);
-    },
+    sendGroupMsg: (groupId, groupOptions, messages) =>
+      pushClient.sendGroupMsg(groupId, groupOptions, messages),
   };
 
   const app: App = {
-    ws: napcat,
-    accountId: options.account?.id,
-    connection,
-    adminGroupId: options.adminGroupId,
+    ...featureContext,
+    get connected() {
+      return connection.isConnected;
+    },
     use(feature, featureOptions) {
-      if (state !== "idle") {
-        throw new Error("必须在 app.start() 之前注册功能。");
-      }
-
+      if (state !== "idle") throw new Error("必须在 app.start() 之前注册功能。");
       pluginTasks.push(
-        Promise.resolve(feature.setup(featureContext, featureOptions)).then((cleanup) => {
-          cleanupManager.add(cleanup);
-        }),
+        Promise.resolve(feature.setup(featureContext, featureOptions)).then((cleanup) =>
+          cleanupManager.add(cleanup),
+        ),
       );
-
       return app;
     },
-    on(event, handler) {
-      return featureContext.on!(event, handler);
-    },
     onConnected(handler) {
-      return featureContext.on!("socket.open", handler);
-    },
-    onCleanup(cleanup) {
-      featureContext.onCleanup(cleanup);
-    },
-    async sendAdminText(text, purpose) {
-      await featureContext.sendAdminText(text, purpose);
-    },
-    async sendAdminMsg(messages, purpose) {
-      await featureContext.sendAdminMsg(messages, purpose);
-    },
-    async sendGroupMsg(groupId, options, messages) {
-      return featureContext.sendGroupMsg(groupId, options, messages);
+      connectedHandlers.add(handler);
+      const unsubscribe = () => connectedHandlers.delete(handler);
+      cleanupManager.add(() => {
+        unsubscribe();
+      });
+      return unsubscribe;
     },
     async start() {
-      logger.debug(`start() state === ${state}`);
-      if (state === "started") {
-        return;
-      }
-
-      if (state !== "idle") {
-        throw new Error(`当前状态为 "${state}"，无法启动应用。`);
-      }
-
+      if (state === "started") return;
+      if (state !== "idle") throw new Error(`当前状态为 "${state}"，无法启动应用。`);
       state = "starting";
       await Promise.all(pluginTasks);
-      logger.info(`插件注册数量：${pluginTasks.length}`);
-      if (options.handleSignals !== false) {
-        registerSignalHandlers(app, cleanupManager, logger);
-      }
-      // 先启动看门狗：首次连接若卡住（库的 connect() 会永不 settle），由它负责持续重连。
       connection.start();
-      if (!(await settleWithin(napcat.connect(), CONNECT_TIMEOUT_MS))) {
-        if (options.connection?.enabled === false) {
+      if (!(await settleWithin(adapter.start(), CONNECT_TIMEOUT_MS))) {
+        if (options.connection?.enabled === false)
           throw new Error("首次连接 NapCat 失败；看门狗已关闭，不再重试。");
-        }
         logger.warn(
           `首次连接 NapCat 超过 ${CONNECT_TIMEOUT_MS}ms 未成功，改由连接看门狗持续重试。`,
         );
@@ -200,60 +183,25 @@ export function createApp(options: CreateAppOptions): App {
       state = "started";
       logger.info(`启动完成；连接状态：${connection.isConnected ? "已连接" : "等待重连"}`);
     },
-    async stop(stopOptions) {
-      if (state === "stopped") {
-        return;
-      }
-
-      if (stopTask) {
-        return stopTask;
-      }
-
+    stop(stopOptions) {
+      if (state === "stopped") return Promise.resolve();
+      if (stopTask) return stopTask;
       stopTask = (async () => {
         state = "stopping";
-        // 先停看门狗，避免它和后面的主动断开抢连接。
         connection.stop();
-
-        if (stopOptions?.announce) {
+        if (stopOptions?.announce)
           await safely(
             () => app.sendAdminText(stopOptions.announce!, { purpose: "app.offline" }),
             logger,
           );
-        }
-
         await safely(() => cleanupManager.run(), logger);
-        await safely(() => napcat.disconnect(), logger);
+        await safely(() => adapter.stop(), logger);
         state = "stopped";
       })();
-
       return stopTask;
     },
   };
-
   return app;
-}
-
-function registerSignalHandlers(
-  app: App,
-  cleanupManager: ReturnType<typeof createCleanupManager>,
-  logger: Logger,
-) {
-  for (const signal of SIGNALS) {
-    const handler = () => {
-      app
-        .stop({
-          announce: `我溜了~`,
-        })
-        .catch((error) => {
-          logger.error("关闭应用时发生错误", error);
-        });
-    };
-
-    process.on(signal, handler);
-    cleanupManager.add(() => {
-      process.off(signal, handler);
-    });
-  }
 }
 
 async function safely(task: () => Promise<void>, logger: Logger) {

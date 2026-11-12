@@ -14,21 +14,24 @@ function createRootDir(): string {
 }
 
 interface FakeWs {
-  get_group_info: (params: { group_id: number }) => Promise<{
-    group_id: number;
-    group_name: string;
+  getGroupInfo: (groupId: string) => Promise<{
+    groupId: string;
+    groupName: string;
   }>;
-  send_group_msg: (params: { group_id: number; message: unknown[] }) => Promise<{
+  sendGroupMessage: (
+    groupId: string,
+    message: unknown[],
+  ) => Promise<{
     message_id: number;
   }>;
 }
 
 function createFakeWs(overrides: Partial<FakeWs> = {}): FakeWs {
   return {
-    async get_group_info(params) {
-      return { group_id: params.group_id, group_name: "饭友群" };
+    async getGroupInfo(groupId) {
+      return { groupId, groupName: "饭友群" };
     },
-    async send_group_msg() {
+    async sendGroupMessage() {
       return { message_id: 1 };
     },
     ...overrides,
@@ -65,7 +68,7 @@ test("发送失败会记录失败并重新抛出错误", async () => {
   const error = new Error("ws 未连接");
   const client = new NapcatPushClient(
     createFakeWs({
-      async send_group_msg() {
+      async sendGroupMessage() {
         throw error;
       },
     }) as never,
@@ -92,7 +95,7 @@ test("get_group_info 失败时回退到「群+ID」但仍记录", async () => {
   const rootDir = createRootDir();
   const client = new NapcatPushClient(
     createFakeWs({
-      async get_group_info() {
+      async getGroupInfo() {
         throw new Error("network");
       },
     }) as never,
@@ -115,10 +118,10 @@ test("群昵称解析超时不会阻塞消息发送", async () => {
   let sent = false;
   const client = new NapcatPushClient(
     createFakeWs({
-      async get_group_info() {
+      async getGroupInfo() {
         return new Promise(() => {});
       },
-      async send_group_msg() {
+      async sendGroupMessage() {
         sent = true;
         return { message_id: 1 };
       },

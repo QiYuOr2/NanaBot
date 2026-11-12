@@ -8,6 +8,8 @@ import { parseQQConfig, resolveOfficialAccounts } from "../src/qq/config.ts";
 import { offlineDetectorFeature } from "../src/offline/feature.ts";
 import type { OfflineState } from "@nana/offline-detector";
 import type { NotifyMessage } from "@nana/notify";
+import type { QQClientPort, QQIncomingMessage } from "@nana/qq";
+import type { IncomingMessage } from "../src/message/types.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -43,7 +45,9 @@ function harness(readyOnStart = true) {
       return run;
     }),
     stop: vi.fn(() => resolveRun()),
-    sendGroupMessage: vi.fn(),
+    replyMessage: vi.fn(async () => ({ id: "reply" })),
+    sendGroupMessage: vi.fn(async () => ({ id: "group" })),
+    sendPrivateMessage: vi.fn(async () => ({ id: "private" })),
   };
   const [account] = resolveOfficialAccounts(
     parseQQConfig({ accounts: [{ id: "official", provider: "official", official: {} }] }).accounts,
@@ -57,7 +61,7 @@ function harness(readyOnStart = true) {
     storage: { rootDir },
     connectTimeoutMs: 5,
   });
-  return { app, client, emit, logger, rootDir, fail: (error: Error) => rejectRun(error) };
+  return { app, client, emit, logger, rootDir, account, fail: (error: Error) => rejectRun(error) };
 }
 
 test("运行中收到群消息会保存群标识供 site 绑定，不记录群聊正文", async () => {
@@ -178,6 +182,121 @@ test("断线保留 SDK 原因并记录恢复耗时，恢复后继续广播连接
     clock.mockRestore();
   } finally {
     vi.restoreAllMocks();
+    await app.stop();
+  }
+});
+
+function officialIncoming(overrides: Partial<QQIncomingMessage> = {}): QQIncomingMessage {
+  return {
+    id: "msg-1",
+    kind: "group",
+    eventType: "GROUP_AT_MESSAGE_CREATE",
+    content: "/status",
+    senderId: "USER",
+    isAtBot: true,
+    replyTarget: { scope: "group", targetId: "GROUP", msgId: "msg-1" },
+    ...overrides,
+  };
+}
+
+test("官方入站消息只由当前账号处理，被动回复保留原消息 ID 且不主动补发", async () => {
+  let currentTime = 1_000;
+  const rootDir = mkdtempSync(join(tmpdir(), "nana-official-adapter-"));
+  roots.push(rootDir);
+  writeFileSync(join(rootDir, "nana.config.yaml"), "{}");
+  const handlers = new Map<string, ((...args: unknown[]) => void)[]>();
+  const sent: string[] = [];
+  let resolveRun: () => void;
+  const run = new Promise<void>((resolve) => {
+    resolveRun = resolve;
+  });
+  const client: QQClientPort = {
+    on(event, listener) {
+      const list = handlers.get(event) ?? [];
+      list.push(listener as (...args: unknown[]) => void);
+      handlers.set(event, list);
+      return () => {
+        handlers.set(
+          event,
+          list.filter((entry) => entry !== listener),
+        );
+      };
+    },
+    start: () => run,
+    stop: () => resolveRun(),
+    async sendGroupMessage() {
+      sent.push("proactive-group");
+      return { id: "group" };
+    },
+    async sendPrivateMessage() {
+      sent.push("proactive-private");
+      return { id: "private" };
+    },
+    async replyMessage(message, parts) {
+      sent.push(
+        `${message.replyTarget.scope}:${message.replyTarget.targetId}:${message.replyTarget.msgId}`,
+      );
+      expect(parts).toEqual([{ type: "text", text: "ok" }]);
+      return { id: "reply" };
+    },
+  };
+  const [account] = resolveOfficialAccounts(
+    parseQQConfig({ accounts: [{ id: "official", provider: "official", official: {} }] }).accounts,
+    { QQ_BOT_APP_ID: "app", QQ_BOT_APP_SECRET: "secret" },
+  );
+  const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const app = createOfficialApp({
+    account,
+    client,
+    logger,
+    storage: { rootDir },
+    now: () => currentTime,
+    connectTimeoutMs: 5,
+  });
+  const messages: IncomingMessage[] = [];
+  app.onMessage((message: IncomingMessage) => {
+    messages.push(message);
+  });
+  await app.start();
+  try {
+    const emit = (event: string, ...args: unknown[]) => {
+      for (const handler of handlers.get(event) ?? []) handler(...args);
+    };
+    emit("connected");
+    emit("message", officialIncoming());
+    expect(messages).toHaveLength(1);
+    await app.replyMessage(messages[0]!, { text: "ok" });
+    expect(sent).toEqual(["group:GROUP:msg-1"]);
+    await expect(
+      app.replyMessage({ ...messages[0]!, accountId: "other" }, { text: "wrong" }),
+    ).rejects.toThrow("账号不匹配");
+    expect(sent).toHaveLength(1);
+
+    for (let index = 0; index < 4; index += 1) {
+      await app.replyMessage(messages[0]!, { text: "ok" });
+    }
+    await expect(app.replyMessage(messages[0]!, { text: "too-many" })).rejects.toThrow(
+      "次数已达上限",
+    );
+    expect(sent).toEqual(Array(5).fill("group:GROUP:msg-1"));
+
+    currentTime += 60 * 60_000 + 1;
+    emit(
+      "message",
+      officialIncoming({
+        id: "msg-2",
+        kind: "private",
+        eventType: "C2C_MESSAGE_CREATE",
+        replyTarget: { scope: "c2c", targetId: "USER", msgId: "msg-2" },
+      }),
+    );
+    const expired = messages.at(-1)!;
+    currentTime += 60 * 60_000 + 1;
+    await expect(app.replyMessage(expired, { text: "expired" })).rejects.toThrow("超过有效期");
+    expect(sent).toEqual(Array(5).fill("group:GROUP:msg-1"));
+    expect(sent).not.toContain("proactive-group");
+    expect(sent).not.toContain("proactive-private");
+  } finally {
     await app.stop();
   }
 });
