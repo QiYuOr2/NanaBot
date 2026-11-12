@@ -44,7 +44,7 @@ function navClass(item: NavItem): string {
         class="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-white/80"
       >
         <span
-          class="flex size-6 items-center justify-center rounded-[8px] bg-gradient-to-b from-[#f2a24a] to-[#b95412] text-[11px] font-semibold text-white shadow-brand"
+          class="flex size-6 items-center justify-center rounded-md bg-gradient-to-b from-[#f2a24a] to-[#b95412] text-[11px] font-semibold text-white shadow-brand"
         >
           N
         </span>

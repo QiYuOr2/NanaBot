@@ -42,11 +42,11 @@ export const presetVercel = definePreset((options: PresetVercelOptions = {}): Pr
         mono: '"Geist Mono", ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, monospace',
       },
       borderRadius: {
-        DEFAULT: "8px",
-        sm: "6px",
-        md: "10px",
-        lg: "14px",
-        xl: "18px",
+        DEFAULT: "6px",
+        sm: "4px",
+        md: "6px",
+        lg: "8px",
+        xl: "12px",
         full: "9999px",
       },
       boxShadow: {
