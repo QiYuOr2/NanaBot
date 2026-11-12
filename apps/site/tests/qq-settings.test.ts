@@ -4,36 +4,65 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp, createRouter, toNodeListener } from "h3";
 import { expect, test, vi } from "vite-plus/test";
+import { BOT_CONTROL_TEST_MESSAGE_PATH } from "@nana/constants";
 import getSettings from "../server/api/settings/qq-groups.get.ts";
 import putSettings from "../server/api/settings/qq-groups.put.ts";
 import getStatus from "../server/api/settings/status.get.ts";
 import postTestMessage from "../server/api/settings/qq-groups/test.post.ts";
 import { recordDiscoveredQQGroup, readPushLogs } from "@nana/storage";
 
+interface BotControlStub {
+  requests: { authorization: string | undefined; body: unknown }[];
+  status: number;
+  response: unknown;
+}
+
 async function withSite(
-  run: (base: string, rootDir: string) => Promise<void>,
+  run: (base: string, rootDir: string, bot: BotControlStub) => Promise<void>,
   configured = true,
   configuration?: string,
+  botStatus = 200,
+  botResponse: unknown = { ok: true, target: "测试群" },
 ) {
   const rootDir = mkdtempSync(join(tmpdir(), "nana-qq-site-"));
   const cwd = process.cwd();
+  const bot: BotControlStub = { requests: [], status: botStatus, response: botResponse };
+  const botServer = createServer(async (request, response) => {
+    if (request.method !== "POST" || request.url !== BOT_CONTROL_TEST_MESSAGE_PATH) {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    bot.requests.push({
+      authorization: request.headers.authorization,
+      body: JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown,
+    });
+    response.writeHead(bot.status, { "Content-Type": "application/json" });
+    response.end(JSON.stringify(bot.response));
+  });
   mkdirSync(join(rootDir, "apps", "site"), { recursive: true });
   writeFileSync(
     join(rootDir, "nana.config.yaml"),
     configuration ??
       `# 保留配置注释\naccounts:\n  - id: main\n    provider: official\n    official: {}\n    adminGroup: 123\n  - id: nc\n    provider: napcat\n    napcat:\n      wsUrl: ws://localhost:1111\n      accessToken: never-return-this\nup: []\n`,
   );
-  if (configured)
-    writeFileSync(
-      join(rootDir, "apps", "site", ".env"),
-      "NANA_SITE_CONFIG_TOKEN=test-management-token-123456\n",
-    );
   vi.stubEnv("NANA_SITE_CONFIG_TOKEN", "");
+  vi.stubEnv("NANA_BOT_CONTROL_URL", "");
   vi.stubEnv("QQ_BOT_APP_ID", "");
   vi.stubEnv("QQ_BOT_APP_SECRET", "");
   vi.stubEnv("APP_TWO", "");
   vi.stubEnv("SECRET_TWO", "");
   process.chdir(rootDir);
+  await new Promise<void>((resolve) => botServer.listen(0, "127.0.0.1", resolve));
+  const botAddress = botServer.address();
+  if (!botAddress || typeof botAddress === "string") throw new Error("No bot control address");
+  if (configured)
+    writeFileSync(
+      join(rootDir, "apps", "site", ".env"),
+      `NANA_SITE_CONFIG_TOKEN=test-management-token-123456\nNANA_BOT_CONTROL_URL=http://127.0.0.1:${botAddress.port}\n`,
+    );
   const router = createRouter()
     .get("/status", getStatus)
     .get("/groups", getSettings)
@@ -44,10 +73,14 @@ async function withSite(
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("No test server address");
-    await run(`http://127.0.0.1:${address.port}`, rootDir);
+    await run(`http://127.0.0.1:${address.port}`, rootDir, bot);
   } finally {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
+    );
+    botServer.closeAllConnections();
+    await new Promise<void>((resolve, reject) =>
+      botServer.close((error) => (error ? reject(error) : resolve())),
     );
     process.chdir(cwd);
     vi.unstubAllEnvs();
@@ -205,69 +238,27 @@ const testPayload = {
   expectedOpenid: "GROUP_SECOND",
   kind: "text",
 };
-function botCredentials(rootDir: string) {
-  mkdirSync(join(rootDir, "apps", "bot"), { recursive: true });
-  writeFileSync(
-    join(rootDir, "apps", "bot", ".env"),
-    'QQ_BOT_APP_ID=first-app\nQQ_BOT_APP_SECRET=first-secret\nAPP_TWO="second-app"\nSECRET_TWO="second-secret"\n',
-  );
-}
-function stubQQRequests(
-  messageResult: Record<string, unknown> = { id: "test-message-id" },
-  messageStatus = 200,
-) {
-  const originalFetch = globalThis.fetch;
-  const requests: { url: string; body: unknown }[] = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      if (url.startsWith("http://127.0.0.1:")) return originalFetch(input, init);
-      if (typeof init?.body !== "string") throw new Error("Expected JSON request body");
-      requests.push({ url, body: JSON.parse(init.body) as unknown });
-      if (url.endsWith("/app/getAppAccessToken"))
-        return Response.json({ access_token: "test-access-token", expires_in: 7200 });
-      if (url.endsWith("/messages")) return Response.json(messageResult, { status: messageStatus });
-      throw new Error(`Unexpected QQ request: ${url}`);
-    }),
-  );
-  return requests;
-}
 
 test.each(["text", "atAll"])(
-  "测试 %s 经真实 SDK 使用对应账号凭据、保存的群标识与消息类型，并记录成功",
+  "测试 %s 转发给运行中的 bot，由 bot 使用当前账号发送",
   async (kind) => {
     await withSite(
-      async (base, rootDir) => {
-        botCredentials(rootDir);
-        const requests = stubQQRequests();
+      async (base, rootDir, bot) => {
         const response = await fetch(`${base}/test`, {
           method: "POST",
           headers,
           body: JSON.stringify({ ...testPayload, kind }),
         });
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({ sent: true, messageId: "test-message-id" });
+        expect(await response.json()).toEqual({ sent: true, target: "测试群" });
         expect(response.headers.get("cache-control")).toBe("no-store");
-        expect(requests).toHaveLength(2);
-        expect(requests[0].body).toEqual({ appId: "second-app", clientSecret: "second-secret" });
-        expect(requests[1].url).toBe("https://api.sgroup.qq.com/v2/groups/GROUP_SECOND/messages");
-        expect(requests[1].body).toMatchObject({
-          msg_type: 0,
-          content:
-            kind === "atAll"
-              ? "<qqbot-at-everyone />NanaBot @全体测试消息：群提醒测试。"
-              : "NanaBot 普通测试消息：群消息发送测试。",
-        });
-        expect(readPushLogs({ rootDir })).toEqual([
-          expect.objectContaining({
-            account: "second",
-            targetId: "GROUP_SECOND",
-            target: "第二个机器人的群",
-            purpose: "message.test",
-            success: true,
-          }),
+        expect(bot.requests).toEqual([
+          {
+            authorization: "Bearer test-management-token-123456",
+            body: { ...testPayload, kind },
+          },
         ]);
+        expect(readPushLogs({ rootDir })).toEqual([]);
       },
       true,
       boundConfig,
@@ -277,9 +268,7 @@ test.each(["text", "atAll"])(
 
 test("未保存的群、NapCat、未知账号、过期映射与任意目标注入都不会发送", async () => {
   await withSite(
-    async (base, rootDir) => {
-      botCredentials(rootDir);
-      const requests = stubQQRequests();
+    async (base, rootDir, bot) => {
       for (const [payload, status] of [
         [{ ...testPayload, groupId: "789" }, 400],
         [{ ...testPayload, accountId: "nc" }, 400],
@@ -293,7 +282,7 @@ test("未保存的群、NapCat、未知账号、过期映射与任意目标注�
             .status,
         ).toBe(status);
       }
-      expect(requests).toEqual([]);
+      expect(bot.requests).toEqual([]);
       expect(readPushLogs({ rootDir })).toEqual([]);
     },
     true,
@@ -301,67 +290,62 @@ test("未保存的群、NapCat、未知账号、过期映射与任意目标注�
   );
 });
 
-test("未配置机器人凭据时给出提示并记录失败", async () => {
+test("bot 未运行对应账号时透传 503，不在 site 侧伪造发送结果", async () => {
   await withSite(
-    async (base, rootDir) => {
-      const requests = stubQQRequests();
+    async (base, rootDir, bot) => {
+      const message = "bot 未运行账号 second，请检查该账号是否启动成功。";
       const response = await fetch(`${base}/test`, {
         method: "POST",
         headers,
         body: JSON.stringify(testPayload),
       });
       expect(response.status).toBe(503);
-      expect((await response.json()).data.message).toContain("APP_TWO / SECRET_TWO");
-      expect(requests).toEqual([]);
-      expect(readPushLogs({ rootDir })[0]).toMatchObject({
-        success: false,
-        purpose: "message.test",
-      });
+      expect((await response.json()).data.message).toBe(message);
+      expect(bot.requests).toHaveLength(1);
+      expect(readPushLogs({ rootDir })).toEqual([]);
     },
     true,
     boundConfig,
+    503,
+    { ok: false, error: "bot 未运行账号 second，请检查该账号是否启动成功。" },
   );
 });
 
 test.each([
-  { code: 40034105, message: "机器人不是群管理员" },
-  { code: 40034100, message: "@全体成员每日额度已耗尽" },
-  {},
-])("平台拒绝或缺少消息 ID 不误报成功，@全体失败不降级重发：%j", async (result) => {
+  "机器人不是群管理员",
+  "@全体成员每日额度已耗尽",
+  "官方 QQ 未返回消息 ID，无法确认消息已发送。",
+])("bot 发送失败时透传错误，不误报成功：%s", async (message) => {
   await withSite(
-    async (base, rootDir) => {
-      botCredentials(rootDir);
-      const requests = stubQQRequests(result);
+    async (base, rootDir, bot) => {
       const response = await fetch(`${base}/test`, {
         method: "POST",
         headers,
         body: JSON.stringify({ ...testPayload, kind: "atAll" }),
       });
       expect(response.status).toBe(502);
-      expect(requests.filter((request) => request.url.endsWith("/messages"))).toHaveLength(1);
-      expect(readPushLogs({ rootDir })[0]).toMatchObject({
-        success: false,
-        purpose: "message.test",
-      });
+      expect((await response.json()).data.message).toBe(message);
+      expect(bot.requests).toHaveLength(1);
+      expect(readPushLogs({ rootDir })).toEqual([]);
     },
     true,
     boundConfig,
+    502,
+    { ok: false, error: message },
   );
 });
 
-test("发送异常中的机器人密钥不会返回页面或写入推送记录", async () => {
+test("bot 控制接口不可达时返回 503，不自行发送", async () => {
   await withSite(
-    async (base, rootDir) => {
-      botCredentials(rootDir);
-      stubQQRequests({ code: 123, message: "invalid second-secret" });
+    async (base) => {
+      vi.stubEnv("NANA_BOT_CONTROL_URL", "http://127.0.0.1:1");
       const response = await fetch(`${base}/test`, {
         method: "POST",
         headers,
         body: JSON.stringify(testPayload),
       });
-      expect(response.status).toBe(502);
-      expect(await response.text()).not.toContain("second-secret");
-      expect(readPushLogs({ rootDir })[0].error).not.toContain("second-secret");
+      expect(response.status).toBe(503);
+      expect((await response.json()).statusMessage).toBe("bot 控制接口不可达");
     },
     true,
     boundConfig,

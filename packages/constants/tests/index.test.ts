@@ -2,6 +2,9 @@ import { expect, test } from "vite-plus/test";
 import {
   BARK_BASE_URL,
   BARK_ICON_URL,
+  BOT_CONTROL_DEFAULT_PORT,
+  BOT_CONTROL_DEFAULT_URL,
+  BOT_CONTROL_TEST_MESSAGE_PATH,
   APP_STATE_FILE,
   DANMU_FILE,
   DATABASE_DIRECTORY,
@@ -35,7 +38,15 @@ test("环境变量名统一", () => {
   expect(ENV_KEYS.QQ_BOT_APP_ID).toBe("QQ_BOT_APP_ID");
   expect(ENV_KEYS.QQ_BOT_APP_SECRET).toBe("QQ_BOT_APP_SECRET");
   expect(ENV_KEYS.NANA_SITE_CONFIG_TOKEN).toBe("NANA_SITE_CONFIG_TOKEN");
+  expect(ENV_KEYS.NANA_BOT_CONTROL_PORT).toBe("NANA_BOT_CONTROL_PORT");
+  expect(ENV_KEYS.NANA_BOT_CONTROL_URL).toBe("NANA_BOT_CONTROL_URL");
   expect(ENV_KEYS.DEEPSEEK_API_KEY).toBe("DEEPSEEK_API_KEY");
+});
+
+test("bot 控制接口默认地址", () => {
+  expect(BOT_CONTROL_DEFAULT_PORT).toBe(6365);
+  expect(BOT_CONTROL_DEFAULT_URL).toBe("http://127.0.0.1:6365");
+  expect(BOT_CONTROL_TEST_MESSAGE_PATH).toBe("/api/qq/test-message");
 });
 
 test("推送目的包含词云，且每个目的都有中文展示名", () => {

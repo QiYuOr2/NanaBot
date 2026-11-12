@@ -79,6 +79,11 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
 抽屉；点击导航、遮罩或按 Esc 收起，路由变化后自动关闭并恢复页面滚动。抽屉状态由
 `app/composables/useMobileSidebar.ts` 按请求隔离，桌面端仍使用固定侧边栏。
 
+设置页的「测试普通消息 / 测试 @全体」由 `POST /api/settings/qq-groups/test` 转发给 bot
+内部控制接口（默认 `http://127.0.0.1:6365`，见 `NANA_BOT_CONTROL_URL`），不会在 site
+内创建 QQ 客户端。实际发送、账号路由和 `message.test` 推送记录都由运行中的 bot 完成；
+bot 不可达时接口返回 `503`。
+
 ## 目录结构（Nuxt 4，`srcDir` 为 `app/`）
 
 ```text

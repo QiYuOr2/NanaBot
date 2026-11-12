@@ -2,8 +2,13 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
-import { resolveProjectRoot } from "@nana/utils";
-import { ENV_KEYS, NANA_CONFIG_FILE, QQ_PROVIDER_LABELS } from "@nana/constants";
+import { readAppEnvValue, readOptionalNumberEnv, resolveProjectRoot } from "@nana/utils";
+import {
+  BOT_CONTROL_TEST_MESSAGE_PATH,
+  ENV_KEYS,
+  NANA_CONFIG_FILE,
+  QQ_PROVIDER_LABELS,
+} from "@nana/constants";
 import { readConfig } from "@nana/config";
 import { createLoggerManager, type BotApp, type Logger } from "./core";
 import {
@@ -40,8 +45,10 @@ import {
   resolveQQAccounts,
   createAccountApp,
   startAccountApps,
+  type QQRuntimeAccount,
 } from "./accounts";
 import { validateOfficialTargets } from "./qq";
+import { startBotControlServer, type BotControlServer } from "./control";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
 const entryDir = dirname(fileURLToPath(import.meta.url));
@@ -76,6 +83,7 @@ const loggers = createLoggerManager({ rootDir: projectRoot });
 const appLogger = loggers.root;
 
 interface AccountRuntime {
+  account: QQRuntimeAccount;
   app: BotApp;
   streamers: MonitorStreamerConfig[];
   sendWordCloud: WordCloudSender;
@@ -236,11 +244,63 @@ async function main(): Promise<void> {
       });
     }
 
-    runtimes.push({ app, streamers, sendWordCloud, onSessionClosed, logger: accountLogger });
+    runtimes.push({
+      account,
+      app,
+      streamers,
+      sendWordCloud,
+      onSessionClosed,
+      logger: accountLogger,
+    });
   }
 
-  registerShutdown(runtimes.map((runtime) => runtime.app));
+  let controlServer: BotControlServer | undefined;
+  registerShutdown(
+    runtimes.map((runtime) => runtime.app),
+    () => controlServer?.stop(),
+  );
   const activeRuntimes = await startAccountApps(runtimes);
+
+  let configuredControlPort: number | undefined;
+  try {
+    configuredControlPort = readOptionalNumberEnv(ENV_KEYS.NANA_BOT_CONTROL_PORT);
+  } catch (error) {
+    appLogger.warn(`[control] ${ENV_KEYS.NANA_BOT_CONTROL_PORT} 不是有效数字，使用默认端口`, error);
+  }
+  const controlToken =
+    readAppEnvValue("site", ENV_KEYS.NANA_SITE_CONFIG_TOKEN) ??
+    readAppEnvValue("bot", ENV_KEYS.NANA_SITE_CONFIG_TOKEN);
+  if (!controlToken || controlToken.length < 16) {
+    appLogger.warn("[control] 未配置至少 16 位的 NANA_SITE_CONFIG_TOKEN，site 测试消息将返回 503");
+  }
+  const controlPort =
+    configuredControlPort &&
+    Number.isInteger(configuredControlPort) &&
+    configuredControlPort > 0 &&
+    configuredControlPort <= 65_535
+      ? configuredControlPort
+      : undefined;
+  if (configuredControlPort !== undefined && controlPort === undefined) {
+    appLogger.warn(
+      `[control] ${ENV_KEYS.NANA_BOT_CONTROL_PORT}=${configuredControlPort} 不合法，使用默认端口`,
+    );
+  }
+  try {
+    controlServer = await startBotControlServer({
+      runtimes: new Map(
+        activeRuntimes.map((runtime) => [
+          runtime.account.id,
+          { account: runtime.account, app: runtime.app },
+        ]),
+      ),
+      rootDir: projectRoot,
+      logger: appLogger,
+      ...(controlPort === undefined ? {} : { port: controlPort }),
+    });
+    appLogger.info(`[control] 测试消息接口：${controlServer.url}${BOT_CONTROL_TEST_MESSAGE_PATH}`);
+  } catch (error) {
+    appLogger.error("[control] 启动测试消息接口失败，site 测试消息暂不可用", error);
+  }
 
   try {
     await syncLiveStatus(monitorConfig.streamers, {
@@ -291,13 +351,21 @@ function withAccountLabel(notifier: Notifier, account: { name: string }): Notifi
 }
 
 /** 多 App 共用 SIGINT / SIGTERM：所有连接都收尾，但每个账号只发一次下线消息。 */
-function registerShutdown(apps: readonly BotApp[]): void {
+function registerShutdown(
+  apps: readonly BotApp[],
+  stopExtra?: () => Promise<void> | undefined,
+): void {
   let stopping = false;
   const stopAll = async () => {
     if (stopping) {
       return;
     }
     stopping = true;
+    try {
+      await stopExtra?.();
+    } catch (error) {
+      appLogger.error("[app] 关闭控制接口时发生错误", error);
+    }
     const results = await Promise.allSettled(apps.map((app) => app.stop({ announce: "我溜了~" })));
     for (const result of results) {
       if (result.status === "rejected") {

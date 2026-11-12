@@ -1,10 +1,10 @@
 import { createError } from "h3";
 import { readConfig, parseQQConfig } from "@nana/config";
-import { QQClient, type QQMessagePart } from "@nana/qq";
-import { PUSH_PURPOSE_LABELS } from "@nana/constants";
-import { writePushLog } from "@nana/storage";
+import { BOT_CONTROL_DEFAULT_URL, BOT_CONTROL_TEST_MESSAGE_PATH, ENV_KEYS } from "@nana/constants";
 import { readAppEnvValue } from "@nana/utils";
 import type { QQTestMessageKind } from "../../shared/qq-groups.ts";
+
+const BOT_CONTROL_TIMEOUT_MS = 15_000;
 
 export async function sendQQTestMessage(input: {
   accountId: string;
@@ -22,51 +22,58 @@ export async function sendQQTestMessage(input: {
   if (group.openid !== input.expectedOpenid)
     throw createError({ statusCode: 409, statusMessage: "群映射已变更，请刷新配置后再测试" });
 
-  const atAll = input.kind === "atAll";
-  const text = atAll
-    ? "NanaBot @全体测试消息：群提醒测试。"
-    : "NanaBot 普通测试消息：群消息发送测试。";
-  const parts: QQMessagePart[] = [
-    ...(atAll ? [{ type: "atAll" as const }] : []),
-    { type: "text", text },
-  ];
-  const appId = readAppEnvValue("bot", account.appIdEnv);
-  const appSecret = readAppEnvValue("bot", account.appSecretEnv);
-  const record = (success: boolean, error?: string) => {
-    try {
-      writePushLog({
-        account: account.id,
-        targetId: group.openid,
-        target: group.name ?? `群${input.groupId}`,
-        purpose: "message.test",
-        purposeLabel: PUSH_PURPOSE_LABELS["message.test"],
-        pushedAt: new Date().toISOString(),
-        success,
-        error,
-        content: text,
-        subject: "NanaBot",
-      });
-    } catch {
-      // 已发送的消息不因记录失败而重试，以免再次打扰群成员。
-      console.error("[site] 写入测试消息推送记录失败");
-    }
-  };
-  if (!appId || !appSecret) {
-    const message = `账号 ${account.name ?? account.id} 缺少 ${account.appIdEnv} / ${account.appSecretEnv}，请配置 apps/bot/.env。`;
-    record(false, message);
-    throw createError({ statusCode: 503, statusMessage: "机器人凭据未配置", data: { message } });
+  const token = readAppEnvValue("site", ENV_KEYS.NANA_SITE_CONFIG_TOKEN);
+  if (!token || token.length < 16) {
+    throw createError({
+      statusCode: 503,
+      statusMessage: "配置管理口令不可用",
+      data: { message: "请先设置至少 16 位的 NANA_SITE_CONFIG_TOKEN。" },
+    });
   }
+  const controlUrl = (
+    readAppEnvValue("site", ENV_KEYS.NANA_BOT_CONTROL_URL) || BOT_CONTROL_DEFAULT_URL
+  ).replace(/\/+$/u, "");
+
+  let response: Response;
   try {
-    const client = new QQClient({ appId, appSecret, sandbox: account.sandbox });
-    // 只使用 HTTP 发送，不建立第二条 Gateway 连接。
-    const sent = await client.sendGroupMessage(group.openid, parts);
-    record(true);
-    return { sent: true, messageId: sent.id };
-  } catch (error) {
-    const message = (error instanceof Error ? error.message : "官方 QQ 发送失败")
-      .replaceAll(appSecret, "[已隐藏]")
-      .slice(0, 500);
-    record(false, message);
-    throw createError({ statusCode: 502, statusMessage: "测试消息发送失败", data: { message } });
+    response = await fetch(`${controlUrl}${BOT_CONTROL_TEST_MESSAGE_PATH}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        accountId: input.accountId,
+        groupId: input.groupId,
+        expectedOpenid: input.expectedOpenid,
+        kind: input.kind,
+      }),
+      signal: AbortSignal.timeout(BOT_CONTROL_TIMEOUT_MS),
+    });
+  } catch (cause) {
+    const timeout = cause instanceof Error && cause.name === "TimeoutError";
+    throw createError({
+      statusCode: timeout ? 504 : 503,
+      statusMessage: timeout ? "bot 控制接口响应超时" : "bot 控制接口不可达",
+      data: {
+        message: timeout
+          ? "bot 未在限定时间内响应，消息可能仍在发送，请先确认群内结果再重试。"
+          : "请确认 bot 已启动，并检查 NANA_BOT_CONTROL_URL 配置。",
+      },
+    });
   }
+
+  const payload = (await response.json().catch(() => undefined)) as
+    | { ok?: boolean; target?: unknown; error?: unknown }
+    | undefined;
+  if (!response.ok || payload?.ok !== true) {
+    const message =
+      typeof payload?.error === "string" ? payload.error : `bot 返回 HTTP ${response.status}`;
+    const statusCode =
+      response.status >= 400 && response.status !== 401 && response.status !== 403
+        ? response.status
+        : 502;
+    throw createError({ statusCode, statusMessage: "测试消息发送失败", data: { message } });
+  }
+  return { sent: true, target: typeof payload.target === "string" ? payload.target : undefined };
 }

@@ -57,10 +57,11 @@ export class OfficialPushClient {
       this.record({ ...base, success: true });
       return target;
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       this.record({
         ...base,
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: message.replaceAll(this.account.appSecret, "[已隐藏]"),
       });
       throw error;
     }

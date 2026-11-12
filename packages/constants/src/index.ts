@@ -63,11 +63,18 @@ export const ENV_KEYS = {
   QQ_BOT_APP_ID: "QQ_BOT_APP_ID",
   QQ_BOT_APP_SECRET: "QQ_BOT_APP_SECRET",
   NANA_SITE_CONFIG_TOKEN: "NANA_SITE_CONFIG_TOKEN",
+  NANA_BOT_CONTROL_PORT: "NANA_BOT_CONTROL_PORT",
+  NANA_BOT_CONTROL_URL: "NANA_BOT_CONTROL_URL",
   SERVER_EMAIL: "SERVER_EMAIL",
   SERVER_EMAIL_PASSWORD: "SERVER_EMAIL_PASSWORD",
   /** DeepSeek 直播摘要。机器人与站点补生成都读这个变量。 */
   DEEPSEEK_API_KEY: "DEEPSEEK_API_KEY",
 } as const;
+
+/** bot 内部控制接口：仅监听本机，site 通过同一管理口令调用。 */
+export const BOT_CONTROL_DEFAULT_PORT = 6365;
+export const BOT_CONTROL_DEFAULT_URL = `http://127.0.0.1:${BOT_CONTROL_DEFAULT_PORT}`;
+export const BOT_CONTROL_TEST_MESSAGE_PATH = "/api/qq/test-message";
 
 /** Bark 推送服务地址。 */
 export const BARK_BASE_URL = "https://api.day.app/";
