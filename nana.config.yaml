@@ -1,19 +1,27 @@
-# QQ 官方通道：在这里增加 qq.provider: official 与 qq.accounts；完整配置、扫码绑定及
-# group_openid 获取步骤见 README「QQ 官方机器人」。现有 NapCat 配置保留以便切回。
-napcat:
+# 主号使用 QQ 官方 API，饭总号继续使用 NapCat；完整字段见 nana.config.yaml.example。
+qq:
+  defaultAccount: "2799397589"
   accounts:
-    # 当前 NC_WS_URL 对应的主号。
     - id: "2799397589"
       name: 主号
+      provider: official
       adminGroup: 646247690
+      official:
+        appIdEnv: QQ_BOT_APP_ID
+        appSecretEnv: QQ_BOT_APP_SECRET
+        sandbox: false
+      # 启动后在 site 设置中绑定管理群 646247690 的 group_openid。
+      groups: {}
 
     # 饭总使用的第二个 NapCat 实例；连接信息在 .env 的 NC_WS_URL_2 /
     # NC_ACCESS_TOKEN_2 中配置。
     - id: "2227511984"
       name: 饭总号
-      wsUrlEnv: NC_WS_URL_2
-      accessTokenEnv: NC_ACCESS_TOKEN_2
+      provider: napcat
       adminGroup: 1101365727
+      napcat:
+        wsUrlEnv: NC_WS_URL_2
+        accessTokenEnv: NC_ACCESS_TOKEN_2
 
 up:
   - dynamic: false
