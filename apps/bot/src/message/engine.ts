@@ -376,7 +376,7 @@ async function sendResponse(
 ) {
   const text = response.slice(0, 2_000);
   try {
-    if (message.platform === "official" && message.scene === "group") {
+    if (message.platform === "official") {
       await context.replyMessage(message, { text });
     } else {
       await context.sendMessage(

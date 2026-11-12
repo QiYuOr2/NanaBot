@@ -455,7 +455,7 @@ describe("dispatcher", () => {
     expect(logs[0]?.content).not.toContain("private-secret");
   });
 
-  test("official group replies use the passive path without adding an at mention", async () => {
+  test("official replies use the passive path without adding an at mention", async () => {
     const rootDir = mkdtempSync(join(tmpdir(), "nana-message-"));
     temporaryRoots.push(rootDir);
     const passive: string[] = [];
@@ -504,8 +504,28 @@ describe("dispatcher", () => {
         },
       }),
     );
-    expect(passive).toEqual([expect.stringContaining("NanaBot：运行中")]);
-    expect(passive[0]).not.toContain("<@");
+    await handler?.(
+      incoming({
+        id: "private",
+        accountId: "official",
+        platform: "official",
+        scene: "private",
+        conversationId: "USER",
+        text: "/status",
+        replyContext: {
+          platform: "official",
+          messageId: "private",
+          eventType: "C2C_MESSAGE_CREATE",
+          scene: "private",
+          userOpenId: "USER",
+        },
+      }),
+    );
+    expect(passive).toEqual([
+      expect.stringContaining("NanaBot：运行中"),
+      expect.stringContaining("NanaBot：运行中"),
+    ]);
+    expect(passive.every((reply) => !reply.includes("<@"))).toBe(true);
     expect(proactive).toEqual([]);
   });
 });
