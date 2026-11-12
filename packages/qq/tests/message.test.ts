@@ -37,15 +37,13 @@ vi.mock("@tencent-connect/qqbot-nodejs", () => ({ QQBot: SDK }));
 
 function inbound(kind: "group" | "c2c"): any {
   return {
-    rawEventType: kind === "group" ? "GROUP_AT_MESSAGE_CREATE" : "C2C_MESSAGE_CREATE",
+    rawEventType: kind === "group" ? "GROUP_MESSAGE_CREATE" : "C2C_MESSAGE_CREATE",
     kind,
     messageId: "msg-1",
-    content: "/status",
+    content: kind === "group" ? "<@BOT_OPENID> /status" : "/status",
     senderId: "user",
     senderName: "User",
-    ...(kind === "group"
-      ? { groupOpenid: "GROUP", mentions: [{ is_you: true }], senderIsBot: false }
-      : {}),
+    ...(kind === "group" ? { groupOpenid: "GROUP", senderIsBot: false } : {}),
     replyTarget: {
       scope: kind === "group" ? "group" : "c2c",
       targetId: kind === "group" ? "GROUP" : "user",
@@ -78,10 +76,11 @@ test("normalizes C2C and group messages, preserves group discovery and skips bot
     eventId: "event-1",
   });
   expect(messages[1]).toMatchObject({
-    eventType: "GROUP_AT_MESSAGE_CREATE",
+    eventType: "GROUP_MESSAGE_CREATE",
     kind: "group",
     groupOpenid: "GROUP",
-    isAtBot: true,
+    content: "/status",
+    isAtBot: false,
   });
   expect(groups).toEqual([{ openid: "GROUP", source: "message" }]);
 });

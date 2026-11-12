@@ -84,7 +84,9 @@ function harness(config: unknown, rootDir: string, accountConfig?: unknown) {
     async replyMessage(_message: IncomingMessage, response: { text: string }) {
       replies.push(response.text);
     },
-    async sendMessage() {},
+    async sendMessage(_target: unknown, response: { text: string }) {
+      replies.push(response.text);
+    },
     async sendAdminText() {},
     async sendAdminMsg() {},
     async sendGroupMsg() {
@@ -129,7 +131,7 @@ describe("message platform models", () => {
     const base: QQIncomingMessage = {
       id: "msg",
       kind: "group",
-      eventType: "GROUP_AT_MESSAGE_CREATE",
+      eventType: "GROUP_MESSAGE_CREATE",
       content: "/status",
       senderId: "sender",
       groupOpenid: "GROUP",
@@ -144,7 +146,7 @@ describe("message platform models", () => {
         scene: "group",
         groupOpenId: "GROUP",
         messageId: "msg",
-        eventType: "GROUP_AT_MESSAGE_CREATE",
+        eventType: "GROUP_MESSAGE_CREATE",
       },
     });
     expect(
@@ -367,7 +369,9 @@ describe("dispatcher", () => {
       async replyMessage(_message: IncomingMessage, response: { text: string }) {
         replies.push(response.text);
       },
-      async sendMessage() {},
+      async sendMessage(_target: unknown, response: { text: string }) {
+        replies.push(response.text);
+      },
       async sendAdminText() {},
       async sendAdminMsg() {},
       async sendGroupMsg() {
@@ -423,10 +427,12 @@ describe("dispatcher", () => {
         handler = next;
         return () => {};
       },
-      async replyMessage() {
+      async sendMessage() {
         throw new Error("send failed");
       },
-      async sendMessage() {},
+      async replyMessage() {
+        throw new Error("unexpected passive reply");
+      },
       async sendAdminText() {},
       async sendAdminMsg() {},
       async sendGroupMsg() {
@@ -447,5 +453,59 @@ describe("dispatcher", () => {
       purpose: "message.command",
     });
     expect(logs[0]?.content).not.toContain("private-secret");
+  });
+
+  test("official group replies use the passive path without adding an at mention", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "nana-message-"));
+    temporaryRoots.push(rootDir);
+    const passive: string[] = [];
+    const proactive: string[] = [];
+    let handler: ((message: IncomingMessage) => void | Promise<void>) | undefined;
+    const context = {
+      accountId: "official",
+      logger: { debug() {}, info() {}, warn() {}, error() {} },
+      onCleanup() {},
+      onConnectionState: () => () => {},
+      onHeartbeat: () => () => {},
+      onMessage(next: (message: IncomingMessage) => void | Promise<void>) {
+        handler = next;
+        return () => {};
+      },
+      async replyMessage(_message: IncomingMessage, response: { text: string }) {
+        passive.push(response.text);
+      },
+      async sendMessage(_target: unknown, response: { text: string }) {
+        proactive.push(response.text);
+      },
+      async sendAdminText() {},
+      async sendAdminMsg() {},
+      async sendGroupMsg() {
+        return "";
+      },
+    } satisfies FeatureContext;
+    createMessageFeature().setup(context, {
+      config: { cooldown: { enabled: false } },
+      runtime: runtime(rootDir),
+      logger: context.logger,
+    });
+    await handler?.(
+      incoming({
+        id: "group",
+        accountId: "official",
+        platform: "official",
+        scene: "group",
+        conversationId: "GROUP",
+        text: "/status",
+        replyContext: {
+          platform: "official",
+          messageId: "group",
+          scene: "group",
+          groupOpenId: "GROUP",
+        },
+      }),
+    );
+    expect(passive).toEqual([expect.stringContaining("NanaBot：运行中")]);
+    expect(passive[0]).not.toContain("<@");
+    expect(proactive).toEqual([]);
   });
 });

@@ -1,6 +1,11 @@
 import { QQBot } from "@tencent-connect/qqbot-nodejs";
 import { QQSendError, toQQSendError } from "./errors.ts";
-import { encodeQQMessage, readSentMessage, toSDKImageSource } from "./messages.ts";
+import {
+  encodeQQMessage,
+  readSentMessage,
+  stripInboundMentions,
+  toSDKImageSource,
+} from "./messages.ts";
 import type {
   QQClientEvents,
   QQClientOptions,
@@ -58,7 +63,7 @@ export class QQClient implements QQClientPort {
         id: message.messageId,
         eventType: message.rawEventType,
         kind: message.kind === "group" ? "group" : "private",
-        content: message.content,
+        content: stripInboundMentions(message.content),
         senderId: message.senderId,
         ...(message.senderName ? { senderName: message.senderName } : {}),
         ...(message.groupOpenid ? { groupOpenid: message.groupOpenid } : {}),
