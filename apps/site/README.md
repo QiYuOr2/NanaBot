@@ -52,7 +52,7 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
 成败**按群**统计，而不是数原始记录（见 [shared/push-presentation.ts](./shared/push-presentation.ts)）：
 
 - 每个群的最终结果以它最近一次推送为准：`successCount + failureCount + pendingTargetCount
-=== targetCount`；失败后重试成功的群算成功，并通过 `retryCount` 标注「重试后送达」；
+  === targetCount`；失败后重试成功的群算成功，并通过 `retryCount` 标注「重试后送达」；
 - 失败的推送在 `PUSH_PENDING_WINDOW_MS`（60 秒）内展示为「待确认」，超过窗口仍是失败才展示
   「未送达」，避免把慢回执 / 重复推送误报成失败；
 - 活动徽标、时间轴圆点、群明细徽标、面板摘要、`/pushes` 统计共用同一套文案与颜色（

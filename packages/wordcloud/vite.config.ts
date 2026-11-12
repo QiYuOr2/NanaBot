@@ -3,7 +3,7 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   pack: {
     dts: {
-      tsgo: true,
+      generator: "tsgo",
     },
     exports: true,
     // jieba / resvg 都带原生 .node 绑定，必须保持 external 由 Node 直接加载，不能打进 bundle。

@@ -1,5 +1,5 @@
 import { Jieba } from "@node-rs/jieba";
-import { dict } from "@node-rs/jieba/dict";
+import { dict } from "@node-rs/jieba/dict.js";
 import { encodeModernDict, MODERN_WORD_SET } from "./dict.ts";
 import { DEFAULT_NOISE_WORDS, DEFAULT_STOP_WORDS } from "./words.ts";
 import type { ExtractWordsOptions, WordCount } from "./types.ts";
