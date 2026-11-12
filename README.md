@@ -29,7 +29,7 @@ packages/
   qq/                  # QQ 官方通信、消息类型、发送校验与扫码授权
   storage/             # db/ 下的 YAML 与 SQLite 存储
   utils/               # 通用工具
-nana.config.yaml       # 直播监控配置
+nana.config.yaml       # 本地直播监控配置（已 gitignore，不提交）
 ecosystem.config.cjs   # PM2 入口
 ```
 
@@ -112,8 +112,8 @@ Bot 会自己把日志写到项目根目录（即使 PM2 的 `cwd` 是 `apps/bot
 logs/
   bot.log                       # 进程启动、停机、账号跳过等全局事件
   accounts/
-    2799397589.log              # 主号自己的连接、监控、推送、弹幕日志
-    2227511984.log              # 饭总号自己的日志
+    100000001.log               # 主号自己的连接、监控、推送、弹幕日志
+    100000002.log               # 第二账号自己的日志
 ```
 
 每个账号写自己的文件，不会混在一起。单个文件默认达到 10 MiB 后轮转，保留 5 份历史
@@ -122,13 +122,14 @@ logs/
 
 ```bash
 tail -f logs/bot.log
-tail -n 200 logs/accounts/2227511984.log
+tail -n 200 logs/accounts/100000002.log
 ```
 
 ## 配置
 
 全量配置见 [`nana.config.yaml.example`](./nana.config.yaml.example)，包含两种 QQ 通道、多账号、
 群映射、直播通知、词云与离线告警。敏感凭据放 `apps/bot/.env`，site 管理口令放 `apps/site/.env`。
+`nana.config.yaml` 是本地运行时配置，包含真实群号和账号信息，已加入 `.gitignore`，不要提交。
 
 ### 账号与通道
 
@@ -167,9 +168,9 @@ accounts:
 ```yaml
 up:
   - live: true
-    uid: 145149047
-    liveRoomId: 4629447
-    uname: 饭总
+    uid: 10001
+    liveRoomId: 1000001
+    uname: 示例主播
     qqAccount: live
     liveMonitorConfig:
       enableNotify: true
@@ -203,7 +204,7 @@ NapCat 通道继续保留，统一通过顶层 `accounts` 配置。
 3. 在 `apps/bot/.env` 填写 `QQ_BOT_APP_ID` / `QQ_BOT_APP_SECRET`，或在仓库根目录扫码绑定：
 
 ```bash
-vp run @nana/bot#qq:bind 2227511984
+vp run @nana/bot#qq:bind live
 ```
 
 扫码使用官方 `@tencent-connect/qqbot-connector`，凭据直接写入 `apps/bot/.env`，不打印密钥。
@@ -222,7 +223,7 @@ vp run @nana/bot#qq:bind 2227511984
    也可以使用命令行工具（无需提前填写映射，不启动 B 站监控，也不主动发消息）：
 
 ```bash
-vp run @nana/bot#qq:discover 2227511984
+vp run @nana/bot#qq:discover live
 ```
 
 连接后将机器人加入目标群，或在目标群里 @机器人 发一条消息，终端会显示该账号收到的

@@ -22,6 +22,9 @@ dist-ssr
 # Runtime SQLite databases
 db/*.sqlite
 
+# Local runtime config (contains private IDs and notification targets)
+/nana.config.yaml
+
 # dotenv environment variable files
 .env
 .env.*

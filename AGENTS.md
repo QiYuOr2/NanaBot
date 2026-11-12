@@ -52,7 +52,7 @@ packages/
 
 ## 运行时配置
 
-- 根目录 `nana.config.yaml`：直播监控配置与 顶层 `accounts` 账号列表（全量示例 `nana.config.yaml.example`），同时作为项目根目录标记（`@nana/config` 读取）。
+- 根目录 `nana.config.yaml`：本地直播监控配置与顶层 `accounts` 账号列表（全量示例 `nana.config.yaml.example`），同时作为项目根目录标记（`@nana/config` 读取）；该文件已 gitignore，不提交真实群号、账号或邮箱。
 - `apps/bot/.env`（参考 `.env.example`）：`NC_WS_URL`、`NC_ACCESS_TOKEN`、`NC_DEBUG`、`BARK_KEY`、`NANA_BOT_CONTROL_PORT`，变量名收口在 `@nana/constants` 的 `ENV_KEYS`。
 - 多 QQ：顶层 `accounts` 统一配置多账号，每项显式 `provider: official | napcat`，连接参数放同名子段；主播必须通过 `up[].qqAccount` 显式选账号，未配置时不分配账号、不启动该主播的账号监控及录制、不推送；没有默认账号回退。允许两种通道同时运行；单账号失败不改发到其他账号。解析归一化在 `@nana/config`，凭据、路由、应用工厂及启动隔离在 `apps/bot/src/accounts/`。只支持顶层账号列表和同名连接子段，不保留旧配置兼容；群映射保存到 `accounts[].groups`。
 - 官方 QQ：`accounts[].provider: official` 选择官方通道，连接参数放 `official` 子段，可沿用 `qqAccount` 标识。凭据通过 `QQ_BOT_APP_ID` / `QQ_BOT_APP_SECRET` 或账号指定的环境变量读取；`groups.<数字别名>.openid` 必须配置，不能直接用 QQ 群号。`qq:bind` 扫码写入 `.env`，`qq:discover` 获取群 openid。群主需授权主动发言；`{@all}` 转为官方文本标记 `<qqbot-at-everyone />`，机器人需为群管理员且每群每天限一次（官方 2026-10-26 变更）。发送失败不得省略提醒后重发为普通群消息。服务选择只以账号的 `provider` 为准。

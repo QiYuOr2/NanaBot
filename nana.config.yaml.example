@@ -56,8 +56,8 @@ accounts:
 # 主播需要显式指定 qqAccount；未填写时不参与账号推送。
 up:
   - uname: 示例主播（官方推送）
-    uid: 145149047
-    liveRoomId: 4629447
+    uid: 10001
+    liveRoomId: 1000001
     live: true
     qqAccount: live
     liveMonitorConfig:
