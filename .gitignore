@@ -23,7 +23,8 @@ dist-ssr
 db/*.sqlite
 
 # Local runtime config (contains private IDs and notification targets)
-/nana.config.yaml
+/nana.config.*
+!/nana.config.yaml.example
 
 # dotenv environment variable files
 .env
