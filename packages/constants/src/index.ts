@@ -33,6 +33,7 @@ export const PUSH_LOG_PURPOSES = [
   "wordcloud",
   "live.summary",
   "notification",
+  "message.test",
 ] as const;
 
 /** 推送目的的类型。 */
@@ -47,6 +48,7 @@ export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
   wordcloud: "词云",
   "live.summary": "直播摘要",
   notification: "通知",
+  "message.test": "测试消息",
 };
 
 /** QQ 连接通道的展示名称。 */

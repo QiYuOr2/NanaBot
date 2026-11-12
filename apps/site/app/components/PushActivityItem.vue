@@ -40,6 +40,7 @@ const PURPOSE_TAG: Record<string, string> = {
   wordcloud: "bg-status-orange/10 text-status-orange",
   "live.summary": "bg-status-teal/10 text-status-teal",
   notification: "bg-status-orange/10 text-status-orange",
+  "message.test": "bg-status-orange/10 text-status-orange",
 };
 
 const avatarKey = computed(

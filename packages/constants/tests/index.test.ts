@@ -43,6 +43,8 @@ test("推送目的包含词云，且每个目的都有中文展示名", () => {
   expect(PUSH_PURPOSE_LABELS.wordcloud).toBe("词云");
   expect(PUSH_LOG_PURPOSES).toContain("live.summary");
   expect(PUSH_PURPOSE_LABELS["live.summary"]).toBe("直播摘要");
+  expect(PUSH_LOG_PURPOSES).toContain("message.test");
+  expect(PUSH_PURPOSE_LABELS["message.test"]).toBe("测试消息");
 
   for (const purpose of PUSH_LOG_PURPOSES) {
     expect(PUSH_PURPOSE_LABELS[purpose]).toBeTruthy();

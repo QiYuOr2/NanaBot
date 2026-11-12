@@ -19,6 +19,12 @@ defineProps<{ name: string }>();
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </template>
+    <template v-else-if="name === 'menu'">
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </template>
+    <template v-else-if="name === 'close'">
+      <path d="m6 6 12 12M6 18 18 6" />
+    </template>
     <template v-else-if="name === 'filter'">
       <line x1="4" y1="21" x2="4" y2="14" />
       <line x1="4" y1="10" x2="4" y2="3" />

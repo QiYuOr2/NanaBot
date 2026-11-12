@@ -75,12 +75,17 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
 传入自己的操作区（概览页是搜索 / 排序 / 刷新，推送活动页只有刷新）。刷新按钮的转圈与禁用
 状态收口在 `components/AppRefreshButton.vue`。
 
+小屏（`< 1024px`）隐藏固定侧边栏，顶栏左侧的菜单按钮打开 `components/AppMobileSidebar.vue`
+抽屉；点击导航、遮罩或按 Esc 收起，路由变化后自动关闭并恢复页面滚动。抽屉状态由
+`app/composables/useMobileSidebar.ts` 按请求隔离，桌面端仍使用固定侧边栏。
+
 ## 目录结构（Nuxt 4，`srcDir` 为 `app/`）
 
 ```text
 apps/site/
   app/
     app.vue
+    composables/useMobileSidebar.ts
     layouts/default.vue
     pages/index.vue
     pages/pushes.vue
@@ -96,6 +101,7 @@ apps/site/
     components/DanmuMessageList.vue
     components/AppIcon.vue
     components/AppSidebar.vue
+    components/AppMobileSidebar.vue
     types.ts
   shared/
     danmu.ts

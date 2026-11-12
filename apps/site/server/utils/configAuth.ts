@@ -1,24 +1,11 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { parseEnv } from "node:util";
 import { createError, getHeader, setHeader, type H3Event } from "h3";
 import { ENV_KEYS } from "@nana/constants";
-import { resolveProjectRoot } from "@nana/utils";
+import { readAppEnvValue } from "@nana/utils";
 
 /** 独立管理口令，不读取机器人 AppSecret，也不通过接口返回凭据。 */
 export function readSiteConfigToken(rootDir?: string): string | undefined {
-  let value = process.env[ENV_KEYS.NANA_SITE_CONFIG_TOKEN];
-  if (!value) {
-    try {
-      value = parseEnv(
-        readFileSync(join(resolveProjectRoot(rootDir), "apps", "site", ".env"), "utf8"),
-      )[ENV_KEYS.NANA_SITE_CONFIG_TOKEN];
-    } catch {
-      return undefined;
-    }
-  }
-  const token = value?.trim();
+  const token = readAppEnvValue("site", ENV_KEYS.NANA_SITE_CONFIG_TOKEN, rootDir);
   return token && token.length >= 16 ? token : undefined;
 }
 

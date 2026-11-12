@@ -20,6 +20,7 @@
     "@nana/config": "workspace:*",
     "@nana/constants": "workspace:*",
     "@nana/live-summary": "workspace:*",
+    "@nana/qq": "workspace:*",
     "@nana/storage": "workspace:*",
     "@nana/utils": "workspace:*",
     "@nana/wordcloud": "workspace:*",

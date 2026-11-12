@@ -18,6 +18,8 @@
 | [0007](./0007-bot-file-logs.md)              | Bot 文件日志与按账号拆分              | `apps/bot`：日志组件、账号级日志接入、入口装配                | 已完成 |
 | [0008](./0008-live-summary-full-session.md)  | 直播摘要覆盖整场弹幕                  | `packages/live-summary`：摘录抽样 + 提示词 + 回归测试         | 已完成 |
 | [0009](./0009-mixed-qq-accounts.md)          | 官方 / NapCat 混合账号与配置统一      | `apps/bot`、`apps/site`、配置、官方通信与群发现存储           | 已完成 |
+| [0010](./0010-site-qq-test-messages.md)      | site QQ 普通消息与 @全体测试          | `apps/site`、共享环境变量读取、测试推送记录                   | 已完成 |
+| [0011](./0011-site-mobile-navigation.md)     | site 移动端导航抽屉                   | `apps/site`：布局、顶栏、侧边栏、导航状态                     | 已完成 |
 
 新增改动时：复制 [TEMPLATE.md](./TEMPLATE.md) 为 `NNNN-<主题>.md`（编号递增），写完在上表补一行。
 

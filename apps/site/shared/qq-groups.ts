@@ -4,6 +4,7 @@ export interface QQGroupSetting {
   openid: string | null;
   uses: string[];
 }
+export type QQTestMessageKind = "text" | "atAll";
 export interface QQAccountSetting {
   id: string;
   name: string;

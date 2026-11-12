@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { QQGroupSetting, QQAccountSetting } from "#shared/qq-groups";
+import type { QQGroupSetting, QQAccountSetting, QQTestMessageKind } from "#shared/qq-groups";
 
 const props = defineProps<{
   accountId: string;
@@ -17,6 +17,9 @@ const saving = ref(false);
 const error = ref("");
 const success = ref(false);
 const conflicted = ref(false);
+const testing = ref<QQTestMessageKind | null>(null);
+const testResult = ref("");
+const testError = ref("");
 const dirty = computed(
   () => name.value.trim() !== savedName.value || openid.value.trim() !== (savedOpenid.value ?? ""),
 );
@@ -31,11 +34,15 @@ watch(
     savedName.value = nextName;
     conflicted.value = false;
     error.value = "";
+    testResult.value = "";
+    testError.value = "";
   },
 );
 watch([name, openid], () => {
   success.value = false;
   error.value = "";
+  testResult.value = "";
+  testError.value = "";
 });
 
 function seenLabel(timestamp: string): string {
@@ -45,7 +52,7 @@ function selectDiscovered(event: Event) {
   openid.value = (event.target as HTMLSelectElement).value;
 }
 async function save() {
-  if (!openid.value.trim() || saving.value) return;
+  if (!openid.value.trim() || saving.value || testing.value) return;
   saving.value = true;
   success.value = false;
   error.value = "";
@@ -76,6 +83,33 @@ async function save() {
     saving.value = false;
   }
 }
+
+async function sendTest(kind: QQTestMessageKind) {
+  if (!savedOpenid.value || dirty.value || saving.value || testing.value) return;
+  testing.value = kind;
+  testResult.value = "";
+  testError.value = "";
+  try {
+    await $fetch("/api/settings/qq-groups/test", {
+      method: "POST",
+      retry: 0,
+      headers: { Authorization: `Bearer ${props.token}` },
+      body: {
+        accountId: props.accountId,
+        groupId: props.group.id,
+        expectedOpenid: savedOpenid.value,
+        kind,
+      },
+    });
+    testResult.value = `${kind === "atAll" ? "@全体" : "普通"}测试消息已发送，请到群内确认。`;
+  } catch (cause) {
+    const failure = cause as { data?: { statusMessage?: string; data?: { message?: string } } };
+    testError.value =
+      failure.data?.data?.message ?? failure.data?.statusMessage ?? "测试消息发送失败，请稍后重试";
+  } finally {
+    testing.value = null;
+  }
+}
 </script>
 
 <template>
@@ -99,7 +133,7 @@ async function save() {
           class="input mt-1.5 w-full"
           maxlength="100"
           placeholder="便于识别的群名称"
-          :disabled="saving"
+          :disabled="saving || !!testing"
         />
       </div>
       <div class="min-w-0">
@@ -110,7 +144,7 @@ async function save() {
           :id="`${prefix}-candidate`"
           class="input mt-1.5 w-full"
           :value="discovered.some((item) => item.openid === openid) ? openid : ''"
-          :disabled="saving || !discovered.length"
+          :disabled="saving || !!testing || !discovered.length"
           @change="selectDiscovered"
         >
           <option disabled value="">
@@ -137,16 +171,46 @@ async function save() {
         autocomplete="off"
         spellcheck="false"
         placeholder="可从候选列表选择，也可手动粘贴"
-        :disabled="saving"
+        :disabled="saving || !!testing"
       />
     </div>
     <div class="mt-4 flex flex-wrap items-center gap-3">
-      <button type="submit" class="btn-primary" :disabled="saving || !dirty || !openid.trim()">
+      <button
+        type="submit"
+        class="btn-primary"
+        :disabled="saving || !!testing || !dirty || !openid.trim()"
+      >
         {{ saving ? "正在保存…" : "保存映射" }}
       </button>
       <span v-if="success" role="status" class="text-[12px] text-live">已保存，下次推送生效</span>
       <span v-else-if="dirty" class="text-[12px] text-ink-muted">有未保存的修改</span>
       <span v-if="error" role="alert" class="text-[12px] text-status-red">{{ error }}</span>
+    </div>
+    <div v-if="savedOpenid" class="mt-4 border-t border-line pt-4">
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="btn-ghost bg-recessed disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="saving || !!testing || dirty"
+          @click="sendTest('text')"
+        >
+          {{ testing === "text" ? "正在发送…" : "测试普通消息" }}
+        </button>
+        <button
+          type="button"
+          class="btn-ghost bg-recessed disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="saving || !!testing || dirty"
+          @click="sendTest('atAll')"
+        >
+          {{ testing === "atAll" ? "正在发送…" : "测试 @全体" }}
+        </button>
+      </div>
+      <p class="mt-2 text-[12px] leading-relaxed text-ink-muted">
+        {{ dirty ? "请先保存映射后再测试。" : "测试消息发送到当前已保存的群。" }}
+        @全体要求机器人是群管理员，每群每天限一次，测试也占用当天额度。
+      </p>
+      <p v-if="testResult" role="status" class="mt-2 text-[12px] text-live">{{ testResult }}</p>
+      <p v-if="testError" role="alert" class="mt-2 text-[12px] text-status-red">{{ testError }}</p>
     </div>
   </form>
 </template>

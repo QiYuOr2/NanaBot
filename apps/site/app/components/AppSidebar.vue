@@ -1,4 +1,7 @@
 <script setup lang="ts">
+defineProps<{ mobile?: boolean }>();
+const emit = defineEmits<{ navigate: []; close: [] }>();
+
 interface NavItem {
   id: string;
   label: string;
@@ -32,10 +35,8 @@ function navClass(item: NavItem): string {
 </script>
 
 <template>
-  <aside
-    class="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-ink/5 bg-surface lg:flex"
-  >
-    <div class="flex items-center justify-between gap-2 px-3 py-3">
+  <aside class="flex h-full min-h-0 flex-col border-r border-ink/5 bg-surface">
+    <div class="flex shrink-0 items-center justify-between gap-2 px-3 py-3">
       <button
         class="flex items-center gap-2 rounded px-2 py-1.5 text-[13px] font-medium text-ink hover:bg-line"
       >
@@ -47,18 +48,37 @@ function navClass(item: NavItem): string {
         <span class="truncate">NanaBot 监控</span>
         <AppIcon name="chevron-down" class="text-ink-muted" />
       </button>
-      <button class="btn-icon" title="更多">
+      <button
+        v-if="mobile"
+        type="button"
+        class="btn-icon size-10"
+        aria-label="关闭导航菜单"
+        autofocus
+        @click="emit('close')"
+      >
+        <AppIcon name="close" class="size-5" />
+      </button>
+      <button v-else class="btn-icon" title="更多">
         <AppIcon name="more" />
       </button>
     </div>
 
-    <div class="px-3 pb-2">
+    <div class="shrink-0 px-3 pb-2">
       <input class="input-ghost w-full" placeholder="查找" />
     </div>
 
-    <nav class="flex-1 space-y-0.5 overflow-y-auto px-3 py-1">
+    <nav
+      aria-label="主导航"
+      class="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-3 py-1"
+    >
       <template v-for="item in nav" :key="item.id">
-        <NuxtLink v-if="item.to" :to="item.to" :class="navClass(item)">
+        <NuxtLink
+          v-if="item.to"
+          :to="item.to"
+          :class="[navClass(item), mobile && 'min-h-11']"
+          :aria-current="isActive(item) ? 'page' : undefined"
+          @click="emit('navigate')"
+        >
           <AppIcon :name="item.icon" class="size-4 shrink-0" />
           {{ item.label }}
         </NuxtLink>
@@ -69,7 +89,7 @@ function navClass(item: NavItem): string {
       </template>
     </nav>
 
-    <div class="px-3 py-3">
+    <div class="shrink-0 px-3 py-3">
       <div class="rounded-md bg-canvas p-3">
         <p class="text-[12px] font-medium text-ink">提示</p>
         <p class="mt-1 text-[12px] leading-relaxed text-ink-muted">

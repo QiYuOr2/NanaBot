@@ -341,6 +341,9 @@ importers:
       '@nana/live-summary':
         specifier: workspace:*
         version: link:../../packages/live-summary
+      '@nana/qq':
+        specifier: workspace:*
+        version: link:../../packages/qq
       '@nana/storage':
         specifier: workspace:*
         version: link:../../packages/storage
