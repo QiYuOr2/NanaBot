@@ -1,4 +1,4 @@
-import { Structs } from "node-napcat-ts";
+import { textPart } from "../message/parts.ts";
 import { listUnpushedLiveSummaries, markLiveSummaryPushed } from "@nana/storage";
 import type { StorageOptions } from "@nana/storage";
 import { renderLiveSummaryMessage, settleLiveSummary } from "@nana/live-summary";
@@ -98,7 +98,7 @@ async function deliverLiveSummary(
 
   for (const groupId of groupIds) {
     try {
-      await send(groupId, [Structs.text(message)], {
+      await send(groupId, [textPart(message)], {
         purpose: "live.summary",
         content: message,
         subject: streamer,

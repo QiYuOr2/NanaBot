@@ -6,6 +6,7 @@ export type QQRuntimeAccount = OfficialAccount | (NapcatAccount & { provider: "n
 export interface QQAccountSet {
   provider: ParsedQQConfig["provider"];
   accounts: QQRuntimeAccount[];
+  configuredCount: number;
   unavailable: { id: string; name: string; provider: "napcat" | "official"; error: Error }[];
   disabled: string[];
   /** 首个配置账号在站点告警页展示状态，不参与主播消息路由。 */
@@ -53,6 +54,7 @@ export function resolveQQAccounts(
   return {
     provider: qq.provider,
     accounts,
+    configuredCount: qq.accounts.length,
     unavailable,
     disabled,
     statusAccountId: qq.accounts.find((entry) => entry.enabled !== false)?.id ?? qq.accounts[0].id,

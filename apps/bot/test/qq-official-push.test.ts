@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { QQClient } from "@nana/qq";
-import { Structs } from "node-napcat-ts";
+import { atAllPart, imagePart, textPart } from "../src/message/parts.ts";
 import { readPushLogs } from "@nana/storage";
 import { loadOfficialGroups, saveQQGroupMapping } from "@nana/config";
 import { OfficialPushClient } from "../src/qq/push.ts";
@@ -79,8 +79,8 @@ function harness(
 test("真实 SDK 群主动消息使用官方 @全体标记并保留正文，成功落库", async () => {
   const { client, rootDir, requests, logger } = harness();
   await client.sendGroupMsg(123, { purpose: "live.start", content: "开播", subject: "饭总" }, [
-    Structs.text("开播"),
-    Structs.at("all"),
+    textPart("开播"),
+    atAllPart(),
   ]);
   expect(requests).toEqual([
     expect.objectContaining({
@@ -115,9 +115,14 @@ test.each([
   async ({ adminGroupId, content }) => {
     const { client, rootDir, requests, logger } = harness();
     const context: FeatureContext = {
+      accountId: "official",
       adminGroupId,
       logger,
       onCleanup() {},
+      onConnectionState: () => () => {},
+      onMessage: () => () => {},
+      replyMessage: async () => {},
+      sendMessage: async () => {},
       async sendAdminText() {},
       async sendAdminMsg() {},
       sendGroupMsg: (id, options, messages) => client.sendGroupMsg(id, options, messages),
@@ -148,7 +153,7 @@ test.each([
 ])("@全体被平台拒绝时记录失败，不降级成普通群消息：$message", async (failure) => {
   const { client, rootDir, requests } = harness(failure);
   await expect(
-    client.sendGroupMsg(123, { purpose: "live.start" }, [Structs.at("all"), Structs.text("开播")]),
+    client.sendGroupMsg(123, { purpose: "live.start" }, [atAllPart(), textPart("开播")]),
   ).rejects.toThrow(failure.message);
   const sent = requests.filter((request) => request.url.endsWith("/messages"));
   expect(sent).toHaveLength(1);
@@ -162,8 +167,8 @@ test("@全体与图片不能合成媒体消息，不在不支持的类型中吞�
   const { client, rootDir, requests } = harness();
   await expect(
     client.sendGroupMsg(123, { purpose: "notification" }, [
-      Structs.at("all"),
-      Structs.image("https://example.com/image.png"),
+      atAllPart(),
+      imagePart("https://example.com/image.png"),
     ]),
   ).rejects.toThrow("仅支持文本或 Markdown");
   expect(requests).toHaveLength(0);
@@ -188,7 +193,7 @@ test("site 保存映射后同一个发送客户端立即使用新目标，不沿
   const client = new OfficialPushClient(transport, account, { rootDir }, logger, () =>
     loadOfficialGroups("official", rootDir),
   );
-  await client.sendGroupMsg(123, { purpose: "notification" }, [Structs.text("第一条")]);
+  await client.sendGroupMsg(123, { purpose: "notification" }, [textPart("第一条")]);
   saveQQGroupMapping(
     {
       accountId: "official",
@@ -199,7 +204,7 @@ test("site 保存映射后同一个发送客户端立即使用新目标，不沿
     },
     rootDir,
   );
-  await client.sendGroupMsg(123, { purpose: "notification" }, [Structs.text("第二条")]);
+  await client.sendGroupMsg(123, { purpose: "notification" }, [textPart("第二条")]);
   expect(
     requests.filter((request) => request.url.endsWith("/messages")).map((request) => request.url),
   ).toEqual([
@@ -211,7 +216,7 @@ test("site 保存映射后同一个发送客户端立即使用新目标，不沿
     JSON.stringify({ accounts: [{ id: "official", provider: "official", official: {} }] }),
   );
   await expect(
-    client.sendGroupMsg(123, { purpose: "notification" }, [Structs.text("第三条")]),
+    client.sendGroupMsg(123, { purpose: "notification" }, [textPart("第三条")]),
   ).rejects.toThrow("group_openid");
   expect(requests.filter((request) => request.url.endsWith("/messages"))).toHaveLength(2);
 });
@@ -221,8 +226,8 @@ test("词云本地图片经 SDK 上传后作为带正文的媒体消息发送", 
   const imagePath = join(rootDir, "wordcloud.png");
   writeFileSync(imagePath, Buffer.from("test-image"));
   await client.sendGroupMsg(123, { purpose: "wordcloud" }, [
-    Structs.text("场次统计"),
-    Structs.image(imagePath),
+    textPart("场次统计"),
+    imagePart(imagePath),
   ]);
   expect(requests.find((r) => r.url.endsWith("/files"))?.body).toMatchObject({
     file_type: 1,
@@ -240,7 +245,7 @@ test("词云本地图片经 SDK 上传后作为带正文的媒体消息发送", 
 test("平台权限拒绝记为失败并向调用方抛出，允许业务降级", async () => {
   const { client, rootDir } = harness(true);
   await expect(
-    client.sendGroupMsg(123, { purpose: "live.summary" }, [Structs.text("摘要")]),
+    client.sendGroupMsg(123, { purpose: "live.summary" }, [textPart("摘要")]),
   ).rejects.toThrow();
   expect(readPushLogs({ rootDir })[0]).toMatchObject({
     success: false,
@@ -252,10 +257,10 @@ test("平台权限拒绝记为失败并向调用方抛出，允许业务降级",
 test("缺失路由或不支持的消息段不会发到其他群，也不会记为成功", async () => {
   const { client, rootDir, requests } = harness();
   await expect(
-    client.sendGroupMsg(456, { purpose: "notification" }, [Structs.text("test")]),
+    client.sendGroupMsg(456, { purpose: "notification" }, [textPart("test")]),
   ).rejects.toThrow("group_openid");
   await expect(
-    client.sendGroupMsg(123, { purpose: "notification" }, [Structs.face(1)]),
+    client.sendGroupMsg(123, { purpose: "notification" }, [{ type: "face" } as never]),
   ).rejects.toThrow("不支持");
   expect(requests).toHaveLength(0);
   expect(readPushLogs({ rootDir }).every((log) => !log.success)).toBe(true);

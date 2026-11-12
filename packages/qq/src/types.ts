@@ -39,14 +39,31 @@ export interface QQDiscoveredGroup {
   source: "message" | "added";
 }
 
+export interface QQIncomingMessage {
+  id: string;
+  kind: "group" | "private";
+  eventType?: string;
+  content: string;
+  senderId: string;
+  senderName?: string;
+  groupOpenid?: string;
+  timestamp?: string;
+  eventId?: string;
+  isAtBot: boolean;
+  replyTarget: { scope: "group" | "c2c"; targetId: string; msgId: string };
+}
+
 export interface QQClientEvents {
   connected: [];
   disconnected: [event: QQDisconnection];
   groupDiscovered: [group: QQDiscoveredGroup];
   error: [error: Error];
+  message: [message: QQIncomingMessage];
 }
 
-export type QQEventListener<T extends keyof QQClientEvents> = (...args: QQClientEvents[T]) => void;
+export type QQEventListener<T extends keyof QQClientEvents> = (
+  ...args: QQClientEvents[T]
+) => void | Promise<void>;
 
 /** 发送目标始终是官方 group_openid；本地群号映射和业务日志由调用方处理。 */
 export interface QQClientPort {
@@ -55,4 +72,6 @@ export interface QQClientPort {
   start(signal?: AbortSignal): Promise<void>;
   stop(): void;
   sendGroupMessage(groupOpenid: string, parts: readonly QQMessagePart[]): Promise<QQSentMessage>;
+  sendPrivateMessage(openid: string, parts: readonly QQMessagePart[]): Promise<QQSentMessage>;
+  replyMessage(message: QQIncomingMessage, parts: readonly QQMessagePart[]): Promise<QQSentMessage>;
 }

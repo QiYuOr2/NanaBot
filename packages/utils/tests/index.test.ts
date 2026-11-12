@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
@@ -14,7 +14,7 @@ test("resolveProjectRoot 从子目录向上定位项目根目录", () => {
   try {
     process.chdir(join(rootDir, "apps", "bot"));
 
-    expect(resolveProjectRoot()).toBe(resolve(rootDir));
+    expect(resolveProjectRoot()).toBe(realpathSync(resolve(rootDir)));
   } finally {
     process.chdir(originalCwd);
   }

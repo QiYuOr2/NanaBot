@@ -128,6 +128,9 @@ function fakeApp(accountId: string): BotApp {
   const app: BotApp = {
     accountId,
     adminGroupId: undefined,
+    get connected() {
+      return false;
+    },
     start: vi.fn(async () => {}),
     stop: vi.fn(async () => {}),
     use() {
@@ -136,6 +139,17 @@ function fakeApp(accountId: string): BotApp {
     onConnected() {
       return () => {};
     },
+    onMessage() {
+      return () => {};
+    },
+    async replyMessage() {},
+    onConnectionState() {
+      return () => {};
+    },
+    onHeartbeat() {
+      return () => {};
+    },
+    async sendMessage() {},
     onCleanup() {},
     async sendAdminText() {},
     async sendAdminMsg() {},

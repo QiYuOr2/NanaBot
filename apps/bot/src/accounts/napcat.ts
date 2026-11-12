@@ -8,6 +8,7 @@ export interface NapcatAccount {
   accessToken: string;
   adminGroupId?: number;
   watchdog?: boolean;
+  message?: NonNullable<NapcatAccountConfig["message"]>;
 }
 
 export function resolveNapcatAccount(
@@ -33,6 +34,7 @@ export function resolveNapcatAccount(
     wsUrl,
     accessToken,
     adminGroupId: entry.adminGroup,
+    ...(entry.message ? { message: entry.message } : {}),
     ...(entry.watchdog === undefined ? {} : { watchdog: entry.watchdog }),
   };
 }

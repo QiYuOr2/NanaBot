@@ -51,10 +51,13 @@ function createRootDir(): string {
 
 function createContext(): FeatureContext {
   return {
-    ws: {} as never,
+    accountId: "test",
     adminGroupId: undefined,
     logger: consoleLogger,
-    on: () => () => {},
+    onConnectionState: () => () => {},
+    onMessage: () => () => {},
+    replyMessage: async () => {},
+    sendMessage: async () => {},
     onCleanup: () => {},
     sendAdminText: async () => {},
     sendAdminMsg: async () => {},

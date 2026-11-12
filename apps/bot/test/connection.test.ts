@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+import type { NapcatClientPort } from "@nana/napcat";
 import {
   ConnectionSupervisor,
   settleWithin,
@@ -6,44 +7,66 @@ import {
   type ConnectionSupervisorOptions,
 } from "../src/core/connection.ts";
 
-type SocketHandler = (context: unknown) => void;
+type EventHandler = (event: never) => void;
 
 interface FakeWsState {
   reconnectCalls: number;
   probeCalls: number;
 }
 
-/** 手动触发事件的假 NCWebsocket：只实现看门狗用到的那部分。 */
+/** 手动触发 @nana/napcat 连接事件的端口 Mock。 */
 function createFakeWs(overrides: { get_status?: () => Promise<unknown> } = {}) {
-  const handlers = new Map<string, SocketHandler[]>();
+  const handlers = new Map<string, EventHandler[]>();
   const state: FakeWsState = { reconnectCalls: 0, probeCalls: 0 };
 
   const ws = {
-    subscribe(event: string, handler: SocketHandler) {
+    subscribe(event: string, handler: EventHandler) {
       const list = handlers.get(event) ?? [];
       list.push(handler);
       handlers.set(event, list);
       return () => {
         const current = handlers.get(event) ?? [];
         const index = current.indexOf(handler);
-        if (index >= 0) {
-          current.splice(index, 1);
-        }
+        if (index >= 0) current.splice(index, 1);
       };
     },
+    onConnectionState(handler: EventHandler) {
+      return this.subscribe("state", handler);
+    },
+    onMessage(handler: EventHandler) {
+      return this.subscribe("message", handler);
+    },
+    onHeartbeat(handler: EventHandler) {
+      return this.subscribe("heartbeat", handler);
+    },
+    onSocketError(handler: EventHandler) {
+      return this.subscribe("socket.error", handler);
+    },
+    async start() {},
+    async stop() {},
     async reconnect() {
       state.reconnectCalls += 1;
     },
-    async get_status() {
+    async getStatus() {
       state.probeCalls += 1;
       return overrides.get_status ? await overrides.get_status() : { online: true };
+    },
+    async sendGroupMessage() {
+      return { messageId: "1" };
+    },
+    async sendPrivateMessage() {
+      return { messageId: "2" };
+    },
+    async reply() {
+      return { messageId: "3" };
+    },
+    async getGroupInfo() {
+      return { groupId: "1", groupName: "群" };
     },
   };
 
   const emit = (event: string, context: unknown = {}) => {
-    for (const handler of handlers.get(event) ?? []) {
-      handler(context);
-    }
+    for (const handler of handlers.get(event) ?? []) handler(context as never);
   };
 
   return { ws, emit, state };
@@ -59,11 +82,12 @@ function createClock(start = 1_000_000) {
   };
 }
 
-const SOCKET_CONTEXT = {
-  code: 1006,
-  reason: "",
-  reconnection: { enable: true, attempts: Number.POSITIVE_INFINITY, delay: 5_000, nowAttempts: 3 },
-};
+const DISCONNECTED = { connected: false, phase: "disconnected", reconnectAttempts: 3 };
+const CONNECTED = { connected: true, phase: "connected" };
+
+function emitState(emit: (event: string, context?: unknown) => void, connected: boolean) {
+  emit("state", connected ? CONNECTED : DISCONNECTED);
+}
 
 function createLogger(lines: string[]): ConnectionLogger {
   return {
@@ -81,7 +105,7 @@ function createHarness(
   const { ws, emit, state } = createFakeWs({ get_status: options.get_status });
   const clock = createClock();
   const logs: string[] = [];
-  const supervisor = new ConnectionSupervisor(ws as never, {
+  const supervisor = new ConnectionSupervisor(ws as unknown as NapcatClientPort, {
     now: clock.now,
     logger: createLogger(logs),
     ...options.supervisor,
@@ -99,11 +123,11 @@ const NO_THROTTLE: ConnectionSupervisorOptions = { logThrottleMs: 0 };
 test("关闭看门狗后继续跟踪连接，但不探活、不重连", async () => {
   const { supervisor, emit, clock, state } = createHarness({ supervisor: { enabled: false } });
   supervisor.start();
-  emit("socket.open", SOCKET_CONTEXT);
+  emitState(emit, true);
   expect(supervisor.isConnected).toBe(true);
   clock.advance(120_000);
   await supervisor.check();
-  emit("socket.close", SOCKET_CONTEXT);
+  emitState(emit, false);
   clock.advance(120_000);
   await supervisor.check();
   expect(supervisor.isConnected).toBe(false);
@@ -111,77 +135,54 @@ test("关闭看门狗后继续跟踪连接，但不探活、不重连", async ()
   supervisor.stop();
 });
 
-test("socket.open / socket.close 会同步连接状态", () => {
+test("连接打开 / 关闭会同步连接状态", () => {
   const { supervisor, emit } = createHarness();
   supervisor.start();
-
   expect(supervisor.isConnected).toBe(false);
-
-  emit("socket.open", SOCKET_CONTEXT);
+  emitState(emit, true);
   expect(supervisor.isConnected).toBe(true);
-
-  emit("socket.close", SOCKET_CONTEXT);
+  emitState(emit, false);
   expect(supervisor.isConnected).toBe(false);
-
   supervisor.stop();
 });
 
 test("断开后库仍在重试时看门狗不插手", async () => {
   const { supervisor, emit, state, clock } = createHarness();
   supervisor.start();
-
-  emit("socket.open", SOCKET_CONTEXT);
-  emit("socket.close", SOCKET_CONTEXT);
-
-  // 库每 5s 自己重试一次，会不断刷新 socket 活动时间。
+  emitState(emit, true);
+  emitState(emit, false);
   clock.advance(5_000);
-  emit("socket.connecting", SOCKET_CONTEXT);
+  emit("state", { connected: false, phase: "connecting" });
   clock.advance(5_000);
   await supervisor.check();
-
   expect(state.reconnectCalls).toBe(0);
   supervisor.stop();
 });
 
 test("断开后长时间没有重连活动时强制重建连接", async () => {
-  const { supervisor, emit, state, clock, logs } = createHarness({
-    supervisor: NO_THROTTLE,
-  });
+  const { supervisor, emit, state, clock, logs } = createHarness({ supervisor: NO_THROTTLE });
   supervisor.start();
-
-  emit("socket.open", SOCKET_CONTEXT);
-  emit("socket.close", SOCKET_CONTEXT);
-
+  emitState(emit, true);
+  emitState(emit, false);
   clock.advance(19_000);
   await supervisor.check();
   expect(state.reconnectCalls).toBe(0);
-
   clock.advance(1_000);
   await supervisor.check();
   await flush();
-
   expect(state.reconnectCalls).toBe(1);
   expect(logs.some((line) => line.includes("强制重建连接"))).toBe(true);
   supervisor.stop();
 });
 
 test("库被失败响应关掉自动重连后仍由看门狗接管", async () => {
-  const { supervisor, emit, state, clock, logs } = createHarness({
-    supervisor: NO_THROTTLE,
-  });
+  const { supervisor, emit, state, clock, logs } = createHarness({ supervisor: NO_THROTTLE });
   supervisor.start();
-
-  emit("socket.error", {
-    error_type: "response_error",
-    reconnection: { enable: false, attempts: 5, delay: 5_000, nowAttempts: 1 },
-  });
-
+  emit("socket.error", { errorType: "response_error", reconnectEnabled: false });
   expect(logs.some((line) => line.includes("库已永久关闭自动重连"))).toBe(true);
-
   clock.advance(20_000);
   await supervisor.check();
   await flush();
-
   expect(state.reconnectCalls).toBe(1);
   supervisor.stop();
 });
@@ -193,12 +194,10 @@ test("已连接但长时间收不到事件且探活失败时强制重建连接",
     },
   });
   supervisor.start();
-
-  emit("socket.open", SOCKET_CONTEXT);
+  emitState(emit, true);
   clock.advance(60_000);
   await supervisor.check();
   await flush();
-
   expect(state.probeCalls).toBe(1);
   expect(state.reconnectCalls).toBe(1);
   supervisor.stop();
@@ -207,32 +206,25 @@ test("已连接但长时间收不到事件且探活失败时强制重建连接",
 test("已连接且探活成功时不重连，并刷新入向活跃时间", async () => {
   const { supervisor, emit, state, clock } = createHarness();
   supervisor.start();
-
-  emit("socket.open", SOCKET_CONTEXT);
+  emitState(emit, true);
   clock.advance(60_000);
   await supervisor.check();
-
   expect(state.probeCalls).toBe(1);
   expect(state.reconnectCalls).toBe(0);
-
-  // 探活成功等价于一次入向活动：再走不到 inboundIdleMs 不会立刻再探。
   clock.advance(59_000);
   await supervisor.check();
   expect(state.probeCalls).toBe(1);
-
   supervisor.stop();
 });
 
 test("收到 NapCat 事件会刷新入向活跃时间，避免误判半开连接", async () => {
   const { supervisor, emit, state, clock } = createHarness();
   supervisor.start();
-
-  emit("socket.open", SOCKET_CONTEXT);
+  emitState(emit, true);
   clock.advance(50_000);
-  emit("meta_event", {});
+  emit("message", {});
   clock.advance(50_000);
   await supervisor.check();
-
   expect(state.probeCalls).toBe(0);
   expect(state.reconnectCalls).toBe(0);
   supervisor.stop();
@@ -241,19 +233,14 @@ test("收到 NapCat 事件会刷新入向活跃时间，避免误判半开连接
 test("强制重建连接受冷却时间限制，不会连发", async () => {
   const { supervisor, emit, state, clock } = createHarness();
   supervisor.start();
-
-  emit("socket.close", SOCKET_CONTEXT);
+  emitState(emit, false);
   clock.advance(20_000);
   await supervisor.check();
   await flush();
   expect(state.reconnectCalls).toBe(1);
-
-  // 冷却时间内（默认 5s）再巡检一次不应重复触发。
   await supervisor.check();
   await flush();
   expect(state.reconnectCalls).toBe(1);
-
-  // 超过冷却时间后才会再次触发。
   clock.advance(5_000);
   await supervisor.check();
   await flush();
@@ -265,8 +252,7 @@ test("stop() 会退订连接事件", () => {
   const { supervisor, emit } = createHarness();
   supervisor.start();
   supervisor.stop();
-
-  emit("socket.open", SOCKET_CONTEXT);
+  emitState(emit, true);
   expect(supervisor.isConnected).toBe(false);
 });
 
@@ -275,16 +261,12 @@ test("长期离线时日志被节流：21 次断开只留 1 条详情 + 1 条摘
     supervisor: { logThrottleMs: 60_000 },
   });
   supervisor.start();
-
-  emit("socket.open", SOCKET_CONTEXT);
-  emit("socket.close", SOCKET_CONTEXT);
-
-  // 库每 5 秒失败一次，共 100 秒。
+  emitState(emit, true);
+  emitState(emit, false);
   for (let index = 0; index < 20; index += 1) {
     clock.advance(5_000);
-    emit("socket.close", SOCKET_CONTEXT);
+    emitState(emit, false);
   }
-
   expect(logs.filter((line) => line.includes("已连接"))).toHaveLength(1);
   expect(logs.filter((line) => line.includes("NapCat WebSocket 断开"))).toHaveLength(1);
   expect(logs.filter((line) => line.includes("仍未连上 NapCat"))).toHaveLength(1);
@@ -297,18 +279,14 @@ test("故障恢复后「已连接」日志不会被节流吃掉", () => {
     supervisor: { logThrottleMs: 60_000 },
   });
   supervisor.start();
-
-  emit("socket.open", SOCKET_CONTEXT);
+  emitState(emit, true);
   clock.advance(5_000);
-  emit("socket.close", SOCKET_CONTEXT);
-
-  // 长时间离线：一直连不上。
+  emitState(emit, false);
   for (let index = 0; index < 25; index += 1) {
     clock.advance(5_000);
-    emit("socket.close", SOCKET_CONTEXT);
+    emitState(emit, false);
   }
-
-  emit("socket.open", SOCKET_CONTEXT);
+  emitState(emit, true);
   expect(logs.filter((line) => line.includes("已连接"))).toHaveLength(2);
   supervisor.stop();
 });

@@ -1,5 +1,4 @@
 import { QQClient, type QQClientPort } from "@nana/qq";
-import { Structs } from "node-napcat-ts";
 import {
   prepareQQGroupDiscovery,
   recordDiscoveredQQGroup,
@@ -13,6 +12,9 @@ import { consoleLogger, type Logger } from "../core/logger";
 import { CONNECT_TIMEOUT_MS } from "../core/connection";
 import type { OfficialAccount } from "./config";
 import { OfficialPushClient } from "./push";
+import type { IncomingMessage, MessageReply, PlatformConnectionState } from "../message/types.ts";
+import { OfficialMessageAdapter } from "../message/platform.ts";
+import { textPart } from "../message/parts.ts";
 
 export interface OfficialAppOptions {
   account: OfficialAccount;
@@ -20,6 +22,8 @@ export interface OfficialAppOptions {
   logger?: Logger;
   /** 测试注入；生产使用腾讯官方 SDK。 */
   client?: QQClientPort;
+  /** 测试注入：被动回复窗口的时钟。 */
+  now?: () => number;
   connectTimeoutMs?: number;
 }
 
@@ -35,23 +39,31 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
       logger,
       sandbox: account.sandbox,
     });
+  const adapter = new OfficialMessageAdapter(client, account.id, {
+    ...(options.now ? { now: options.now } : {}),
+    logger,
+  });
   const push = new OfficialPushClient(client, account, options.storage, logger, () =>
     loadOfficialGroups(account.id, options.storage?.rootDir),
   );
   const cleanups = createCleanupManager();
   const pluginTasks: Promise<void>[] = [];
   const connectedHandlers = new Set<() => void>();
-  const stateHandlers = new Set<(connected: boolean) => void>();
+  const stateHandlers = new Set<(state: PlatformConnectionState) => void>();
+  const discovered = new Map<string, number>();
   let state: "idle" | "starting" | "started" | "stopping" | "stopped" = "idle";
   let runTask: Promise<void> | undefined;
   let stopTask: Promise<void> | undefined;
   let disconnectedAt: number | undefined;
+  let connectedState = false;
   let resolveReady: () => void;
   const ready = new Promise<void>((resolve) => {
     resolveReady = resolve;
   });
-  const notifyState = (connected: boolean) => {
-    for (const handler of stateHandlers) handler(connected);
+
+  const notifyState = (state: PlatformConnectionState) => {
+    connectedState = state.connected;
+    for (const handler of stateHandlers) handler(state);
   };
   const onReady = () => {
     if (state === "stopping" || state === "stopped") return;
@@ -62,7 +74,7 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
       disconnectedAt = undefined;
     }
     resolveReady();
-    notifyState(true);
+    notifyState({ connected: true, phase: "connected", platform: "official" });
     for (const handler of connectedHandlers) handler();
   };
   cleanups.add(client.on("connected", onReady));
@@ -73,44 +85,50 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
       logger.warn(
         `[官方 QQ] 连接断开（${event.code}），${event.willReconnect ? "等待自动重连" : "无法重连"}；原因：${event.reason || "未提供"}`,
       );
-      notifyState(false);
+      notifyState({ connected: false, phase: "disconnected", platform: "official" });
     }),
   );
   cleanups.add(client.on("error", (error) => logger.error("[官方 QQ] 通信错误", error)));
-  // 只记录路由发现信息，不回复普通聊天，也不记录群聊内容。
-  const discovered = new Map<string, number>();
-  const discoverGroup = (openid: string) => {
-    const last = discovered.get(openid);
-    if (last && Date.now() - last < 60_000) return;
-    try {
-      recordDiscoveredQQGroup(
-        {
-          accountId: account.id,
-          appId: account.appId,
-          openid,
-          lastSeenAt: new Date().toISOString(),
-        },
-        options.storage,
-      );
-      discovered.set(openid, Date.now());
-      if (!last) logger.info(`[官方 QQ] 发现 group_openid=${openid}；可在 site 设置中绑定对应群。`);
-    } catch (error) {
-      logger.error("[官方 QQ] 保存已发现的群标识失败", error);
-    }
-  };
-  cleanups.add(client.on("groupDiscovered", (group) => discoverGroup(group.openid)));
+  cleanups.add(
+    client.on("groupDiscovered", (group) => {
+      const last = discovered.get(group.openid);
+      if (last && Date.now() - last < 60_000) return;
+      try {
+        recordDiscoveredQQGroup(
+          {
+            accountId: account.id,
+            appId: account.appId,
+            openid: group.openid,
+            lastSeenAt: new Date().toISOString(),
+          },
+          options.storage,
+        );
+        discovered.set(group.openid, Date.now());
+        if (!last)
+          logger.info(`[官方 QQ] 发现 group_openid=${group.openid}；可在 site 设置中绑定对应群。`);
+      } catch (error) {
+        logger.error("[官方 QQ] 保存已发现的群标识失败", error);
+      }
+    }),
+  );
 
   const context: FeatureContext = {
     accountId: account.id,
     adminGroupId: account.adminGroupId,
     logger,
     onCleanup: (cleanup) => cleanups.add(cleanup),
+    onMessage(handler) {
+      const unsubscribe = adapter.onMessage(handler);
+      cleanups.add(unsubscribe);
+      return unsubscribe;
+    },
+    replyMessage: (message, response) => adapter.reply(message, response),
     onConnectionState(handler) {
       stateHandlers.add(handler);
-      const unsubscribe = () => {
-        stateHandlers.delete(handler);
-      };
-      cleanups.add(unsubscribe);
+      const unsubscribe = () => stateHandlers.delete(handler);
+      cleanups.add(() => {
+        unsubscribe();
+      });
       return unsubscribe;
     },
     async sendAdminText(text, purpose = { purpose: "notification" }) {
@@ -118,7 +136,7 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
       await push.sendGroupMsg(
         account.adminGroupId,
         { ...purpose, content: text, subject: "NanaBot" },
-        [Structs.text(text)],
+        [textPart(text)],
       );
     },
     async sendAdminMsg(messages, purpose = { purpose: "notification" }) {
@@ -126,10 +144,20 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
       await push.sendGroupMsg(account.adminGroupId, { ...purpose, subject: "NanaBot" }, messages);
     },
     sendGroupMsg: (id, purpose, messages) => push.sendGroupMsg(id, purpose, messages),
+    sendMessage: (target, message) => adapter.send(target, message),
   };
 
   const app: BotApp = {
     ...context,
+    onMessage(handler) {
+      return context.onMessage(handler);
+    },
+    replyMessage(message: IncomingMessage, response: MessageReply) {
+      return context.replyMessage(message, response);
+    },
+    get connected() {
+      return connectedState;
+    },
     use(feature, featureOptions) {
       if (state !== "idle") throw new Error("必须在 app.start() 之前注册功能。");
       pluginTasks.push(
@@ -141,10 +169,10 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
     },
     onConnected(handler) {
       connectedHandlers.add(handler);
-      const unsubscribe = () => {
-        connectedHandlers.delete(handler);
-      };
-      cleanups.add(unsubscribe);
+      const unsubscribe = () => connectedHandlers.delete(handler);
+      cleanups.add(() => {
+        unsubscribe();
+      });
       return unsubscribe;
     },
     async start() {
@@ -158,13 +186,13 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
       } catch (error) {
         logger.error("[官方 QQ] 初始化群标识发现存储失败", error);
       }
-      notifyState(false);
-      runTask = client.start();
+      notifyState({ connected: false, phase: "connecting", platform: "official" });
+      runTask = adapter.start();
       // SDK start() 在整个连接生命周期内保持 pending，不能直接 await。
       void runTask.catch((error) => {
         if (state === "stopping" || state === "stopped") return;
         logger.error("[官方 QQ] 连接终止，需要检查凭据或平台权限", error);
-        notifyState(false);
+        notifyState({ connected: false, phase: "disconnected", platform: "official" });
         if (state === "started")
           void app.stop().catch((stopError) => logger.error("[官方 QQ] 清理失败", stopError));
       });
@@ -204,10 +232,10 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
           await Promise.allSettled(pluginTasks);
           await cleanups.run();
         } finally {
-          client.stop();
-          await runTask?.catch(() => undefined);
+          await adapter.stop();
           connectedHandlers.clear();
           stateHandlers.clear();
+          await runTask?.catch(() => undefined);
           state = "stopped";
         }
       })();

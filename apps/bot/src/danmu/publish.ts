@@ -1,7 +1,7 @@
 import { rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Structs } from "node-napcat-ts";
+import { imagePart, textPart } from "../message/parts.ts";
 import type { StorageOptions } from "@nana/storage";
 import { buildWordCloudSvg, renderSessionMessage, renderWordCloudPng } from "@nana/wordcloud";
 import type { WordCount } from "@nana/wordcloud";
@@ -100,7 +100,7 @@ async function deliverWordCloud(
 ): Promise<void> {
   if (imagePath) {
     try {
-      await sendWordCloud(groupId, [Structs.text(text), Structs.image(imagePath)], purpose);
+      await sendWordCloud(groupId, [textPart(text), imagePart(imagePath)], purpose);
       return;
     } catch (error) {
       logger.error(
@@ -111,7 +111,7 @@ async function deliverWordCloud(
   }
 
   try {
-    await sendWordCloud(groupId, [Structs.text(text)], purpose);
+    await sendWordCloud(groupId, [textPart(text)], purpose);
   } catch (error) {
     logger.error(`[弹幕词云] 场次 #${sessionId} 向群 ${groupId} 推送词云失败`, error);
   }

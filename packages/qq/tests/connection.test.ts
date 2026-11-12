@@ -54,7 +54,19 @@ test("规范化 READY/RESUMED、断连与群发现事件，支持取消订阅", 
   try {
     sdk.emit("ready", {});
     sdk.emit("resumed", {});
-    sdk.emit("message", {}, { kind: "group", groupOpenid: "GROUP" });
+    sdk.emit(
+      "message",
+      {},
+      {
+        kind: "group",
+        rawEventType: "GROUP_AT_MESSAGE_CREATE",
+        messageId: "group-message",
+        senderId: "user",
+        content: "hello",
+        groupOpenid: "GROUP",
+        replyTarget: { scope: "group", targetId: "GROUP", msgId: "group-message" },
+      },
+    );
     sdk.emit("message", {}, { kind: "c2c", groupOpenid: "IGNORE" });
     sdk.emit("rawEvent", { eventType: "GROUP_ADD_ROBOT", data: { group_openid: "ADDED" } });
     sdk.emit("rawEvent", { eventType: "FRIEND_ADD", data: { group_openid: "IGNORE" } });
@@ -64,7 +76,22 @@ test("规范化 READY/RESUMED、断连与群发现事件，支持取消订阅", 
       [{ openid: "ADDED", source: "added" }],
     ]);
     unsubscribe();
-    sdk.emit("message", {}, { kind: "group", groupOpenid: "AFTER_UNSUBSCRIBE" });
+    sdk.emit(
+      "message",
+      {},
+      {
+        kind: "group",
+        messageId: "after-unsubscribe",
+        senderId: "user",
+        content: "hello",
+        groupOpenid: "AFTER_UNSUBSCRIBE",
+        replyTarget: {
+          scope: "group",
+          targetId: "AFTER_UNSUBSCRIBE",
+          msgId: "after-unsubscribe",
+        },
+      },
+    );
     expect(groups).toHaveBeenCalledTimes(2);
     sdk.emit("disconnected", { code: 1006, willReconnect: true });
     expect(disconnected).toHaveBeenCalledWith({ code: 1006, willReconnect: true });

@@ -1,4 +1,4 @@
-import type { NCWebsocket } from "node-napcat-ts";
+import type { NapcatClientPort } from "@nana/napcat";
 
 /**
  * 库自带重连的尝试次数：设为「无限」。
@@ -89,20 +89,18 @@ const DEFAULT_LOGGER: ConnectionLogger = {
 /**
  * NapCat 连接看门狗：把「库自己不管了」的连接重新拉起来，让机器人不需要人工重启。
  *
- * node-napcat-ts 有四种情况会永久失联，库本身都不再自救：
+ * node-napcat-ts 有三种情况会永久失联，库本身都不再自救：
  *
  * 1. 重连预算耗尽（`attempts` 次尝试用完），且此刻 `connect()` 会挂起而不是重连；
- * 2. 收到 `{ status: "failed", echo: null }` 响应时，库会 `disconnect()` 并把
- *    `reconnection.enable` 永久置为 false；
- * 3. 连接卡在 CONNECTING（对端不在，TCP 握手黑洞）；
- * 4. TCP 半开——对端消失但本端收不到 close，`socket.close` 永远不会触发。
+ * 2. 连接卡在 CONNECTING（对端不在，TCP 握手黑洞）；
+ * 3. TCP 半开——对端消失但本端收不到 close，`socket.close` 永远不会触发。
  *
- * 前三种表现为「断开后 socket 活动时间停滞」，第四种表现为「自称已连接但长时间
+ * 前两种表现为「断开后 socket 活动时间停滞」，第三种表现为「自称已连接但长时间
  * 收不到任何 NapCat 事件」。两种情况都由本类巡检并强制 `reconnect()`。
  */
 export class ConnectionSupervisor {
   private readonly enabled: boolean;
-  private readonly ws: NCWebsocket;
+  private readonly ws: NapcatClientPort;
   private readonly intervalMs: number;
   private readonly disconnectedIdleMs: number;
   private readonly inboundIdleMs: number;
@@ -129,7 +127,7 @@ export class ConnectionSupervisor {
   /** 看门狗最近一次出手的原因，附在周期性摘要里。 */
   private lastAction: string | undefined;
 
-  constructor(ws: NCWebsocket, options: ConnectionSupervisorOptions = {}) {
+  constructor(ws: ConnectionSupervisor["ws"], options: ConnectionSupervisorOptions = {}) {
     this.enabled = options.enabled ?? true;
     this.ws = ws;
     this.intervalMs = options.intervalMs ?? 10_000;
@@ -166,52 +164,44 @@ export class ConnectionSupervisor {
     this.lastInboundAt = at;
 
     this.unsubscribes = [
-      this.ws.subscribe("socket.connecting", markSocketActivity),
-      this.ws.subscribe("socket.open", () => {
-        this.connected = true;
-        const openedAt = this.now();
-        this.lastSocketActivityAt = openedAt;
-        this.lastInboundAt = openedAt;
-        this.loggedDisconnect = false;
-        this.lastAction = undefined;
-        this.logConnected();
-      }),
-      this.ws.subscribe("socket.close", (event) => {
+      this.ws.onConnectionState((event) => {
+        if (event.phase === "connecting") {
+          markSocketActivity();
+          return;
+        }
+        if (event.connected) {
+          this.connected = true;
+          const openedAt = this.now();
+          this.lastSocketActivityAt = openedAt;
+          this.lastInboundAt = openedAt;
+          this.loggedDisconnect = false;
+          this.lastAction = undefined;
+          this.logConnected();
+          return;
+        }
         this.connected = false;
         markSocketActivity();
-
-        const attempts = event.reconnection.nowAttempts;
+        const attempts = event.reconnectAttempts ?? 0;
         if (this.loggedDisconnect) {
           this.logDegraded(
             () =>
-              `[连接看门狗] 仍未连上 NapCat（库已尝试 ${attempts} 次${
-                this.lastAction ? `，看门狗：${this.lastAction}` : ""
-              }）`,
+              `[连接看门狗] 仍未连上 NapCat（库已尝试 ${attempts} 次${this.lastAction ? `，看门狗：${this.lastAction}` : ""}）`,
           );
           return;
         }
-
         this.loggedDisconnect = true;
-        this.logDegraded(
-          () => `[连接看门狗] NapCat WebSocket 断开（code=${event.code}，库已尝试 ${attempts} 次）`,
-        );
+        this.logDegraded(() => `[连接看门狗] NapCat WebSocket 断开（库已尝试 ${attempts} 次）`);
       }),
-      this.ws.subscribe("socket.error", (event) => {
+      this.ws.onMessage(markInbound),
+      this.ws.onHeartbeat(markInbound),
+      this.ws.onSocketError((event) => {
         markSocketActivity();
-        if (this.enabled && event.error_type === "response_error" && !event.reconnection.enable) {
+        if (this.enabled && event.errorType === "response_error" && !event.reconnectEnabled) {
           this.logDegraded(
             () => "[连接看门狗] NapCat 返回失败响应，库已永久关闭自动重连，改由看门狗接管",
           );
         }
-        // connect_error 不单独打日志：库每次连接失败都会紧跟一个 socket.close，那条已经带了
-        // code 与尝试次数；两条都打只会让长期离线时的日志量翻倍。
       }),
-      // NCEventBus 会把 `a.b` 冒泡到 `a`，订阅事件总类即可覆盖所有入向流量。
-      this.ws.subscribe("meta_event", markInbound),
-      this.ws.subscribe("message", markInbound),
-      this.ws.subscribe("message_sent", markInbound),
-      this.ws.subscribe("notice", markInbound),
-      this.ws.subscribe("request", markInbound),
     ];
 
     if (!this.enabled) return;
@@ -264,7 +254,8 @@ export class ConnectionSupervisor {
   private async probe(): Promise<void> {
     this.lastProbeAt = this.now();
 
-    if (await settleWithin(this.ws.get_status(), this.probeTimeoutMs)) {
+    const statusTask = this.ws.getStatus();
+    if (await settleWithin(statusTask, this.probeTimeoutMs)) {
       this.lastInboundAt = this.now();
       return;
     }

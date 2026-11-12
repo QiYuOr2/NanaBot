@@ -1,6 +1,5 @@
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
-import type { SendMessageSegment } from "node-napcat-ts";
-import { Structs } from "node-napcat-ts";
+import { atAllPart, textPart, type MessagePart } from "../../message/parts.ts";
 import type { FeatureContext } from "../../core";
 
 const AT_ALL_TOKEN = "{@all}";
@@ -31,9 +30,9 @@ export function createNapcatMonitorSink(
           if (notifyGroupIds.length) {
             await context.sendAdminMsg(
               [
-                Structs.text(`对应直播间 ${event.roomId}\n`),
-                Structs.text(`已配置 ${notifyGroupIds.join(",")}\n`),
-                Structs.text(`AdminID ${context.adminGroupId}`),
+                textPart(`对应直播间 ${event.roomId}\n`),
+                textPart(`已配置 ${notifyGroupIds.join(",")}\n`),
+                textPart(`AdminID ${context.adminGroupId}`),
               ],
               { purpose: "app.online" },
             );
@@ -74,10 +73,8 @@ async function sendGroupText(
       context.logger.error(`[直播监控] 向群 ${groupId} 发送 "${streamer}" 开播通知失败`, error);
       await context.sendAdminMsg(
         [
-          Structs.text(`向群 ${groupId} 发送 "${streamer}" 开播通知失败`),
-          Structs.text(
-            `错误信息: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
-          ),
+          textPart(`向群 ${groupId} 发送 "${streamer}" 开播通知失败`),
+          textPart(`错误信息: ${error instanceof Error ? error.message : JSON.stringify(error)}`),
         ],
         { purpose: "notification", label: "错误" },
       );
@@ -85,18 +82,18 @@ async function sendGroupText(
   }
 }
 
-function toMessageSegments(text: string): SendMessageSegment[] {
+function toMessageSegments(text: string): MessagePart[] {
   if (!text.includes(AT_ALL_TOKEN)) {
-    return [Structs.text(text)];
+    return [textPart(text)];
   }
 
   return text.split(AT_ALL_TOKEN).flatMap((part, index, parts) => {
-    const segments: SendMessageSegment[] = [];
+    const segments: MessagePart[] = [];
     if (part) {
-      segments.push(Structs.text(part));
+      segments.push(textPart(part));
     }
     if (index < parts.length - 1) {
-      segments.push(Structs.at("all"));
+      segments.push(atAllPart());
     }
     return segments;
   });
