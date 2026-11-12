@@ -2,6 +2,12 @@ import { QQSendError } from "./errors.ts";
 import type { QQImageSource, QQMessagePart, QQSentMessage } from "./types.ts";
 
 const AT_ALL_MARKER = "<qqbot-at-everyone />";
+const INBOUND_MENTION_PATTERN = /<@(?:all|[0-9A-Za-z_-]+)>/g;
+
+/** 官方事件把 @ 用户编码成 `<@openid>`；命令与规则只应看到纯文本。 */
+export function stripInboundMentions(content: string): string {
+  return content.replaceAll(INBOUND_MENTION_PATTERN, " ").replace(/\s+/g, " ").trim();
+}
 
 export function encodeQQMessage(parts: readonly QQMessagePart[]) {
   let text = "";

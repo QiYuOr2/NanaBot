@@ -1,6 +1,5 @@
 import {
   NCWebsocket,
-  Structs,
   type GroupMessage,
   type PrivateFriendMessage,
   type PrivateGroupMessage,
@@ -147,20 +146,20 @@ export class NapcatClient implements NapcatClientPort {
     event: NapcatIncomingEvent,
     message: readonly NapcatMessagePart[],
   ): Promise<NapcatSentMessage> {
-    const quoted = [Structs.reply(event.messageId), ...toNapcatSegments(message)];
+    const parts = toNapcatSegments(message);
     if (event.messageType === "group") {
       if (!event.groupId) throw toNapcatError(new Error("缺少群 ID"), "回复");
       return this.send("群回复", () =>
         this.socket.send_group_msg({
           group_id: requireNumericId(event.groupId!, "群 ID"),
-          message: quoted,
+          message: parts,
         }),
       );
     }
     return this.send("私聊回复", () =>
       this.socket.send_private_msg({
         user_id: requireNumericId(event.userId, "用户 ID"),
-        message: quoted,
+        message: parts,
       }),
     );
   }

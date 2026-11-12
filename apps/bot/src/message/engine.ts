@@ -376,7 +376,19 @@ async function sendResponse(
 ) {
   const text = response.slice(0, 2_000);
   try {
-    await context.replyMessage(message, { text });
+    if (message.platform === "official" && message.scene === "group") {
+      await context.replyMessage(message, { text });
+    } else {
+      await context.sendMessage(
+        {
+          platform: message.platform,
+          accountId: message.accountId,
+          scene: message.scene,
+          conversationId: message.conversationId,
+        },
+        { text },
+      );
+    }
     record(true);
     logger.info(
       `[message] reply account=${message.accountId} platform=${message.platform} scene=${message.scene} message=${message.id} target=${message.conversationId} purpose=${purpose} result=success`,

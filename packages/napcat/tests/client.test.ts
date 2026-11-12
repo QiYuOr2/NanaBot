@@ -79,7 +79,7 @@ function groupEvent(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test("converts OneBot events, ignores self messages and sends quoted group replies", async () => {
+test("converts OneBot events, ignores self messages and sends plain group replies", async () => {
   const client = new NapcatClient({ url: "ws://localhost", accountId: "main" });
   const socket = sdk.instances.at(-1)!;
   const messages: NapcatIncomingEvent[] = [];
@@ -100,10 +100,7 @@ test("converts OneBot events, ignores self messages and sends quoted group repli
   await client.reply(messages[0]!, [{ type: "text", text: "ok" }]);
   expect(socket.sent[0]).toMatchObject({
     group_id: 456,
-    message: [
-      { type: "reply", data: { id: "42" } },
-      { type: "text", data: { text: "ok" } },
-    ],
+    message: [{ type: "text", data: { text: "ok" } }],
   });
   await client.reply(
     {
@@ -117,10 +114,7 @@ test("converts OneBot events, ignores self messages and sends quoted group repli
   );
   expect(socket.sent[1]).toMatchObject({
     user_id: 321,
-    message: [
-      { type: "reply", data: { id: "43" } },
-      { type: "text", data: { text: "private-ok" } },
-    ],
+    message: [{ type: "text", data: { text: "private-ok" } }],
   });
 });
 
