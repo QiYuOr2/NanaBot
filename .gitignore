@@ -43,11 +43,8 @@ db/*.sqlite
 *.sln
 *.sw?
 
-# AI agent worktrees
-.claude/worktrees/
-!.vscode/
-!.vscode/settings.json
-!.vscode/extensions.json
-
-
+# Local AI agent/tool state
+.agent
 .agents
+.claude
+.grok
