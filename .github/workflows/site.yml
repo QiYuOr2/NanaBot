@@ -18,6 +18,7 @@ on:
       - "vite.config.ts"
       - ".github/workflows/site.yml"
       - "scripts/deploy-site-output.sh"
+      - "scripts/tests/deploy-site-output.test.ts"
   workflow_dispatch:
 
 permissions:
@@ -53,6 +54,9 @@ jobs:
       - name: Build site dependencies
         run: pnpm --filter "@nana/site^..." --workspace-concurrency=1 run build
 
+      - name: Test site deployment script
+        run: pnpm exec vp test scripts/tests/deploy-site-output.test.ts
+
       - name: Build site
         run: pnpm build:site
 
@@ -64,6 +68,18 @@ jobs:
           find apps/site/.output/server/node_modules -type f -name '*.node' -print
           test -d apps/site/.output/server/node_modules/@node-rs/jieba-linux-x64-gnu
           test -d apps/site/.output/server/node_modules/@resvg/resvg-js-linux-x64-gnu
+
+      - name: Smoke test Linux server
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 node apps/site/.output/server/index.mjs > /tmp/nana-site-smoke.log 2>&1 &
+          site_pid=$!
+          trap 'kill "$site_pid" 2>/dev/null || true' EXIT
+          if ! curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 1 --max-time 2 \
+            http://127.0.0.1:3000/api/health; then
+            cat /tmp/nana-site-smoke.log
+            exit 1
+          fi
 
       - name: Package site artifact
         run: tar -C apps/site/.output -czf site-output.tar.gz .

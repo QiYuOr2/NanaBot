@@ -178,6 +178,9 @@ pm2 logs @nana/site
 更推荐由 [GitHub Actions](../../.github/workflows/site.yml) 在 Linux x64 构建 site，
 服务器只接收 `.output` 产物。未配置 `DEPLOY_*` secrets 时 workflow 只上传 artifact；
 配置后会通过 SSH 原子替换产物、重启 `@nana/site` 并做健康检查。
+部署脚本根据服务器 PM2 配置解析 `.output/server/index.mjs` 的实际路径，
+默认替换 `apps/site/.output`；健康检查端口取该配置的 `NITRO_PORT` / `port` / `PORT`，
+也可用服务器环境变量 `SITE_HEALTH_URL` 显式覆盖完整地址。
 
 ## 依赖的 workspace 包
 

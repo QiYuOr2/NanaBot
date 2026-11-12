@@ -127,7 +127,9 @@ DEPLOY_PATH      服务器仓库绝对路径，例如 /root/NanaBotV2
 ```
 
 配置完成后无需再在服务器执行 `pnpm build:site`；workflow 会解包到临时目录，
-验证 `.output`、重启 `@nana/site`，并在健康检查失败时回滚。
+根据服务器 PM2 配置的启动入口替换 `apps/site/.output`、重启 `@nana/site`，
+并在健康检查失败时回滚。健康检查访问 `/api/health`，端口从同一份 PM2 配置读取，
+不会固定检查仓库根目录产物或默认端口。
 
 ### Bot 日志
 

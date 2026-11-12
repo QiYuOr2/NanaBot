@@ -24,6 +24,7 @@
 | [0013](./0013-low-memory-deploy.md)           | 低内存部署选项                        | `scripts/app.mjs`：构建前停止应用、失败恢复                               | 已完成 |
 | [0014](./0014-site-ci-build.md)               | Site Linux CI 构建与产物部署          | GitHub Actions、部署脚本：服务器不再构建 site                             | 已完成 |
 | [0015](./0015-operations-and-project-auth.md) | 运维面板、项目鉴权与账号控制          | site、bot、共享配置、CI：日志 / 系统状态、统一登录、提醒模板、NapCat 开关 | 已完成 |
+| [0016](./0016-site-deploy-target.md)          | 修正 Site CI 部署目录                 | 部署脚本、CI：按 PM2 启动路径切换产物、端口解析和部署回归验证             | 已完成 |
 
 新增改动时：复制 [TEMPLATE.md](./TEMPLATE.md) 为 `NNNN-<主题>.md`（编号递增），写完在上表补一行。
 
