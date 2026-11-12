@@ -60,6 +60,32 @@ test("直接填写的连接参数优先，管理群只使用账号配置", () =>
   });
 });
 
+test("停用 NapCat 不读取凭据，其主播跳过且不改发；全部停用也可以启动面板控制服务", () => {
+  const config = {
+    accounts: [
+      {
+        ...account("stopped", { wsUrlEnv: "MISSING_URL", accessTokenEnv: "MISSING_TOKEN" }),
+        enabled: false,
+      },
+      account("active", { wsUrl: "ws://localhost:1111", accessToken: "token" }),
+    ],
+  };
+  const result = resolveQQAccounts(config, {});
+  expect(result.disabled).toEqual(["stopped"]);
+  expect(result.unavailable).toEqual([]);
+  expect(result.accounts.map((entry) => entry.id)).toEqual(["active"]);
+  expect(
+    [
+      ...groupStreamersByAccount(
+        [{ streamer: "停用主播", qqAccount: "stopped" }],
+        result.accounts,
+        { skipAccountIds: new Set(result.disabled) },
+      ).values(),
+    ].flat(),
+  ).toEqual([]);
+  expect(resolveQQAccounts({ accounts: [config.accounts[0]] }, {}).accounts).toEqual([]);
+});
+
 test("连接参数必须显式配置，不再创建环境变量单账号", () => {
   expect(() =>
     resolveQQAccounts({}, { NC_ACCESS_TOKEN: "token", NC_WS_URL: "ws://localhost:1111" }),

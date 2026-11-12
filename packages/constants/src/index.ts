@@ -10,6 +10,7 @@ export const NANA_CONFIG_FILE = "nana.config.yaml";
 
 /** 项目的运行时数据库目录，位于项目根目录下。 */
 export const DATABASE_DIRECTORY = "db";
+export const LOG_DIRECTORY = "logs";
 
 /** 直播状态的 SQLite 数据库文件名。 */
 export const LIVE_STATUS_FILE = "live-status.sqlite";
@@ -63,6 +64,7 @@ export const ENV_KEYS = {
   QQ_BOT_APP_ID: "QQ_BOT_APP_ID",
   QQ_BOT_APP_SECRET: "QQ_BOT_APP_SECRET",
   NANA_SITE_CONFIG_TOKEN: "NANA_SITE_CONFIG_TOKEN",
+  NANA_AUTH_TOKEN: "NANA_AUTH_TOKEN",
   NANA_BOT_CONTROL_PORT: "NANA_BOT_CONTROL_PORT",
   NANA_BOT_CONTROL_URL: "NANA_BOT_CONTROL_URL",
   SERVER_EMAIL: "SERVER_EMAIL",

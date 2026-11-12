@@ -6,7 +6,6 @@ const props = defineProps<{
   accountId: string;
   group: QQGroupSetting;
   discovered: QQAccountSetting["discovered"];
-  token: string;
 }>();
 const emit = defineEmits<{ saved: [value: { name: string; openid: string }] }>();
 const name = ref(props.group.name);
@@ -59,7 +58,6 @@ async function save() {
   try {
     await $fetch("/api/settings/qq-groups", {
       method: "PUT",
-      headers: { Authorization: `Bearer ${props.token}` },
       body: {
         accountId: props.accountId,
         groupId: props.group.id,
@@ -93,7 +91,6 @@ async function sendTest(kind: QQTestMessageKind) {
     await $fetch("/api/settings/qq-groups/test", {
       method: "POST",
       retry: 0,
-      headers: { Authorization: `Bearer ${props.token}` },
       body: {
         accountId: props.accountId,
         groupId: props.group.id,

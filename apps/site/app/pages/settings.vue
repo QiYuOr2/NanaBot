@@ -3,11 +3,7 @@ import { computed, ref } from "vue";
 import type { QQGroupsResponse } from "#shared/qq-groups";
 
 useHead({ title: "群配置 · NanaBot" });
-const { data: status, error: statusError } = await useFetch<{ configured: boolean }>(
-  "/api/settings/status",
-);
-const token = ref("");
-const unlocked = ref(false);
+const requestFetch = useRequestFetch();
 const loading = ref(false);
 const error = ref("");
 const settings = ref<QQGroupsResponse | null>(null);
@@ -27,30 +23,19 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    settings.value = await $fetch<QQGroupsResponse>("/api/settings/qq-groups", {
-      headers: { Authorization: `Bearer ${token.value}` },
-    });
-    unlocked.value = true;
+    settings.value = await requestFetch<QQGroupsResponse>("/api/settings/qq-groups");
   } catch (cause) {
     error.value = messageOf(cause);
   } finally {
     loading.value = false;
   }
 }
-function lock() {
-  token.value = "";
-  settings.value = null;
-  unlocked.value = false;
-  error.value = "";
-}
+await load();
 </script>
 
 <template>
   <AppHeader :trail="[{ label: 'NanaBot', to: '/' }, { label: '设置' }]">
-    <template v-if="unlocked">
-      <button type="button" class="btn-ghost" @click="lock">锁定</button>
-      <AppRefreshButton :pending="loading" @click="load" />
-    </template>
+    <AppRefreshButton :pending="loading" @click="load" />
   </AppHeader>
   <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
     <h1 class="text-[22px] font-semibold tracking-tight">QQ 群映射</h1>
@@ -58,41 +43,11 @@ function lock() {
       为每个机器人绑定对应的通知群，保存后下次推送自动使用新配置。
     </p>
 
-    <p v-if="statusError" role="alert" class="card mt-5 p-5 text-sm text-status-red">
-      无法读取配置状态，请刷新页面重试。
+    <p v-if="error && !settings" role="alert" class="card mt-5 p-5 text-sm text-status-red">
+      {{ error }}
     </p>
-    <section v-else-if="!status?.configured" class="card mt-5 max-w-xl p-5">
-      <h2 class="text-[14px] font-medium">先设置配置管理口令</h2>
-      <p class="mt-2 text-[13px] leading-relaxed text-ink-secondary">
-        在服务器 apps/site/.env 中设置至少 16 位的 NANA_SITE_CONFIG_TOKEN，然后刷新页面。示例见
-        apps/site/.env.example。
-      </p>
-      <p class="mt-3 text-[12px] text-ink-muted">管理口令与 QQ 机器人密钥独立。</p>
-    </section>
-    <form v-else-if="!unlocked" class="card mt-5 max-w-md space-y-4 p-5" @submit.prevent="load">
-      <div>
-        <label for="config-token" class="text-[13px] font-medium">配置管理口令</label>
-        <input
-          id="config-token"
-          v-model="token"
-          type="password"
-          autocomplete="current-password"
-          class="input mt-2 w-full"
-          required
-          :disabled="loading"
-          placeholder="输入管理口令"
-        />
-      </div>
-      <p class="text-[12px] leading-relaxed text-ink-muted">
-        解锁后可查看和修改群映射。口令仅在当前页面使用。
-      </p>
-      <p v-if="error" role="alert" class="text-[13px] text-status-red">{{ error }}</p>
-      <button type="submit" class="btn-primary" :disabled="loading || !token">
-        {{ loading ? "正在验证…" : "解锁配置" }}
-      </button>
-    </form>
 
-    <template v-else-if="settings">
+    <template v-if="settings">
       <div class="card mt-5 p-4">
         <div class="flex flex-wrap items-center gap-2 text-[13px]">
           <span class="font-medium">{{ settings.accounts.length }} 个官方机器人</span>
@@ -160,7 +115,6 @@ function lock() {
             :group="group"
             :account-id="account.id"
             :discovered="account.discovered"
-            :token="token"
             @saved="Object.assign(group, $event)"
           />
           <p v-if="!account.groups.length" class="card p-4 text-[13px] text-ink-muted">

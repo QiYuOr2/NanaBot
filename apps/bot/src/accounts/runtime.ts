@@ -16,13 +16,14 @@ export function createAccountApp(
       baseUrl: account.wsUrl,
       accessToken: account.accessToken,
       reconnection: {
-        enable: true,
+        enable: account.watchdog ?? false,
         attempts: UNLIMITED_RECONNECT_ATTEMPTS,
         delay: RECONNECT_DELAY_MS,
       },
     },
     account: { id: account.id, name: account.name },
     adminGroupId: account.adminGroupId,
+    connection: { enabled: account.watchdog ?? false },
     ...options,
     handleSignals: false,
   });
@@ -32,6 +33,7 @@ export function createAccountApp(
 export async function startAccountApps<T extends { app: BotApp; logger: Logger }>(
   runtimes: readonly T[],
 ): Promise<T[]> {
+  if (!runtimes.length) return [];
   const results = await Promise.allSettled(runtimes.map((runtime) => runtime.app.start()));
   const active: T[] = [];
   const errors: unknown[] = [];

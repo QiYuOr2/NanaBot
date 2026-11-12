@@ -45,6 +45,7 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
   let state: "idle" | "starting" | "started" | "stopping" | "stopped" = "idle";
   let runTask: Promise<void> | undefined;
   let stopTask: Promise<void> | undefined;
+  let disconnectedAt: number | undefined;
   let resolveReady: () => void;
   const ready = new Promise<void>((resolve) => {
     resolveReady = resolve;
@@ -54,6 +55,12 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
   };
   const onReady = () => {
     if (state === "stopping" || state === "stopped") return;
+    if (disconnectedAt !== undefined) {
+      logger.info(
+        `[官方 QQ] 连接已恢复（中断 ${((Date.now() - disconnectedAt) / 1000).toFixed(1)} 秒）`,
+      );
+      disconnectedAt = undefined;
+    }
     resolveReady();
     notifyState(true);
     for (const handler of connectedHandlers) handler();
@@ -62,8 +69,9 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
   cleanups.add(
     client.on("disconnected", (event) => {
       if (state === "stopping" || state === "stopped") return;
+      disconnectedAt ??= Date.now();
       logger.warn(
-        `[官方 QQ] 连接断开（${event.code}），${event.willReconnect ? "等待自动重连" : "无法重连"}`,
+        `[官方 QQ] 连接断开（${event.code}），${event.willReconnect ? "等待自动重连" : "无法重连"}；原因：${event.reason || "未提供"}`,
       );
       notifyState(false);
     }),

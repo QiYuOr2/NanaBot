@@ -15,7 +15,7 @@ export function groupStreamersByAccount<T extends AccountAssignableStreamer>(
   accounts: readonly { id: string }[],
   options: { skipAccountIds?: ReadonlySet<string> } = {},
 ): Map<string, T[]> {
-  if (!accounts.length) {
+  if (!accounts.length && !options.skipAccountIds?.size) {
     throw new Error("至少需要配置一个 QQ 账号。");
   }
 

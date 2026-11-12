@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
-import { readAppEnvValue, readOptionalNumberEnv, resolveProjectRoot } from "@nana/utils";
+import { readProjectAuthToken, readOptionalNumberEnv, resolveProjectRoot } from "@nana/utils";
 import {
   BOT_CONTROL_TEST_MESSAGE_PATH,
   ENV_KEYS,
@@ -49,6 +49,8 @@ import {
 } from "./accounts";
 import { validateOfficialTargets } from "./qq";
 import { startBotControlServer, type BotControlServer } from "./control";
+import { parseBotNotifications, renderBotNotice } from "./config/notifications.ts";
+import { registerStartupNotice } from "./core/startupNotice.ts";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
 const entryDir = dirname(fileURLToPath(import.meta.url));
@@ -93,10 +95,12 @@ interface AccountRuntime {
 
 async function main(): Promise<void> {
   const config = readConfig();
-  const { provider, accounts, unavailable, statusAccountId } = resolveQQAccounts(config);
+  const { provider, accounts, unavailable, disabled, statusAccountId } = resolveQQAccounts(config);
+  const notices = parseBotNotifications(config);
   const officialAccounts = accounts.filter((account) => account.provider === "official");
   appLogger.info(`[app] QQ 通道：${provider}`);
-  const unavailableAccountIds = new Set(unavailable.map((account) => account.id));
+  const unavailableAccountIds = new Set([...disabled, ...unavailable.map((account) => account.id)]);
+  for (const id of disabled) appLogger.info(`[app] 账号 ${id} 已停用，跳过连接与主播任务`);
   for (const account of unavailable) {
     appLogger.warn(
       `[app] ${QQ_PROVIDER_LABELS[account.provider]} 账号 ${account.name}（${account.id}）暂不可用，已跳过：${account.error.message}`,
@@ -155,19 +159,7 @@ async function main(): Promise<void> {
       logger: accountLogger,
     });
 
-    app.onConnected(() => {
-      const text = showAccountLabel ? `我来了~（${account.name}）` : "我来了~";
-      app
-        .sendAdminText(text, { purpose: "app.online" })
-        .then(() => {
-          if (account.adminGroupId) {
-            accountLogger.info(`上线提示已发送到管理群 ${account.adminGroupId}`);
-          }
-        })
-        .catch((error) => {
-          accountLogger.error(`[app] ${account.name} 发送机器人连接提示失败`, error);
-        });
-    });
+    registerStartupNotice(app, renderBotNotice(notices.online, account), accountLogger);
 
     // 每个主播只建一条 blive 长连接：开播通知与弹幕录制共用同一条连接的事件流。
     // 录制器要等监控 setup 才创建，轮询/停机必须拿这张 Map 的引用，不能提前拷贝。
@@ -256,7 +248,10 @@ async function main(): Promise<void> {
 
   let controlServer: BotControlServer | undefined;
   registerShutdown(
-    runtimes.map((runtime) => runtime.app),
+    runtimes.map(({ app, account }) => ({
+      app,
+      announce: renderBotNotice(notices.offline, account),
+    })),
     () => controlServer?.stop(),
   );
   const activeRuntimes = await startAccountApps(runtimes);
@@ -267,11 +262,9 @@ async function main(): Promise<void> {
   } catch (error) {
     appLogger.warn(`[control] ${ENV_KEYS.NANA_BOT_CONTROL_PORT} 不是有效数字，使用默认端口`, error);
   }
-  const controlToken =
-    readAppEnvValue("site", ENV_KEYS.NANA_SITE_CONFIG_TOKEN) ??
-    readAppEnvValue("bot", ENV_KEYS.NANA_SITE_CONFIG_TOKEN);
+  const controlToken = readProjectAuthToken(projectRoot);
   if (!controlToken || controlToken.length < 16) {
-    appLogger.warn("[control] 未配置至少 16 位的 NANA_SITE_CONFIG_TOKEN，site 测试消息将返回 503");
+    appLogger.warn("[control] 请在根目录 .env 配置至少 16 位的 NANA_AUTH_TOKEN");
   }
   const controlPort =
     configuredControlPort &&
@@ -352,7 +345,7 @@ function withAccountLabel(notifier: Notifier, account: { name: string }): Notifi
 
 /** 多 App 共用 SIGINT / SIGTERM：所有连接都收尾，但每个账号只发一次下线消息。 */
 function registerShutdown(
-  apps: readonly BotApp[],
+  apps: readonly { app: BotApp; announce?: string }[],
   stopExtra?: () => Promise<void> | undefined,
 ): void {
   let stopping = false;
@@ -366,7 +359,9 @@ function registerShutdown(
     } catch (error) {
       appLogger.error("[app] 关闭控制接口时发生错误", error);
     }
-    const results = await Promise.allSettled(apps.map((app) => app.stop({ announce: "我溜了~" })));
+    const results = await Promise.allSettled(
+      apps.map(({ app, announce }) => app.stop({ announce })),
+    );
     for (const result of results) {
       if (result.status === "rejected") {
         appLogger.error("[app] 关闭应用时发生错误", result.reason);

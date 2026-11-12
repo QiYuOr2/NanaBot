@@ -1,7 +1,7 @@
 import { createError } from "h3";
 import { readConfig, parseQQConfig } from "@nana/config";
 import { BOT_CONTROL_DEFAULT_URL, BOT_CONTROL_TEST_MESSAGE_PATH, ENV_KEYS } from "@nana/constants";
-import { readAppEnvValue } from "@nana/utils";
+import { readAppEnvValue, readProjectAuthToken } from "@nana/utils";
 import type { QQTestMessageKind } from "../../shared/qq-groups.ts";
 
 const BOT_CONTROL_TIMEOUT_MS = 15_000;
@@ -22,12 +22,12 @@ export async function sendQQTestMessage(input: {
   if (group.openid !== input.expectedOpenid)
     throw createError({ statusCode: 409, statusMessage: "群映射已变更，请刷新配置后再测试" });
 
-  const token = readAppEnvValue("site", ENV_KEYS.NANA_SITE_CONFIG_TOKEN);
+  const token = readProjectAuthToken();
   if (!token || token.length < 16) {
     throw createError({
       statusCode: 503,
       statusMessage: "配置管理口令不可用",
-      data: { message: "请先设置至少 16 位的 NANA_SITE_CONFIG_TOKEN。" },
+      data: { message: "请先在根目录 .env 设置至少 16 位的 NANA_AUTH_TOKEN。" },
     });
   }
   const controlUrl = (

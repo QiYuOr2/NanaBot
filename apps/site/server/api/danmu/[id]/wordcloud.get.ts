@@ -16,10 +16,8 @@ const CLOUD_SIZE: Pick<WordCloudRenderOptions, "width" | "height"> = {
   height: DEFAULT_CLOUD_HEIGHT,
 };
 
-/** 场次结束后词云图不再变化，可以放心让浏览器缓存。 */
-const CACHE_CONTROL_PUBLIC = "public, max-age=3600";
-/** 进行中的场次内容仍会变化，只做短时缓存，避免反复重算分词与渲染。 */
-const CACHE_CONTROL_ACTIVE = "public, max-age=60";
+/** 词云与其他业务数据共用登录鉴权，避免共享缓存留存退出后的内容。 */
+const CACHE_CONTROL = "no-store";
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, "id"));
@@ -42,7 +40,6 @@ export default defineEventHandler(async (event) => {
     maxWords: DANMU_WORDCLOUD_MAX_WORDS,
     title: payload.title,
   });
-  const cacheControl = payload.ended ? CACHE_CONTROL_PUBLIC : CACHE_CONTROL_ACTIVE;
 
   // 显式 `?format=svg` 直接返回 SVG 文本，便于排查服务端字体问题。
   if (resolveDanmuWordCloudFormat(getQuery(event).format) === "svg") {
@@ -50,7 +47,7 @@ export default defineEventHandler(async (event) => {
       event,
       new Response(svg, {
         status: 200,
-        headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": cacheControl },
+        headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": CACHE_CONTROL },
       }),
     );
   }
@@ -73,7 +70,7 @@ export default defineEventHandler(async (event) => {
     event,
     new Response(png, {
       status: 200,
-      headers: { "Content-Type": "image/png", "Cache-Control": cacheControl },
+      headers: { "Content-Type": "image/png", "Cache-Control": CACHE_CONTROL },
     }),
   );
 });

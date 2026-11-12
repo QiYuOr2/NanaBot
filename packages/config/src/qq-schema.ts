@@ -5,6 +5,7 @@ const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
 const common = z.object({
   id: z.string().regex(/^[A-Za-z0-9_-]+$/),
   name: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
   adminGroup: z.number().int().positive().optional(),
 });
 const napcatSchema = common
@@ -16,6 +17,7 @@ const napcatSchema = common
         wsUrlEnv: envName.optional(),
         accessToken: z.string().min(1).optional(),
         accessTokenEnv: envName.optional(),
+        watchdog: z.boolean().optional(),
       })
       .strict()
       .refine((value) => value.wsUrl || value.wsUrlEnv, "需要配置 wsUrl 或 wsUrlEnv")

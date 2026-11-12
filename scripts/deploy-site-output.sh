@@ -2,7 +2,7 @@
 set -euo pipefail
 
 artifact="${1:-}"
-health_url="${SITE_HEALTH_URL:-http://127.0.0.1:3000/}"
+health_url="${SITE_HEALTH_URL:-http://127.0.0.1:3000/api/health}"
 health_attempts="${SITE_HEALTH_ATTEMPTS:-10}"
 pm2_config="${SITE_PM2_CONFIG:-apps/site/ecosystem.config.cjs}"
 

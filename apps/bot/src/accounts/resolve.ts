@@ -7,6 +7,7 @@ export interface QQAccountSet {
   provider: ParsedQQConfig["provider"];
   accounts: QQRuntimeAccount[];
   unavailable: { id: string; name: string; provider: "napcat" | "official"; error: Error }[];
+  disabled: string[];
   /** 首个配置账号在站点告警页展示状态，不参与主播消息路由。 */
   statusAccountId: string;
 }
@@ -19,7 +20,9 @@ export function resolveQQAccounts(
   const qq = parseQQConfig(config);
   const accounts: QQRuntimeAccount[] = [];
   const unavailable: QQAccountSet["unavailable"] = [];
+  const disabled = qq.accounts.filter((entry) => entry.enabled === false).map((entry) => entry.id);
   for (const entry of qq.accounts) {
+    if (entry.enabled === false) continue;
     try {
       accounts.push(
         entry.provider === "official"
@@ -42,10 +45,16 @@ export function resolveQQAccounts(
       throw new Error(`官方 QQ 账号 ${account.id} 与其他账号使用相同 AppID。`);
     appIds.add(account.appId);
   }
-  if (!accounts.length)
+  if (!accounts.length && unavailable.length)
     throw new AggregateError(
       unavailable.map((account) => account.error),
       "没有可启动的 QQ 账号，请检查各账号的连接凭据。",
     );
-  return { provider: qq.provider, accounts, unavailable, statusAccountId: qq.accounts[0].id };
+  return {
+    provider: qq.provider,
+    accounts,
+    unavailable,
+    disabled,
+    statusAccountId: qq.accounts.find((entry) => entry.enabled !== false)?.id ?? qq.accounts[0].id,
+  };
 }

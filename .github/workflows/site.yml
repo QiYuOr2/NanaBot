@@ -5,12 +5,19 @@ on:
     branches: [v2]
     paths:
       - "apps/site/**"
-      - "packages/**"
+      - "packages/bilibili-api/**"
+      - "packages/config/**"
+      - "packages/constants/**"
+      - "packages/live-summary/**"
+      - "packages/storage/**"
+      - "packages/utils/**"
+      - "packages/wordcloud/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "vite.config.ts"
       - ".github/workflows/site.yml"
+      - "scripts/deploy-site-output.sh"
   workflow_dispatch:
 
 permissions:

@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { BOT_CONTROL_DEFAULT_PORT, BOT_CONTROL_TEST_MESSAGE_PATH, ENV_KEYS } from "@nana/constants";
-import { readAppEnvValue } from "@nana/utils";
+import { BOT_CONTROL_DEFAULT_PORT, BOT_CONTROL_TEST_MESSAGE_PATH } from "@nana/constants";
+import { readProjectAuthToken } from "@nana/utils";
 import type { Logger } from "../core/logger.ts";
 import { BotControlError, sendTestMessage, type TestMessageRuntime } from "./testMessage.ts";
 
@@ -19,10 +19,8 @@ export interface BotControlServer {
   stop(): Promise<void>;
 }
 
-function readControlToken(): string | undefined {
-  const token =
-    readAppEnvValue("site", ENV_KEYS.NANA_SITE_CONFIG_TOKEN) ??
-    readAppEnvValue("bot", ENV_KEYS.NANA_SITE_CONFIG_TOKEN);
+function readControlToken(rootDir: string): string | undefined {
+  const token = readProjectAuthToken(rootDir);
   return token && token.length >= 16 ? token : undefined;
 }
 
@@ -66,11 +64,11 @@ async function handleRequest(
     return;
   }
 
-  const expected = readControlToken();
+  const expected = readControlToken(options.rootDir);
   if (!expected) {
     sendJson(response, 503, {
       ok: false,
-      error: "bot 控制接口未配置管理口令，请设置 apps/site/.env 的 NANA_SITE_CONFIG_TOKEN。",
+      error: "bot 控制接口未配置管理口令，请设置根目录 .env 的 NANA_AUTH_TOKEN。",
     });
     return;
   }

@@ -75,7 +75,7 @@ pnpm pm2:start   # 同时启动 bot 与 site
 ```bash
 pnpm dev:site                                            # 开发（http://localhost:3000）
 pnpm build:site                                          # 生产构建（.output/）
-pm2 start apps/site/ecosystem.config.cjs                 # 生产运行，端口 6364
+pm2 start apps/site/ecosystem.config.cjs                 # 生产运行，端口 3000
 ```
 
 ## 部署
@@ -112,7 +112,7 @@ pnpm app deploy site --stop-before-build  # 构建前先停应用，降低小内
 
 ### 在 CI 构建 site
 
-小内存服务器不建议运行 `pnpm build:site`。推送 `v2` 后，
+小内存服务器不建议运行 `pnpm build:site`。推送 `v2` 且涉及 site 或其依赖包时，
 [`site.yml`](./.github/workflows/site.yml) 会在 Linux x64 上构建并上传
 `site-output-<sha>` artifact，服务器只接收产物并重启 PM2。
 
@@ -153,7 +153,7 @@ tail -n 200 logs/accounts/100000002.log
 ## 配置
 
 全量配置见 [`nana.config.yaml.example`](./nana.config.yaml.example)，包含两种 QQ 通道、多账号、
-群映射、直播通知、词云与离线告警。敏感凭据放 `apps/bot/.env`，site 管理口令放 `apps/site/.env`。
+群映射、直播通知、词云与离线告警。机器人凭据放 `apps/bot/.env`，项目管理口令放根目录 `.env`。
 `nana.config.yaml` 是本地运行时配置，包含真实群号和账号信息，已加入 `.gitignore`，不要提交。
 
 ### 账号与通道
@@ -281,24 +281,55 @@ vp run @nana/bot#qq:discover live
 旧版 API 文档曾公告停止主动推送，当前 Agent 文档已说明群主可授权主动发言，部署应以
 当前机器人实际开放权限为准。
 
+### 账号启停与上线 / 下线提醒
+
+`accounts[].enabled: false` 保留配置但不连接该账号，也不启动其主播监控、弹幕录制或推送。
+不会把该账号的主播改发到其他账号。全部账号停用时仍可运行 bot 控制服务。
+NapCat 的 `accounts[].napcat.watchdog` 默认 `false`，关闭主动探活、强制重连和库自动重连；
+长期运行的 NapCat 服务可设为 `true`，恢复持续重连。修改后重启 bot。
+
+```yaml
+botNotifications:
+  online:
+    enabled: true
+    messageTemplate: "我来了~"
+  offline:
+    enabled: true
+    messageTemplate: "我溜了~"
+```
+
+两种提醒可独立关闭，发往各账号的管理群。模板支持 `{accountId}`、`{accountName}`、`{provider}`，
+默认不自动附带账号名。下线提醒在正常 SIGINT / SIGTERM 收尾时发送，强制终止无法发送。
+
+### 日志与服务器状态
+
+site 侧栏的「项目日志」读取根目录 `logs/` 中的 `.log` / `.txt` / `.out` / `.err` 及数字轮转文件，
+包括 `accounts/` 子目录。支持选择文件、末尾行数和手动刷新，单次最多 256 KiB / 2000 行，
+拒绝目录穿越与符号链接。最多列出 500 个文件，递归深度 5 层。
+
+「服务器状态」在进入页面或刷新时获取一次 CPU、内存、交换空间、磁盘和 NVIDIA GPU 状态，
+不自动轮询。GPU 需要驱动及 `nvidia-smi`，无法读取时显示原因；Linux 展示可见的物理挂载磁盘，
+其他系统展示根目录及项目所在磁盘。在容器或分离部署中，指标来自 site 所在运行环境。
+`/api/health` 公开返回最小健康状态，供部署检查；其余业务 API 均受全站鉴权保护。
+
 ### 在 site 配置 QQ 群映射
 
 首次更新后执行 `pnpm app deploy all`，同时更新 bot 与 site；后续编辑群映射无需重新部署。
 两者需要使用同一项目根目录的配置与 `db/`，与当前 PM2 部署方式一致。
 
-1. 参考 `apps/site/.env.example` 创建 `apps/site/.env`，设置独立的管理口令：
+1. 参考根目录 `.env.example` 创建 `.env`，设置全项目共用的管理口令：
 
    ```dotenv
-   NANA_SITE_CONFIG_TOKEN=填写至少16位的随机管理口令
-   NANA_BOT_CONTROL_URL=http://127.0.0.1:6365
+   NANA_AUTH_TOKEN=填写至少16位的随机管理口令
    ```
 
-   可用 `openssl rand -hex 24` 生成。站点按请求读取该文件，保存后刷新设置页即可，无需
-   重启 site。`NANA_BOT_CONTROL_URL` 指向 bot 的控制接口，默认值即本机 `6365`；bot 读取
-   同一文件中的口令鉴权。也可通过进程环境变量提供；修改进程环境变量时按 PM2 的方式更新环境。
+   可用 `openssl rand -hex 24` 生成。bot 与 site 共用此口令，按请求读取；修改后旧登录会话失效。
+   原 `apps/site/.env#NANA_SITE_CONFIG_TOKEN` 仍兼容。进程中的 `NANA_AUTH_TOKEN` 优先于根目录文件。
+   `apps/site/.env` 中可配置 `NANA_BOT_CONTROL_URL`，默认 `http://127.0.0.1:6365`。
 
-2. 打开 site「设置」，输入口令解锁。群映射的读取与修改接口均需认证；口令仅保留在当前
-   页面内存，刷新或锁定后需重新输入。页面不会读取或返回机器人 AppSecret。
+2. 打开 site 后统一登录，所有业务页面和 API 都需要认证。浏览器通过 HttpOnly Cookie 记住登录
+   30 天，刷新或下次进入无需重复填写；侧栏可退出登录。设置页直接使用当前会话，不再单独解锁。
+   页面不会读取或返回机器人 AppSecret。
 3. 页面按 `accounts` 列出每个官方机器人自己的管理群、主播通知群及词云群，NapCat 账号单独显示，
    无需绑定 openid。未填写 openid
    的群也会显示。先按原方式配置账号、AppID / AppSecret 和主播目标群即可，`groups` 可先留空。
@@ -312,7 +343,7 @@ vp run @nana/bot#qq:discover live
 
 site 不读取机器人凭据，也不直接调用官方 API。bot 在 `127.0.0.1:6365` 提供内部控制接口
 （`apps/bot/.env#NANA_BOT_CONTROL_PORT` 可改），site 通过 `NANA_BOT_CONTROL_URL` 调用，
-两边共用 `NANA_SITE_CONFIG_TOKEN`。bot 未运行时测试返回 `503`；发送仍走 bot 当前账号的
+两边共用根目录 `.env#NANA_AUTH_TOKEN`。bot 未运行时测试返回 `503`；发送仍走 bot 当前账号的
 官方 / NapCat 实现，不会建立第二条 Gateway 连接。
 
 bot 只持久化发现的群标识及最近发现时间，不存储 QQ 群聊正文。候选存于 `db/qq-group.sqlite`，

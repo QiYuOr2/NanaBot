@@ -110,6 +110,7 @@ test("应用工厂按 provider 分派，并传递各自独立的连接参数", (
 });
 
 test("一个连接启动或清理失败，不会阻止另一个连接继续运行", async () => {
+  expect(await startAccountApps([])).toEqual([]);
   const good = { app: fakeApp("nc"), logger };
   const bad = { app: fakeApp("api"), logger };
   bad.app.start = vi.fn(() => Promise.reject(new Error("invalid official credentials")));

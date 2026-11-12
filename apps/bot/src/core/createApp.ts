@@ -190,6 +190,9 @@ export function createApp(options: CreateAppOptions): App {
       // 先启动看门狗：首次连接若卡住（库的 connect() 会永不 settle），由它负责持续重连。
       connection.start();
       if (!(await settleWithin(napcat.connect(), CONNECT_TIMEOUT_MS))) {
+        if (options.connection?.enabled === false) {
+          throw new Error("首次连接 NapCat 失败；看门狗已关闭，不再重试。");
+        }
         logger.warn(
           `首次连接 NapCat 超过 ${CONNECT_TIMEOUT_MS}ms 未成功，改由连接看门狗持续重试。`,
         );

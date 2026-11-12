@@ -1,12 +1,16 @@
 # NanaBot 全量配置示例。复制为 nana.config.yaml，并按实际情况填写。
-# 敏感凭据放在 apps/bot/.env；site 管理口令放在 apps/site/.env。
+# 机器人凭据放在 apps/bot/.env；全项目管理口令放在根目录 .env。
 # 同一进程可同时连接多个官方机器人和多个 NapCat 实例。
 accounts:
   - id: main
     name: 主号（NapCat）
     provider: napcat
+    # false 时保留账号配置，但不连接、不启动该账号的监控、录制或推送。
+    enabled: true
     adminGroup: 100000001
     napcat:
+      # 默认 false：关闭连接看门狗和自动重连。需要长期运行 NapCat 时设为 true。
+      watchdog: false
       # wsUrlEnv 指定的变量必须存在；也可以直接填 wsUrl。
       wsUrlEnv: NC_WS_URL
       accessTokenEnv: NC_ACCESS_TOKEN
@@ -40,6 +44,7 @@ accounts:
     provider: napcat
     adminGroup: 100000005
     napcat:
+      watchdog: false
       wsUrlEnv: NC_WS_URL_2
       accessTokenEnv: NC_ACCESS_TOKEN_2
 
@@ -52,6 +57,16 @@ accounts:
       appSecretEnv: QQ_BOT_APP_SECRET_2
       sandbox: true
     groups: {}
+
+# 上线 / 下线提醒均发往各账号 adminGroup。修改后重启 bot 生效。
+# 模板支持 {accountId}、{accountName}、{provider}；默认不自动附带账号名。
+botNotifications:
+  online:
+    enabled: true
+    messageTemplate: "我来了~"
+  offline:
+    enabled: true
+    messageTemplate: "我溜了~"
 
 # 主播需要显式指定 qqAccount；未填写时不参与账号推送。
 up:
@@ -118,4 +133,4 @@ wordcloud:
 
 # DeepSeek 摘要凭据 DEEPSEEK_API_KEY、Bark 凭据 BARK_KEY、NapCat 调试 NC_DEBUG
 # 均放在 apps/bot/.env；详细变量见 apps/bot/.env.example。
-# site 群映射管理口令 NANA_SITE_CONFIG_TOKEN 放在 apps/site/.env。
+# 全项目管理口令 NANA_AUTH_TOKEN 放在根目录 .env。

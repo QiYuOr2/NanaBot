@@ -96,6 +96,21 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 /** 断言日志必需关闭节流（`logThrottleMs: 0`），否则同窗口内的日志会被吃掉。 */
 const NO_THROTTLE: ConnectionSupervisorOptions = { logThrottleMs: 0 };
 
+test("关闭看门狗后继续跟踪连接，但不探活、不重连", async () => {
+  const { supervisor, emit, clock, state } = createHarness({ supervisor: { enabled: false } });
+  supervisor.start();
+  emit("socket.open", SOCKET_CONTEXT);
+  expect(supervisor.isConnected).toBe(true);
+  clock.advance(120_000);
+  await supervisor.check();
+  emit("socket.close", SOCKET_CONTEXT);
+  clock.advance(120_000);
+  await supervisor.check();
+  expect(supervisor.isConnected).toBe(false);
+  expect(state).toEqual({ reconnectCalls: 0, probeCalls: 0 });
+  supervisor.stop();
+});
+
 test("socket.open / socket.close 会同步连接状态", () => {
   const { supervisor, emit } = createHarness();
   supervisor.start();

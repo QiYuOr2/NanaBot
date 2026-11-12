@@ -1,6 +1,8 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { dateFormat } from "@nana/utils";
+import { LOG_DIRECTORY } from "@nana/constants";
+export { LOG_DIRECTORY } from "@nana/constants";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -30,7 +32,6 @@ export interface LoggerManager {
   account(id: string, name?: string): Logger;
 }
 
-export const LOG_DIRECTORY = "logs";
 export const ACCOUNT_LOG_DIRECTORY = "accounts";
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MAX_FILES = 5;

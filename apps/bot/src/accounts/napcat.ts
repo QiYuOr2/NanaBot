@@ -7,6 +7,7 @@ export interface NapcatAccount {
   wsUrl: string;
   accessToken: string;
   adminGroupId?: number;
+  watchdog?: boolean;
 }
 
 export function resolveNapcatAccount(
@@ -32,5 +33,6 @@ export function resolveNapcatAccount(
     wsUrl,
     accessToken,
     adminGroupId: entry.adminGroup,
+    ...(entry.watchdog === undefined ? {} : { watchdog: entry.watchdog }),
   };
 }

@@ -78,6 +78,29 @@ async function withControl(
   }
 }
 
+test("bot 控制接口与 site 共用根目录项目口令，优先于旧应用口令", async () => {
+  const { rootDir, account, app, sent, logger } = harness();
+  const projectToken = `${TOKEN}-project`;
+  writeFileSync(join(rootDir, ".env"), `NANA_AUTH_TOKEN=${projectToken}\n`);
+  vi.stubEnv("NANA_AUTH_TOKEN", "");
+  await withControl(new Map([["official", { account, app }]]), rootDir, logger, async (url) => {
+    const request = (token: string) =>
+      fetch(`${url}${BOT_CONTROL_TEST_MESSAGE_PATH}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: "official",
+          groupId: "123",
+          expectedOpenid: "GROUP_OPENID",
+          kind: "text",
+        }),
+      });
+    expect((await request(TOKEN)).status).toBe(401);
+    expect((await request(projectToken)).status).toBe(200);
+    expect(sent).toHaveLength(1);
+  });
+});
+
 test("测试消息走运行中的 bot 账号，普通消息与 @全体都写入 message.test", async () => {
   const { rootDir, account, app, sent, logger } = harness();
   const runtimes = new Map([["official", { account, app }]]);

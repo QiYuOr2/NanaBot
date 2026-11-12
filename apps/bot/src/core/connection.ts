@@ -24,6 +24,8 @@ export interface ConnectionLogger {
 }
 
 export interface ConnectionSupervisorOptions {
+  /** false 时只跟踪连接事件，不探活或强制重连。 */
+  enabled?: boolean;
   /** 巡检间隔（毫秒），默认 10000。 */
   intervalMs?: number;
   /**
@@ -99,6 +101,7 @@ const DEFAULT_LOGGER: ConnectionLogger = {
  * 收不到任何 NapCat 事件」。两种情况都由本类巡检并强制 `reconnect()`。
  */
 export class ConnectionSupervisor {
+  private readonly enabled: boolean;
   private readonly ws: NCWebsocket;
   private readonly intervalMs: number;
   private readonly disconnectedIdleMs: number;
@@ -127,6 +130,7 @@ export class ConnectionSupervisor {
   private lastAction: string | undefined;
 
   constructor(ws: NCWebsocket, options: ConnectionSupervisorOptions = {}) {
+    this.enabled = options.enabled ?? true;
     this.ws = ws;
     this.intervalMs = options.intervalMs ?? 10_000;
     this.disconnectedIdleMs = options.disconnectedIdleMs ?? 20_000;
@@ -146,7 +150,7 @@ export class ConnectionSupervisor {
 
   /** 订阅连接事件并启动周期巡检。 */
   start(): void {
-    if (this.timer !== undefined) {
+    if (this.unsubscribes.length) {
       return;
     }
 
@@ -194,7 +198,7 @@ export class ConnectionSupervisor {
       }),
       this.ws.subscribe("socket.error", (event) => {
         markSocketActivity();
-        if (event.error_type === "response_error" && !event.reconnection.enable) {
+        if (this.enabled && event.error_type === "response_error" && !event.reconnection.enable) {
           this.logDegraded(
             () => "[连接看门狗] NapCat 返回失败响应，库已永久关闭自动重连，改由看门狗接管",
           );
@@ -210,6 +214,7 @@ export class ConnectionSupervisor {
       this.ws.subscribe("request", markInbound),
     ];
 
+    if (!this.enabled) return;
     this.timer = setInterval(() => {
       void this.check();
     }, this.intervalMs);
@@ -233,6 +238,7 @@ export class ConnectionSupervisor {
 
   /** 执行一次巡检。`start()` 会按 `intervalMs` 周期调用，测试可直接调用。 */
   async check(): Promise<void> {
+    if (!this.enabled) return;
     const at = this.now();
 
     if (!this.connected) {

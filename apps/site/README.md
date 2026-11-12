@@ -64,11 +64,11 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
 
 弹幕词云页的数据接口：
 
-| 接口                           | 说明                                                                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `GET /api/danmu/sessions`      | `{ sessions, limit }`，按开播时间倒序；`?limit=` 覆盖条数（默认 20，上限 100）                               |
-| `GET /api/danmu/:id`           | 场次统计 + Top 词（前 30）+ 最近 200 条弹幕（倒序）；不存在返回 404                                          |
-| `GET /api/danmu/:id/wordcloud` | 直接返回 `image/png`（`Cache-Control: public, max-age=3600`）；`?format=svg` 返回 SVG 文本，渲染失败返回 500 |
+| 接口                           | 说明                                                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `GET /api/danmu/sessions`      | `{ sessions, limit }`，按开播时间倒序；`?limit=` 覆盖条数（默认 20，上限 100）                     |
+| `GET /api/danmu/:id`           | 场次统计 + Top 词（前 30）+ 最近 200 条弹幕（倒序）；不存在返回 404                                |
+| `GET /api/danmu/:id/wordcloud` | 登录后返回 `image/png`（`Cache-Control: no-store`）；`?format=svg` 返回 SVG 文本，渲染失败返回 500 |
 
 页面外壳（侧边栏 + 主列）在 `app/layouts/default.vue`，顶栏由 `components/AppHeader.vue` 提供：
 它只负责吸顶外壳与面包屑（`trail` 属性），各页面通过 `#status` 插槽补侧边状态、通过默认插槽
@@ -83,6 +83,21 @@ NanaBot 的直播状态展示 Web 应用，基于 Nuxt 4 + Vite+ (`vp`) 开发�
 内部控制接口（默认 `http://127.0.0.1:6365`，见 `NANA_BOT_CONTROL_URL`），不会在 site
 内创建 QQ 客户端。实际发送、账号路由和 `message.test` 推送记录都由运行中的 bot 完成；
 bot 不可达时接口返回 `503`。
+
+## 全站登录与运维页面
+
+根目录 `.env#NANA_AUTH_TOKEN` 是 bot 与 site 共用管理口令，至少 16 位；兼容原
+`apps/site/.env#NANA_SITE_CONFIG_TOKEN`。登录后使用 30 天 HttpOnly 签名 Cookie，所有业务页面
+与 API 统一鉴权，设置页无需再次解锁。更换口令后旧会话失效，侧栏支持退出登录。
+
+- `/logs`：选择项目 `logs/` 中的应用、账号或轮转日志，读取末尾 100 / 500 / 1000 / 2000 行，
+  最多 256 KiB。只在进入页面、切换文件 / 行数或点击刷新时读取。
+- `/system`：进入或刷新时采集 CPU、内存、交换空间、磁盘用量，以及 NVIDIA GPU 使用率、
+  显存与温度。需要 `nvidia-smi` 才能读取 GPU，无 GPU 工具时其余指标仍可用。
+- `/api/health`：无需登录的最小健康检查，供部署脚本使用。
+
+系统指标及日志均来自 site 运行环境。部署到其他服务器或容器后，应确保 site 能访问项目根目录。
+CI 只在 `apps/site`、site 直接 / 间接依赖包、共享构建配置或部署脚本变化时运行；可手动触发。
 
 ## 目录结构（Nuxt 4，`srcDir` 为 `app/`）
 
@@ -153,7 +168,7 @@ pm2 restart @nana/site
 pm2 logs @nana/site
 ```
 
-站点以 `.output/server/index.mjs` 运行，服务端口为 `6364`，通过环境变量 `PORT` 配置
+站点以 `.output/server/index.mjs` 运行，服务端口为 `3000`，通过环境变量 `PORT` 配置
 （见 [ecosystem.config.cjs](./ecosystem.config.cjs)）。也可在仓库根用
 `pnpm pm2:start` 同时启动 bot 与 site；只更新本站点时用 `pnpm app deploy site`（构建 +
 只重启 `@nana/site`），或 `pnpm app restart site` 跳过构建直接重启。

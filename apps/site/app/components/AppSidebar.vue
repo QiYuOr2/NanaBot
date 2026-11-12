@@ -16,10 +16,23 @@ const nav: NavItem[] = [
   { id: "danmu", label: "弹幕词云", icon: "cloud", to: "/danmu" },
   { id: "alerts", label: "告警", icon: "bell", to: "/alerts" },
   { id: "pushes", label: "推送活动", icon: "send", to: "/pushes" },
+  { id: "logs", label: "项目日志", icon: "message-square", to: "/logs" },
+  { id: "system", label: "服务器状态", icon: "activity", to: "/system" },
   { id: "settings", label: "设置", icon: "settings", to: "/settings" },
 ];
 
 const route = useRoute();
+const signingOut = ref(false);
+async function logout() {
+  signingOut.value = true;
+  try {
+    await $fetch("/api/auth/logout", { method: "POST" });
+    clearNuxtData();
+    await navigateTo("/login");
+  } finally {
+    signingOut.value = false;
+  }
+}
 
 const NAV_CLASS =
   "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-all duration-200";
@@ -135,9 +148,9 @@ function navClass(item: NavItem): string {
           N
         </span>
         <span class="truncate">NanaBot</span>
-        <span class="ml-auto">
-          <AppIcon name="more" :size="20" class="text-ink-muted" />
-        </span>
+        <button type="button" class="btn-ghost ml-auto" :disabled="signingOut" @click="logout">
+          退出登录
+        </button>
       </div>
     </div>
   </aside>

@@ -57,7 +57,7 @@ function harness(readyOnStart = true) {
     storage: { rootDir },
     connectTimeoutMs: 5,
   });
-  return { app, client, emit, rootDir, fail: (error: Error) => rejectRun(error) };
+  return { app, client, emit, logger, rootDir, fail: (error: Error) => rejectRun(error) };
 }
 
 test("运行中收到群消息会保存群标识供 site 绑定，不记录群聊正文", async () => {
@@ -152,6 +152,32 @@ test("官方断连告警忽略短暂抖动，持续离线告警并在 RESUMED �
     expect(sent[0]).toContain("离线");
     expect(sent[1]).toContain("恢复");
   } finally {
+    await app.stop();
+  }
+});
+
+test("断线保留 SDK 原因并记录恢复耗时，恢复后继续广播连接状态", async () => {
+  const { app, emit, logger } = harness();
+  const connected = vi.fn();
+  app.onConnected(connected);
+  try {
+    await app.start();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(100_000);
+    emit("disconnected", {
+      code: 1000,
+      reason: "Gateway requested reconnect",
+      willReconnect: true,
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "[官方 QQ] 连接断开（1000），等待自动重连；原因：Gateway requested reconnect",
+    );
+    clock.mockReturnValue(102_000);
+    emit("connected");
+    expect(logger.info).toHaveBeenCalledWith("[官方 QQ] 连接已恢复（中断 2.0 秒）");
+    expect(connected).toHaveBeenCalledTimes(2);
+    clock.mockRestore();
+  } finally {
+    vi.restoreAllMocks();
     await app.stop();
   }
 });

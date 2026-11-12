@@ -33,8 +33,10 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@golar/vue": "catalog:",
     "@types/node": "catalog:",
     "@unocss/nuxt": "^66.0.0",
+    "golar": "catalog:",
     "typescript": "catalog:",
     "unocss": "^66.0.0",
     "vite": "catalog:",

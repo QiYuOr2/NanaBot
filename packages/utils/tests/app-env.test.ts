@@ -2,12 +2,26 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { readAppEnvValue } from "../src/index.ts";
+import { readAppEnvValue, readProjectAuthToken } from "../src/index.ts";
 
 const roots: string[] = [];
 afterEach(() => {
   vi.unstubAllEnvs();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+test("项目口令统一按进程、根目录、旧应用配置顺序读取", () => {
+  const root = mkdtempSync(join(tmpdir(), "nana-auth-env-"));
+  roots.push(root);
+  mkdirSync(join(root, "apps", "site"), { recursive: true });
+  vi.stubEnv("NANA_AUTH_TOKEN", "");
+  vi.stubEnv("NANA_SITE_CONFIG_TOKEN", "");
+  writeFileSync(join(root, "apps/site/.env"), "NANA_SITE_CONFIG_TOKEN=legacy-token-123456\n");
+  expect(readProjectAuthToken(root)).toBe("legacy-token-123456");
+  writeFileSync(join(root, ".env"), "NANA_AUTH_TOKEN=project-token-123456\n");
+  expect(readProjectAuthToken(root)).toBe("project-token-123456");
+  vi.stubEnv("NANA_AUTH_TOKEN", "environment-token-123456");
+  expect(readProjectAuthToken(root)).toBe("environment-token-123456");
 });
 
 test("应用环境变量按应用隔离，支持引号与注释，不写入进程环境", () => {

@@ -52,10 +52,10 @@ function barWidth(count: number): string {
           中文分词后按出现次数排序，已过滤停用词、噪音词与主播名
         </p>
       </div>
-      <span class="shrink-0 text-[13px] text-ink-muted">{{ stats.topWords.length }} 个词</span>
+      <span class="shrink-0 text-[13px] text-ink-muted">{{ topWords.length }} 个词</span>
     </div>
 
-    <p v-if="stats.topWords.length === 0" class="mt-4 text-[13px] text-ink-muted">
+    <p v-if="topWords.length === 0" class="mt-4 text-[13px] text-ink-muted">
       {{ emptyText }}
     </p>
 
