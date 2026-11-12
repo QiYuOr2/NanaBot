@@ -73,7 +73,9 @@ botNotifications:
 # 官方 QQ 群聊如需「不 @ 机器人也触发」，还需在开放平台打开「接收所有消息」，
 # 让平台下发 GROUP_MESSAGE_CREATE；代码无需额外配置，Intents 已包含 1<<25。
 # 回复均为普通文本：不 @ 用户，不引用原消息。官方群聊使用不带 message_reference
-# 的被动回复以避免主动消息频控；NapCat 与私聊使用普通消息发送。
+# 的被动回复以避免主动消息频控；官方私聊按平台规则使用被动回复；
+# NapCat 群聊与私聊使用普通消息发送。site 保存的 accounts[].groups 群映射
+# 仍由推送链路每次发送时读取，不受 message 规则配置影响，无需重启 bot。
 message:
   enabled: true
   commands:
