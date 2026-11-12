@@ -49,7 +49,7 @@
   <rect x="1080" y="402" width="410" height="194" rx="4" fill="#eff8f4" stroke="#b9dfca" stroke-width="1.5"/><path d="M1080 406 Q1080 402 1084 402 H1486 Q1490 402 1490 406 V446 H1080 Z" fill="#dcefe4"/>
   <text x="1106" y="431" class="card-title" fill="#276849">apps/site</text><text x="1228" y="430" class="card-sub">Nuxt 4 · Web Dashboard</text>
   <g><rect x="1106" y="464" width="168" height="104" rx="2" fill="#fff" stroke="#d4e8dc"/><text x="1124" y="491" class="item-title">数据面板</text><text x="1124" y="516" class="item-desc">直播 / 监控状态</text><text x="1124" y="537" class="item-desc">弹幕 / 推送 / 告警</text><rect x="1290" y="464" width="174" height="104" rx="2" fill="#fff" stroke="#d4e8dc"/><text x="1308" y="491" class="item-title">管理设置</text><text x="1308" y="516" class="item-desc">QQ 群映射</text><text x="1308" y="537" class="item-desc">配置管理 / 测试消息</text></g>
-  <path d="M1080 548 H1048" class="line" marker-end="url(#arrow)"/><text x="1106" y="586" class="small" font-size="11.5">调用 Bot Control API · HTTP + Token</text>
+  <path d="M1080 548 H1032" class="line" marker-end="url(#arrow)"/><text x="1106" y="586" class="small" font-size="11.5">调用 Bot Control API · HTTP + Token</text>
   <path d="M650 625 V682" class="line" marker-end="url(#arrow)"/><path d="M1285 625 V682" class="dash" marker-end="url(#arrow-dash)"/>
   <rect x="80" y="682" width="1440" height="210" rx="4" fill="#fff" stroke="#e2e8f0"/>
   <text x="108" y="718" class="layer-title">共享能力包</text><text x="108" y="742" class="small">packages/* · workspace</text>
