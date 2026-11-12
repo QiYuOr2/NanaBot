@@ -95,10 +95,12 @@ pnpm app restart site      # pm2 restart apps/site/ecosystem.config.cjs
 pnpm app stop bot          # pm2 stop @nana/bot
 pnpm app logs bot          # pm2 logs @nana/bot
 pnpm app deploy bot --no-build   # 跳过构建，只做 PM2 重启
+pnpm app deploy site --stop-before-build  # 构建前先停应用，降低小内存机器 OOM 风险
 ```
 
 `all` 指 `apps/` 下所有带 `ecosystem.config.cjs` 的可部署应用；没有该文件的目录
 （例如不进 PM2 的工具）不会被 `all` 带上，需要时用应用名显式指定。
+`--stop-before-build` 只影响 `deploy`；构建失败时会尝试重新启动原先停止的应用。
 
 两个应用的 PM2 配置各自独立（`apps/bot/ecosystem.config.cjs` /
 `apps/site/ecosystem.config.cjs`），根目录 `ecosystem.config.cjs` 只是把两者合并，

@@ -157,6 +157,8 @@ pm2 logs @nana/site
 （见 [ecosystem.config.cjs](./ecosystem.config.cjs)）。也可在仓库根用
 `pnpm pm2:start` 同时启动 bot 与 site；只更新本站点时用 `pnpm app deploy site`（构建 +
 只重启 `@nana/site`），或 `pnpm app restart site` 跳过构建直接重启。
+内存较小的服务器可加 `--stop-before-build`：`pnpm app deploy site --stop-before-build`，
+构建期间先释放旧站点占用的内存，构建失败会自动尝试恢复。
 
 ## 依赖的 workspace 包
 

@@ -21,6 +21,7 @@
 | [0010](./0010-site-qq-test-messages.md)      | site QQ 普通消息与 @全体测试          | `apps/site`、共享环境变量读取、测试推送记录                   | 已完成 |
 | [0011](./0011-site-mobile-navigation.md)     | site 移动端导航抽屉                   | `apps/site`：布局、顶栏、侧边栏、导航状态                     | 已完成 |
 | [0012](./0012-site-tests-via-bot-control.md) | site 测试消息改走 bot 控制接口        | `apps/bot`、`apps/site`：运行中账号发送与内部控制接口         | 已完成 |
+| [0013](./0013-low-memory-deploy.md)          | 低内存部署选项                        | `scripts/app.mjs`：构建前停止应用、失败恢复                   | 已完成 |
 
 新增改动时：复制 [TEMPLATE.md](./TEMPLATE.md) 为 `NNNN-<主题>.md`（编号递增），写完在上表补一行。
 

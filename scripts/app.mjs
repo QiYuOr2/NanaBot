@@ -31,9 +31,10 @@ const USAGE = `用法：pnpm app <命令> [应用名...] [选项]
   logs <应用...|all>          pm2 logs（跟随输出，通过 -- 透传参数）
 
 选项：
-  --no-build   deploy 时跳过构建，只做 PM2 重启
-  --dry-run    只打印将要执行的命令，不真正执行
-  -h, --help   打印本帮助
+  --no-build           deploy 时跳过构建，只做 PM2 重启
+  --stop-before-build  deploy 构建前先停止选中的应用，降低 OOM 风险；失败时尝试恢复
+  --dry-run            只打印将要执行的命令，不真正执行
+  -h, --help           打印本帮助
 
 应用名可写目录名（bot）、包名（@nana/bot）或 apps/ 路径（apps/bot）。
 all 表示 apps/ 下所有带 ecosystem.config.cjs 的可部署应用；没有该文件的目录
@@ -70,9 +71,9 @@ function toRelative(target) {
   return relative === "" || relative.startsWith("..") ? target : relative;
 }
 
-function run(command, args) {
+function run(command, args, options = {}) {
   log(`$ ${[command, ...args].join(" ")}`);
-  if (dryRun) return;
+  if (dryRun) return 0;
 
   const result = isWindows
     ? spawnSync([command, ...args].map(shellQuote).join(" "), {
@@ -83,7 +84,9 @@ function run(command, args) {
     : spawnSync(command, args, { cwd: rootDir, stdio: "inherit" });
 
   if (result.error) fail(`${command} 执行失败：${result.error.message}`);
-  if (result.status !== 0) process.exit(result.status ?? 1);
+  const status = result.status ?? 1;
+  if (status !== 0 && !options.allowFailure) process.exit(status);
+  return status;
 }
 
 function readPm2Names(ecosystemFile) {
@@ -140,9 +143,9 @@ function selectApps(apps, inputs) {
   return selected;
 }
 
-function buildApp(app) {
+function buildApp(app, options = {}) {
   log(`构建 ${app.packageName}`);
-  run("vp", ["run", `${app.packageName}#build`]);
+  return run("vp", ["run", `${app.packageName}#build`], options);
 }
 
 function requireEcosystemFile(app) {
@@ -182,6 +185,7 @@ function main() {
 
   dryRun = ownArgs.includes("--dry-run");
   const skipBuild = ownArgs.includes("--no-build");
+  const stopBeforeBuild = ownArgs.includes("--stop-before-build");
   const inputs = ownArgs.filter((argument) => !argument.startsWith("-"));
 
   const command = rawCommand ?? "help";
@@ -213,7 +217,26 @@ function main() {
     }
     case "deploy": {
       const files = ecosystemTargets(selected);
-      if (!skipBuild) for (const app of selected) buildApp(app);
+      const shouldStop = stopBeforeBuild && !skipBuild;
+
+      if (shouldStop) {
+        const stopStatus = run("pm2", ["stop", ...pm2Targets()], { allowFailure: true });
+        if (stopStatus !== 0) log("没有可停止的应用进程，继续构建");
+      }
+
+      if (!skipBuild) {
+        for (const app of selected) {
+          const status = buildApp(app, { allowFailure: shouldStop });
+          if (status === 0) continue;
+
+          if (shouldStop) {
+            log("构建失败，尝试恢复之前停止的应用");
+            for (const file of files) run("pm2", ["start", file], { allowFailure: true });
+          }
+          process.exit(status);
+        }
+      }
+
       for (const file of files) run("pm2", ["startOrRestart", file]);
       return;
     }
