@@ -1,72 +1,155 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1160" viewBox="0 0 1680 1160" role="img" aria-labelledby="title desc">
   <title id="title">NanaBot 工程架构图</title>
-  <desc id="desc">NanaBot 分层工程架构：外部服务、应用层、共享能力包和数据存储。</desc>
+  <desc id="desc">基于当前 v2 代码的 NanaBot 架构，展示外部服务、Bot 与 Site 应用、workspace 包和共享配置及 SQLite 数据。</desc>
   <defs>
     <style>
-      text { font-family: "Inter","Noto Sans CJK SC","Microsoft YaHei",sans-serif; fill: #243247; }
-      .eyebrow { font-size: 14px; font-weight: 700; letter-spacing: 2px; fill: #64748b; }
-      .main-title { font-size: 34px; font-weight: 750; fill: #17243a; }
-      .subtitle { font-size: 16px; fill: #64748b; }
-      .layer-title { font-size: 17px; font-weight: 750; fill: #334155; }
-      .card-title { font-size: 20px; font-weight: 750; }
-      .card-sub { font-size: 14px; fill: #64748b; }
-      .item-title { font-size: 15px; font-weight: 700; }
-      .item-desc { font-size: 13px; fill: #64748b; }
-      .small { font-size: 12px; fill: #64748b; }
-      .line { fill: none; stroke: #718096; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-      .dash { fill: none; stroke: #8b9bb0; stroke-width: 2; stroke-dasharray: 7 7; stroke-linecap: round; }
-      .soft-line { fill: none; stroke: #a8b4c4; stroke-width: 1.6; stroke-linecap: round; }
+      text{font-family:Inter,"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#263449}
+      .eyebrow{font-size:13px;font-weight:700;letter-spacing:2px;fill:#718096}
+      .heading{font-size:32px;font-weight:750;fill:#17243a}
+      .subheading{font-size:15px;fill:#718096}
+      .layer{font-size:17px;font-weight:750;fill:#334155}
+      .label{font-size:17px;font-weight:700}
+      .desc{font-size:13px;fill:#64748b}
+      .tiny{font-size:12px;fill:#718096}
+      .module{font-size:14px;font-weight:700}
+      .module-desc{font-size:12px;fill:#718096}
+      .solid{fill:none;stroke:#718096;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}
+      .dashed{fill:none;stroke:#94a3b8;stroke-width:1.8;stroke-dasharray:6 6}
+      .card{stroke-width:1.2}
+      .round{rx:4;ry:4}
     </style>
-    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#718096"/></marker>
-    <marker id="arrow-dash" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#8b9bb0"/></marker>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#718096"/></marker>
+    <marker id="arrowBoth" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#94a3b8"/></marker>
+    <marker id="arrowStart" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto"><path d="M8 0L0 4L8 8Z" fill="#94a3b8"/></marker>
   </defs>
-  <rect width="1600" height="1080" fill="#f7f9fc"/>
-  <circle cx="1460" cy="100" r="190" fill="#edf2fa"/><circle cx="90" cy="1000" r="180" fill="#eef4f4"/>
-  <text x="80" y="66" class="eyebrow">NANABOT / ENGINEERING OVERVIEW</text>
-  <text x="80" y="116" class="main-title">NanaBot 工程架构</text>
-  <text x="80" y="148" class="subtitle">TypeScript · pnpm workspace · Vite+ · Bot 与 Web 面板独立部署</text>
-  <g transform="translate(1120 78)"><path d="M0 0 H52" class="line" marker-end="url(#arrow)"/><text x="64" y="5" class="small">主要调用 / 数据流</text><path d="M0 30 H52" class="dash" marker-end="url(#arrow-dash)"/><text x="64" y="35" class="small">共享依赖 / 辅助关系</text></g>
-  <rect x="80" y="190" width="1440" height="142" rx="4" fill="#fff" stroke="#e2e8f0"/>
-  <text x="108" y="222" class="layer-title">外部服务</text><text x="108" y="246" class="small">系统边界</text>
-  <g>
-    <rect x="270" y="211" width="230" height="88" rx="2" fill="#f1f6ff" stroke="#c9d9f5"/><circle cx="296" cy="239" r="7" fill="#4f83d1"/><text x="314" y="245" class="item-title">Bilibili</text><text x="292" y="273" class="item-desc">直播状态 / 弹幕数据</text>
-    <rect x="520" y="211" width="230" height="88" rx="2" fill="#f2f0ff" stroke="#d7d0f5"/><circle cx="546" cy="239" r="7" fill="#7867c8"/><text x="564" y="245" class="item-title">QQ 平台</text><text x="542" y="273" class="item-desc">官方机器人 API</text>
-    <rect x="770" y="211" width="230" height="88" rx="2" fill="#f2f0ff" stroke="#d7d0f5"/><circle cx="796" cy="239" r="7" fill="#7867c8"/><text x="814" y="245" class="item-title">NapCat</text><text x="792" y="273" class="item-desc">OneBot WebSocket</text>
-    <rect x="1020" y="211" width="210" height="88" rx="2" fill="#fff7ed" stroke="#f4d6b4"/><circle cx="1046" cy="239" r="7" fill="#d58b43"/><text x="1064" y="245" class="item-title">AI 服务</text><text x="1042" y="273" class="item-desc">DeepSeek · 直播摘要</text>
-    <rect x="1250" y="211" width="240" height="88" rx="2" fill="#eef8f3" stroke="#c8e5d5"/><circle cx="1276" cy="239" r="7" fill="#3c9a70"/><text x="1294" y="245" class="item-title">通知服务</text><text x="1272" y="273" class="item-desc">Bark · SMTP 邮件</text>
+  <rect width="1680" height="1160" fill="#f7f9fc"/>
+  <text x="72" y="54" class="eyebrow">NANABOT / V2 ENGINEERING OVERVIEW</text>
+  <text x="72" y="102" class="heading">NanaBot 工程架构</text>
+  <text x="72" y="130" class="subheading">TypeScript · pnpm workspace · Vite+ · Bot / Site 独立部署，共享配置与 SQLite 数据</text>
+  <g transform="translate(1240 78)">
+    <path d="M0 0H42" class="solid" marker-end="url(#arrow)"/><text x="54" y="4" class="tiny">运行调用 / 数据流</text>
+    <path d="M0 25H42" class="dashed" marker-end="url(#arrow)"/><text x="54" y="29" class="tiny">workspace 依赖</text>
   </g>
-  <path d="M385 332 V375 M635 332 V375 M885 332 V375 M1125 332 V375 M1370 332 V375" class="soft-line" marker-end="url(#arrow)"/>
-  <rect x="80" y="375" width="1440" height="250" rx="4" fill="#fff" stroke="#dce5f0"/>
-  <text x="108" y="410" class="layer-title">应用层</text><text x="108" y="434" class="small">独立运行的应用</text>
-  <rect x="270" y="402" width="760" height="194" rx="4" fill="#eef4ff" stroke="#b8ccef" stroke-width="1.5"/><path d="M270 406 Q270 402 274 402 H1026 Q1030 402 1030 406 V446 H270 Z" fill="#dce9fc"/>
-  <text x="296" y="431" class="card-title" fill="#24528f">apps/bot</text><text x="420" y="430" class="card-sub">QQ Bot · 业务运行核心</text>
+
+  <!-- External services -->
+  <rect x="72" y="164" width="1536" height="142" rx="4" fill="#fff" stroke="#dfe6ef"/>
+  <text x="96" y="194" class="layer">外部服务</text>
   <g>
-    <rect x="296" y="464" width="164" height="104" rx="2" fill="#fff" stroke="#d5e1f1"/><text x="314" y="491" class="item-title">账号与连接</text><text x="314" y="516" class="item-desc">多账号管理</text><text x="314" y="537" class="item-desc">通道适配 / 路由</text>
-    <rect x="474" y="464" width="164" height="104" rx="2" fill="#fff" stroke="#d5e1f1"/><text x="492" y="491" class="item-title">直播监控</text><text x="492" y="516" class="item-desc">状态检测</text><text x="492" y="537" class="item-desc">开播 / 下播推送</text>
-    <rect x="652" y="464" width="164" height="104" rx="2" fill="#fff" stroke="#d5e1f1"/><text x="670" y="491" class="item-title">弹幕与摘要</text><text x="670" y="516" class="item-desc">采集 / 录制 / 词云</text><text x="670" y="537" class="item-desc">AI 直播摘要</text>
-    <rect x="830" y="464" width="174" height="104" rx="2" fill="#fff" stroke="#d5e1f1"/><text x="848" y="491" class="item-title">控制与告警</text><text x="848" y="516" class="item-desc">Bot Control API</text><text x="848" y="537" class="item-desc">离线检测 / 通知</text>
+    <rect x="250" y="182" width="244" height="96" rx="4" fill="#f0f5ff" stroke="#cbdaf3"/>
+    <text x="270" y="212" class="label" fill="#315f9c">Bilibili</text>
+    <text x="270" y="238" class="desc">REST API · 直播信息</text><text x="270" y="258" class="desc">blive 长连接 · 弹幕事件</text>
+
+    <rect x="510" y="182" width="244" height="96" rx="4" fill="#f4f1ff" stroke="#d9d1f2"/>
+    <text x="530" y="212" class="label" fill="#6655a5">QQ 官方平台</text>
+    <text x="530" y="238" class="desc">Gateway / Bot API</text><text x="530" y="258" class="desc">腾讯 Node.js SDK</text>
+
+    <rect x="770" y="182" width="244" height="96" rx="4" fill="#f4f1ff" stroke="#d9d1f2"/>
+    <text x="790" y="212" class="label" fill="#6655a5">NapCat</text>
+    <text x="790" y="238" class="desc">WebSocket / OneBot</text><text x="790" y="258" class="desc">node-napcat-ts</text>
+
+    <rect x="1030" y="182" width="244" height="96" rx="4" fill="#fff7ed" stroke="#f0d7b9"/>
+    <text x="1050" y="212" class="label" fill="#a96527">DeepSeek</text>
+    <text x="1050" y="238" class="desc">直播整场弹幕摘要</text><text x="1050" y="258" class="desc">模型 API</text>
+
+    <rect x="1290" y="182" width="244" height="96" rx="4" fill="#eef8f3" stroke="#cce5d7"/>
+    <text x="1310" y="212" class="label" fill="#347b59">通知服务</text>
+    <text x="1310" y="238" class="desc">SMTP 邮件 · Bark</text><text x="1310" y="258" class="desc">离线告警投递</text>
   </g>
-  <rect x="1080" y="402" width="410" height="194" rx="4" fill="#eff8f4" stroke="#b9dfca" stroke-width="1.5"/><path d="M1080 406 Q1080 402 1084 402 H1486 Q1490 402 1490 406 V446 H1080 Z" fill="#dcefe4"/>
-  <text x="1106" y="431" class="card-title" fill="#276849">apps/site</text><text x="1228" y="430" class="card-sub">Nuxt 4 · Web Dashboard</text>
-  <g><rect x="1106" y="464" width="168" height="104" rx="2" fill="#fff" stroke="#d4e8dc"/><text x="1124" y="491" class="item-title">数据面板</text><text x="1124" y="516" class="item-desc">直播 / 监控状态</text><text x="1124" y="537" class="item-desc">弹幕 / 推送 / 告警</text><rect x="1290" y="464" width="174" height="104" rx="2" fill="#fff" stroke="#d4e8dc"/><text x="1308" y="491" class="item-title">管理设置</text><text x="1308" y="516" class="item-desc">QQ 群映射</text><text x="1308" y="537" class="item-desc">配置管理 / 测试消息</text></g>
-  <path d="M1080 548 H1032" class="line" marker-end="url(#arrow)"/><text x="1106" y="586" class="small" font-size="11.5">调用 Bot Control API · HTTP + Token</text>
-  <path d="M650 625 V682" class="line" marker-end="url(#arrow)"/><path d="M1285 625 V682" class="dash" marker-end="url(#arrow-dash)"/>
-  <rect x="80" y="682" width="1440" height="210" rx="4" fill="#fff" stroke="#e2e8f0"/>
-  <text x="108" y="718" class="layer-title">共享能力包</text><text x="108" y="742" class="small">packages/* · workspace</text>
+
+  <!-- External to Bot -->
+  <path d="M372 306V350" class="solid" marker-end="url(#arrow)"/>
+  <path d="M632 306V350" class="solid" marker-end="url(#arrow)"/>
+  <path d="M892 306V350" class="solid" marker-end="url(#arrow)"/>
+  <path d="M1152 306V350" class="solid" marker-end="url(#arrow)"/>
+  <path d="M1412 306V350" class="solid" marker-end="url(#arrow)"/>
+
+  <!-- Applications -->
+  <rect x="72" y="350" width="1536" height="310" rx="4" fill="#fff" stroke="#dfe6ef"/>
+  <text x="96" y="382" class="layer">应用层</text>
+  <text x="96" y="405" class="tiny">独立部署</text>
+
+  <rect x="250" y="372" width="790" height="260" rx="4" fill="#eef4ff" stroke="#b9cdec" stroke-width="1.4"/>
+  <path d="M254 372H1036V418H254Z" fill="#dce9fc"/>
+  <text x="274" y="402" class="label" fill="#24528f">apps/bot</text>
+  <text x="400" y="401" class="desc">QQ Bot · 多账号运行时与业务编排</text>
+
   <g>
-    <rect x="270" y="706" width="270" height="70" rx="2" fill="#f4f1ff" stroke="#d9d0f4"/><text x="290" y="733" class="item-title" fill="#5c4a9a">@nana/qq</text><text x="290" y="755" class="item-desc">QQ 官方通信封装</text>
-    <rect x="558" y="706" width="270" height="70" rx="2" fill="#eef5ff" stroke="#d1e0f4"/><text x="578" y="729" class="item-title" fill="#315f9a" font-size="13">@nana/bilibili-api</text><text x="578" y="748" class="item-title" fill="#315f9a" font-size="13">@nana/monitor</text><text x="578" y="766" class="item-desc" font-size="11.5">数据接口与监控抽象</text>
-    <rect x="846" y="706" width="270" height="70" rx="2" fill="#fff6eb" stroke="#f0ddc2"/><text x="866" y="733" class="item-title" fill="#9a652c">内容处理能力</text><text x="866" y="755" class="item-desc">wordcloud · live-summary</text>
-    <rect x="1134" y="706" width="356" height="70" rx="2" fill="#edf8f2" stroke="#cfe7d8"/><text x="1154" y="733" class="item-title" fill="#347453">基础设施能力</text><text x="1154" y="751" class="item-desc" font-size="11.5">storage · config · notify</text><text x="1154" y="767" class="item-desc" font-size="11.5">offline-detector · utils</text>
+    <rect x="274" y="434" width="178" height="76" rx="3" fill="#fff" stroke="#d6e1f0"/>
+    <text x="290" y="459" class="module">core</text><text x="290" y="483" class="module-desc">Feature 生命周期 · 连接监督</text>
+    <rect x="466" y="434" width="178" height="76" rx="3" fill="#fff" stroke="#d6e1f0"/>
+    <text x="482" y="459" class="module">accounts / qq</text><text x="482" y="483" class="module-desc">多账号 · 官方 / NapCat 适配</text>
+    <rect x="658" y="434" width="178" height="76" rx="3" fill="#fff" stroke="#d6e1f0"/>
+    <text x="674" y="459" class="module">message</text><text x="674" y="483" class="module-desc">消息归一化 · 命令 / 规则</text>
+    <rect x="850" y="434" width="166" height="76" rx="3" fill="#fff" stroke="#d6e1f0"/>
+    <text x="866" y="459" class="module">control</text><text x="866" y="483" class="module-desc">内部 HTTP 测试消息 API</text>
+
+    <rect x="274" y="524" width="178" height="76" rx="3" fill="#fff" stroke="#d6e1f0"/>
+    <text x="290" y="549" class="module">monitor</text><text x="290" y="573" class="module-desc">直播状态 · 开播 / 下播通知</text>
+    <rect x="466" y="524" width="178" height="76" rx="3" fill="#fff" stroke="#d6e1f0"/>
+    <text x="482" y="549" class="module">danmu</text><text x="482" y="573" class="module-desc">弹幕录制 · 会话 · 词云</text>
+    <rect x="658" y="524" width="178" height="76" rx="3" fill="#fff" stroke="#d6e1f0"/>
+    <text x="674" y="549" class="module">summary</text><text x="674" y="573" class="module-desc">直播摘要生成 / 补推</text>
+    <rect x="850" y="524" width="166" height="76" rx="3" fill="#fff" stroke="#d6e1f0"/>
+    <text x="866" y="549" class="module">offline</text><text x="866" y="573" class="module-desc">离线检测 · 邮件 / Bark</text>
   </g>
-  <rect x="270" y="794" width="1220" height="66" rx="2" fill="#f8fafc" stroke="#e2e8f0"/><text x="292" y="821" class="item-title">共享基础包</text><text x="420" y="821" class="item-desc">constants · utils · config · storage</text><text x="292" y="842" class="small">封装跨应用复用的配置解析、数据访问、常量与通用工具；业务能力包按需组合。</text>
-  <path d="M650 892 V938" class="line" marker-end="url(#arrow)"/>
-  <rect x="80" y="938" width="1440" height="104" rx="4" fill="#fff" stroke="#e2e8f0"/><text x="108" y="976" class="layer-title">数据存储</text><text x="108" y="1000" class="small">运行时数据</text>
+
+  <rect x="1090" y="372" width="444" height="260" rx="4" fill="#eff8f3" stroke="#b9dfca" stroke-width="1.4"/>
+  <path d="M1094 372H1530V418H1094Z" fill="#dcefe4"/>
+  <text x="1114" y="402" class="label" fill="#276849">apps/site</text>
+  <text x="1235" y="401" class="desc">Nuxt 4 · Web Dashboard</text>
+  <rect x="1114" y="434" width="396" height="76" rx="3" fill="#fff" stroke="#d4e8dc"/>
+  <text x="1132" y="459" class="module">Web UI</text><text x="1132" y="483" class="module-desc">概览 · 推送活动 · 告警 · 日志 · 服务器状态</text>
+  <rect x="1114" y="524" width="396" height="76" rx="3" fill="#fff" stroke="#d4e8dc"/>
+  <text x="1132" y="549" class="module">Nitro Server API</text><text x="1132" y="573" class="module-desc">会话鉴权 · 配置 / 群映射 · 数据读取 · Bot 测试转发</text>
+
+  <!-- Site to Bot control call -->
+  <path d="M1090 563H1040" class="solid" marker-end="url(#arrow)"/>
+  <rect x="1028" y="516" width="62" height="34" rx="2" fill="#fff" stroke="#b8c4d3"/>
+  <text x="1059" y="529" text-anchor="middle" class="tiny">HTTP</text><text x="1059" y="542" text-anchor="middle" class="tiny">Bearer</text>
+  <text x="1060" y="617" text-anchor="middle" class="tiny">Site → Bot Control API</text>
+
+  <!-- Package layer -->
+  <path d="M645 660V706" class="dashed" marker-end="url(#arrow)"/>
+  <path d="M1310 660V706" class="dashed" marker-end="url(#arrow)"/>
+  <rect x="72" y="706" width="1536" height="250" rx="4" fill="#fff" stroke="#dfe6ef"/>
+  <text x="96" y="738" class="layer">Workspace packages</text>
+  <text x="96" y="760" class="tiny">按应用 package.json 的直接依赖划分</text>
+
+  <text x="250" y="742" class="module" fill="#475569">Bot 专用能力</text>
   <g>
-    <rect x="270" y="960" width="260" height="58" rx="2" fill="#f8fafc" stroke="#dce3eb"/><text x="290" y="985" class="item-title">nana.config.yaml</text><text x="290" y="1004" class="small">业务配置 / 账号 / 主播</text>
-    <rect x="548" y="960" width="260" height="58" rx="2" fill="#f8fafc" stroke="#dce3eb"/><text x="568" y="985" class="item-title">live-status.sqlite</text><text x="568" y="1004" class="small">直播状态</text>
-    <rect x="826" y="960" width="260" height="58" rx="2" fill="#f8fafc" stroke="#dce3eb"/><text x="846" y="985" class="item-title">push-log.sqlite</text><text x="846" y="1004" class="small">消息推送记录</text>
-    <rect x="1104" y="960" width="386" height="58" rx="2" fill="#f8fafc" stroke="#dce3eb"/><text x="1124" y="985" class="item-title">其他 SQLite 数据</text><text x="1124" y="1004" class="small">danmu · qq-group · offline-alert 等</text>
+    <rect x="250" y="758" width="230" height="58" rx="3" fill="#f4f1ff" stroke="#d9d1f2"/>
+    <text x="266" y="782" class="module" fill="#6655a5">@nana/qq</text><text x="266" y="802" class="module-desc">官方 QQ 通信 / SDK</text>
+    <rect x="492" y="758" width="230" height="58" rx="3" fill="#f4f1ff" stroke="#d9d1f2"/>
+    <text x="508" y="782" class="module" fill="#6655a5">@nana/napcat</text><text x="508" y="802" class="module-desc">NapCat WebSocket 客户端</text>
+    <rect x="734" y="758" width="230" height="58" rx="3" fill="#f4f1ff" stroke="#d9d1f2"/>
+    <text x="750" y="782" class="module" fill="#6655a5">@nana/monitor</text><text x="750" y="802" class="module-desc">B 站直播事件源抽象</text>
+    <rect x="976" y="758" width="230" height="58" rx="3" fill="#fff7ed" stroke="#f0d7b9"/>
+    <text x="992" y="782" class="module" fill="#a96527">@nana/notify</text><text x="992" y="802" class="module-desc">SMTP / Bark 通知器</text>
+    <rect x="1218" y="758" width="290" height="58" rx="3" fill="#fff7ed" stroke="#f0d7b9"/>
+    <text x="1234" y="782" class="module" fill="#a96527">@nana/offline-detector</text><text x="1234" y="802" class="module-desc">离线状态检测逻辑</text>
   </g>
-  <text x="80" y="1068" class="small">NanaBot · v2 branch · Architecture overview</text><text x="1520" y="1068" class="small" text-anchor="end">逻辑分层示意，非逐文件调用图</text>
+
+  <text x="250" y="850" class="module" fill="#475569">Bot 与 Site 共同依赖</text>
+  <g>
+    <rect x="250" y="866" width="168" height="58" rx="3" fill="#f1f6ff" stroke="#cbdaf3"/><text x="264" y="890" class="module" fill="#315f9c">@nana/bilibili-api</text><text x="264" y="910" class="module-desc">B 站 API 封装</text>
+    <rect x="430" y="866" width="150" height="58" rx="3" fill="#f8fafc" stroke="#dce3ec"/><text x="444" y="890" class="module">@nana/config</text><text x="444" y="910" class="module-desc">YAML 配置读写</text>
+    <rect x="592" y="866" width="150" height="58" rx="3" fill="#f8fafc" stroke="#dce3ec"/><text x="606" y="890" class="module">@nana/constants</text><text x="606" y="910" class="module-desc">共享常量</text>
+    <rect x="754" y="866" width="168" height="58" rx="3" fill="#fff7ed" stroke="#f0d7b9"/><text x="768" y="890" class="module" fill="#a96527">@nana/live-summary</text><text x="768" y="910" class="module-desc">摘要处理能力</text>
+    <rect x="934" y="866" width="150" height="58" rx="3" fill="#eef8f3" stroke="#cce5d7"/><text x="948" y="890" class="module" fill="#347b59">@nana/storage</text><text x="948" y="910" class="module-desc">YAML / SQLite 存储</text>
+    <rect x="1096" y="866" width="150" height="58" rx="3" fill="#f8fafc" stroke="#dce3ec"/><text x="1110" y="890" class="module">@nana/utils</text><text x="1110" y="910" class="module-desc">通用工具</text>
+    <rect x="1258" y="866" width="250" height="58" rx="3" fill="#f4f1ff" stroke="#d9d1f2"/><text x="1272" y="890" class="module" fill="#6655a5">@nana/wordcloud</text><text x="1272" y="910" class="module-desc">分词 / 词云渲染</text>
+  </g>
+
+  <!-- Data layer -->
+  <path d="M645 956V1000" class="solid" marker-end="url(#arrow)"/>
+  <path d="M1310 956V1000" class="solid" marker-end="url(#arrow)"/>
+  <rect x="72" y="1000" width="1536" height="112" rx="4" fill="#fff" stroke="#dfe6ef"/>
+  <text x="96" y="1032" class="layer">共享配置与数据</text>
+  <text x="96" y="1055" class="tiny">Bot / Site 访问同一项目根目录</text>
+  <rect x="430" y="1020" width="330" height="70" rx="3" fill="#f8fafc" stroke="#dce3ec"/>
+  <text x="450" y="1047" class="module">nana.config.yaml</text><text x="450" y="1070" class="module-desc">账号 · 主播 · 群映射 · 消息规则</text>
+  <rect x="780" y="1020" width="728" height="70" rx="3" fill="#f8fafc" stroke="#dce3ec"/>
+  <text x="800" y="1047" class="module">db/*.sqlite</text>
+  <text x="800" y="1070" class="module-desc">live-status · push-log · danmu / live-summary · qq-group · offline-alert · app-state</text>
+  <text x="72" y="1140" class="tiny">实线：运行时请求 / 数据读写　·　虚线：应用对 workspace 包的依赖　·　Site 通过 loopback HTTP 调用 Bot，业务消息仍由 Bot 当前账号通道发送</text>
 </svg>
