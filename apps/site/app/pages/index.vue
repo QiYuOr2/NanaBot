@@ -73,9 +73,10 @@ const generatedLabel = computed(() => {
     <div class="relative hidden sm:block">
       <AppIcon
         name="search"
-        class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-ink-muted"
+        :size="20"
+        class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
       />
-      <input v-model="query" class="input-search w-56" placeholder="搜索主播" />
+      <input v-model="query" class="input-search w-56 pl-10" placeholder="搜索主播" />
     </div>
 
     <button class="btn-icon" :title="sortLive ? '按直播状态排序' : '排序'" @click="toggleSort">
@@ -88,26 +89,49 @@ const generatedLabel = computed(() => {
   <div class="mx-auto w-full max-w-6xl flex-1 px-6 py-6">
     <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
       <section class="card p-4">
-        <div class="flex items-center justify-between">
-          <h3 class="text-[13px] font-medium text-ink">正在直播</h3>
-          <span class="dot bg-live" />
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-[13px] font-medium text-ink">正在直播</h3>
+              <span class="dot bg-live" />
+            </div>
+            <p
+              class="mt-2 font-mono text-[26px] font-semibold leading-none tracking-tight text-ink"
+            >
+              {{ data?.liveCount ?? 0 }}/{{ data?.total ?? 0 }}
+            </p>
+            <p class="mt-1 text-[12px] text-ink-muted">共 {{ data?.total ?? 0 }} 位主播</p>
+          </div>
+          <span class="icon-tile size-9 shrink-0">
+            <AppIcon name="activity" :size="24" class="text-live" />
+          </span>
         </div>
-        <p class="mt-2 font-mono text-[26px] font-semibold leading-none tracking-tight text-ink">
-          {{ data?.liveCount ?? 0 }}/{{ data?.total ?? 0 }}
-        </p>
-        <p class="mt-1 text-[12px] text-ink-muted">共 {{ data?.total ?? 0 }} 位主播</p>
       </section>
 
       <section class="card p-4">
-        <h3 class="text-[13px] font-medium text-ink">提醒</h3>
-        <p class="mt-2 text-[13px] text-ink-secondary">
-          主播开播 / 下播时会在配置的 QQ 群内推送通知。
-        </p>
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="text-[13px] font-medium text-ink">提醒</h3>
+            <p class="mt-2 text-[13px] text-ink-secondary">
+              主播开播 / 下播时会在配置的 QQ 群内推送通知。
+            </p>
+          </div>
+          <span class="icon-tile size-9 shrink-0">
+            <AppIcon name="bell" :size="24" class="text-accent-bright" />
+          </span>
+        </div>
       </section>
 
       <section class="card p-4">
-        <h3 class="text-[13px] font-medium text-ink">最近更新</h3>
-        <p class="mt-2 text-[13px] text-ink-secondary">{{ generatedLabel }}</p>
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="text-[13px] font-medium text-ink">最近更新</h3>
+            <p class="mt-2 text-[13px] text-ink-secondary">{{ generatedLabel }}</p>
+          </div>
+          <span class="icon-tile size-9 shrink-0">
+            <AppIcon name="clock" :size="24" class="text-accent-bright" />
+          </span>
+        </div>
       </section>
     </div>
 

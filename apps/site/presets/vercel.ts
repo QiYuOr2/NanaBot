@@ -19,16 +19,17 @@ export const presetVercel = definePreset((options: PresetVercelOptions = {}): Pr
     name: "vercel",
     theme: {
       colors: {
-        canvas: "#fafafa",
+        canvas: "#f7f4f0",
         surface: "#ffffff",
-        recessed: "#f2f2f2",
-        ink: "#171717",
-        "ink-secondary": "#4d4d4d",
-        "ink-muted": "#8f8f8f",
-        accent: "#0072f5",
-        "accent-dark": "#005fcc",
-        line: "#ebebeb",
-        live: "#398e4a",
+        recessed: "#f1ebe5",
+        ink: "#1b1714",
+        "ink-secondary": "#544b43",
+        "ink-muted": "#8a7f75",
+        accent: "#b95412",
+        "accent-dark": "#9a430d",
+        "accent-bright": "#e8822c",
+        line: "#e8e1da",
+        live: "#2f8f4e",
         "status-blue": "#0062d1",
         "status-cyan": "#52aeff",
         "status-teal": "#45dec5",
@@ -41,18 +42,19 @@ export const presetVercel = definePreset((options: PresetVercelOptions = {}): Pr
         mono: '"Geist Mono", ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, monospace',
       },
       borderRadius: {
-        DEFAULT: "6px",
-        sm: "4px",
-        md: "8px",
-        lg: "12px",
-        xl: "16px",
+        DEFAULT: "8px",
+        sm: "6px",
+        md: "10px",
+        lg: "14px",
+        xl: "18px",
         full: "9999px",
       },
       boxShadow: {
-        border: "0 0 0 1px rgba(0,0,0,0.08)",
-        "card-hover": "0 0 0 1px rgba(0,0,0,0.08), 0 8px 16px -8px rgba(0,0,0,0.12)",
-        header: "0 1px 0 0 rgba(0,0,0,0.10)",
-        "focus-ring": "0 0 0 2px #ffffff, 0 0 0 4px #0072f5",
+        border: "0 0 0 1px rgba(22,24,29,0.065), inset 0 1px 0 rgba(255,255,255,0.72)",
+        "card-hover": "0 0 0 1px rgba(22,24,29,0.11), inset 0 1px 0 rgba(255,255,255,0.82)",
+        header: "0 1px 0 rgba(22,24,29,0.08)",
+        brand: "0 0 0 1px rgba(185,84,18,0.20), inset 0 1px 0 rgba(255,255,255,0.24)",
+        "focus-ring": "0 0 0 2px #ffffff, 0 0 0 4px #b95412",
       },
       letterSpacing: {
         tight: "-0.02em",
@@ -63,10 +65,14 @@ export const presetVercel = definePreset((options: PresetVercelOptions = {}): Pr
       ? [
           // surfaces
           ["card", "rounded-lg bg-surface shadow-border"],
+          [
+            "icon-tile",
+            "inline-flex items-center justify-center rounded-md bg-gradient-to-b from-white to-recessed/55 shadow-border",
+          ],
           // buttons (ghost-first, per Vercel)
           [
             "btn",
-            "inline-flex items-center justify-center gap-2 rounded text-sm font-medium transition-colors",
+            "inline-flex items-center justify-center gap-2 rounded text-sm font-medium transition-all duration-150 active:translate-y-px disabled:active:translate-y-0",
           ],
           [
             "btn-ghost",
@@ -74,7 +80,7 @@ export const presetVercel = definePreset((options: PresetVercelOptions = {}): Pr
           ],
           [
             "btn-primary",
-            "btn px-3.5 py-1.5 bg-ink text-white hover:bg-ink/85 disabled:opacity-50",
+            "btn bg-accent px-3.5 py-1.5 text-white shadow-brand hover:bg-accent-dark disabled:opacity-50",
           ],
           [
             "btn-icon",
@@ -91,7 +97,7 @@ export const presetVercel = definePreset((options: PresetVercelOptions = {}): Pr
           ],
           [
             "input-ghost",
-            "h-8 rounded bg-recessed px-3 text-[13px] focus:outline-none focus:bg-surface",
+            "h-8 rounded bg-recessed px-3 text-[13px] placeholder:text-ink-muted focus:bg-surface focus:outline-none focus-visible:shadow-focus-ring",
           ],
           // status indicator dot (size-2.5 ≈ 10px, Vercel's div.size-2.5)
           ["dot", "inline-block size-2.5 shrink-0 rounded-full"],

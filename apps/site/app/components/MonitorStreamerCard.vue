@@ -12,7 +12,7 @@ const TAG_OFF = "rounded bg-recessed px-1.5 py-0.5 text-[11px] font-medium text-
   <article class="card flex h-full flex-col p-4">
     <div class="flex items-center gap-3">
       <span
-        class="flex size-9 shrink-0 items-center justify-center rounded-md bg-canvas text-[14px] font-medium text-ink-secondary"
+        class="flex size-9 shrink-0 items-center justify-center rounded-md bg-canvas text-[14px] font-medium text-ink-secondary shadow-border"
       >
         {{ streamer.streamer.charAt(0) }}
       </span>

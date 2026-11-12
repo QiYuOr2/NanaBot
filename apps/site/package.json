@@ -27,6 +27,7 @@
     "@resvg/resvg-js": "catalog:",
     "@unocss/reset": "^66.0.0",
     "h3": "^1.15.0",
+    "kubai-icons-vue": "catalog:",
     "nuxt": "^4.0.0",
     "vue": "^3.5.0",
     "zod": "catalog:"

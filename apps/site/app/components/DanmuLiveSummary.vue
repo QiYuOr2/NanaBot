@@ -118,9 +118,12 @@ function readError(caught: unknown): string {
         :disabled="pending"
         @click="generate"
       >
-        <span
-          v-if="pending"
-          class="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/30 border-t-white"
+        <AppIcon
+          :name="pending ? 'sync' : 'sparkles'"
+          :size="18"
+          variant="color"
+          class="text-white"
+          :class="pending ? 'animate-spin' : ''"
         />
         {{ buttonLabel }}
       </button>

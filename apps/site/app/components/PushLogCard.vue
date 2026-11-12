@@ -50,7 +50,12 @@ function absoluteTime(iso: string): string {
 <template>
   <section class="card flex h-full flex-col p-4">
     <div class="flex items-center justify-between gap-3">
-      <h2 class="text-[14px] font-medium tracking-tight text-ink">最近推送</h2>
+      <div class="flex items-center gap-2">
+        <span class="icon-tile size-7 shrink-0">
+          <AppIcon name="send" :size="20" class="text-accent-bright" />
+        </span>
+        <h2 class="text-[14px] font-medium tracking-tight text-ink">最近推送</h2>
+      </div>
       <NuxtLink
         class="text-[13px] text-accent transition-colors hover:text-accent-dark"
         to="/pushes"

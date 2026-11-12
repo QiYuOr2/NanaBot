@@ -10,9 +10,12 @@ withDefaults(
 
 <template>
   <button class="btn-primary h-8 text-[13px]" type="button" :disabled="pending">
-    <span
-      v-if="pending"
-      class="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/30 border-t-white"
+    <AppIcon
+      name="sync"
+      :size="18"
+      variant="color"
+      class="text-white"
+      :class="pending ? 'animate-spin' : ''"
     />
     {{ pending ? "刷新中..." : "刷新" }}
   </button>

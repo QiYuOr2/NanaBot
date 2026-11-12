@@ -10,7 +10,7 @@ const sidebarOpen = useMobileSidebar();
 
 <template>
   <header
-    class="sticky top-0 z-10 flex h-12 items-center gap-2 bg-surface/90 px-3 shadow-header backdrop-blur sm:gap-4 sm:px-6"
+    class="sticky top-0 z-10 flex h-12 items-center gap-2 border-b border-ink/5 bg-surface/85 px-3 shadow-header backdrop-blur-xl sm:gap-4 sm:px-6"
   >
     <button
       type="button"
@@ -20,7 +20,7 @@ const sidebarOpen = useMobileSidebar();
       :aria-expanded="sidebarOpen"
       @click="sidebarOpen = true"
     >
-      <AppIcon name="menu" class="size-5" />
+      <AppIcon name="menu" />
     </button>
     <nav
       aria-label="面包屑"

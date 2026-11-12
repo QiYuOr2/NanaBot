@@ -10,4 +10,7 @@ export default defineConfig({
   run: {
     cache: true,
   },
+  test: {
+    exclude: ["**/node_modules/**", "**/dist/**", "**/.nuxt/**", "**/.output/**", "**/.agents/**"],
+  },
 });

@@ -45,7 +45,7 @@ function formatTime(iso: string | null): string {
   <article class="card flex h-full flex-col p-4 transition hover:shadow-card-hover">
     <div class="flex items-center gap-3">
       <span
-        class="flex size-9 shrink-0 items-center justify-center rounded-md bg-canvas text-[14px] font-medium text-ink-secondary"
+        class="flex size-9 shrink-0 items-center justify-center rounded-md bg-canvas text-[14px] font-medium text-ink-secondary shadow-border"
       >
         {{ status.streamer.charAt(0) }}
       </span>
@@ -76,7 +76,7 @@ function formatTime(iso: string | null): string {
 
         <div
           v-if="open"
-          class="absolute right-0 top-full z-30 mt-1 w-44 rounded-lg bg-surface p-1 shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_8px_16px_-8px_rgba(0,0,0,0.12)]"
+          class="absolute right-0 top-full z-30 mt-1 w-44 rounded-lg bg-surface p-1 shadow-border"
           @click.stop
         >
           <button
