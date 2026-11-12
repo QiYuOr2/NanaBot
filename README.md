@@ -5,6 +5,10 @@
 
 基于 pnpm workspace 的 monorepo，由 [Vite+](https://viteplus.dev)（`vp`）统一管理。
 
+## 工程架构
+
+![NanaBot 工程架构图](./docs/architecture/nanabot-architecture.svg)
+
 ## 功能
 
 - 多 B 站直播间开播 / 下播监控
