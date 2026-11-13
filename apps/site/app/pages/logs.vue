@@ -105,12 +105,19 @@ function formatSize(size: number) {
       >
         <template v-for="(row, index) in logRows" :key="index">
           <div v-if="row.timestamp" class="flex min-w-0 items-start gap-2 py-0.5">
-            <span :class="row.timestampClass">{{ row.timestamp }}</span>
-            <span :class="row.levelClass">{{ row.levelText }}</span>
-            <span :class="row.sourceClass" :title="row.source ?? undefined">{{ row.source }}</span>
+            <div
+              class="flex shrink-0 flex-row items-start gap-2 max-sm:w-[9.25rem] max-sm:flex-col max-sm:gap-1"
+            >
+              <span :class="row.timestampClass">{{ row.timestamp }}</span>
+              <span :class="row.levelClass">{{ row.levelText }}</span>
+              <span :class="row.sourceClass" :title="row.source ?? undefined">{{ row.source }}</span>
+            </div>
             <span class="min-w-0 flex-1 whitespace-pre-wrap break-words">{{ row.message }}</span>
           </div>
-          <div v-else class="whitespace-pre-wrap break-words py-0.5 pl-2 text-[#bdbdbd]">
+          <div
+            v-else
+            class="whitespace-pre-wrap break-words py-0.5 pl-2 text-[#bdbdbd] max-sm:pl-[9.75rem]"
+          >
             {{ row.message }}
           </div>
         </template>
