@@ -70,6 +70,8 @@ export const ENV_KEYS = {
   NANA_SITE_CONFIG_TOKEN: "NANA_SITE_CONFIG_TOKEN",
   NANA_AUTH_TOKEN: "NANA_AUTH_TOKEN",
   NANA_BOT_CONTROL_PORT: "NANA_BOT_CONTROL_PORT",
+  /** Rei 桥接专用口令：只对控制接口的 /bridge/* 路由生效，与全站管理口令分离。 */
+  NANA_BRIDGE_TOKEN: "NANA_BRIDGE_TOKEN",
   NANA_BOT_CONTROL_URL: "NANA_BOT_CONTROL_URL",
   SERVER_EMAIL: "SERVER_EMAIL",
   SERVER_EMAIL_PASSWORD: "SERVER_EMAIL_PASSWORD",
@@ -82,6 +84,11 @@ export const BOT_CONTROL_DEFAULT_PORT = 6365;
 export const BOT_CONTROL_DEFAULT_URL = `http://127.0.0.1:${BOT_CONTROL_DEFAULT_PORT}`;
 export const BOT_CONTROL_TEST_MESSAGE_PATH = "/api/qq/test-message";
 export const BOT_CONTROL_HEALTH_PATH = "/health";
+/** Rei 桥接接口：只认桥接专用口令（或全站管理口令），且仅监听本机。 */
+export const BOT_CONTROL_BRIDGE_STATUS_PATH = "/bridge/status";
+export const BOT_CONTROL_BRIDGE_MESSAGES_PATH = "/bridge/messages";
+export const BOT_CONTROL_BRIDGE_SEND_PATH = "/bridge/send";
+export const BOT_CONTROL_BRIDGE_BIND_PATH = "/bridge/bind";
 
 /** Bark 推送服务地址。 */
 export const BARK_BASE_URL = "https://api.day.app/";

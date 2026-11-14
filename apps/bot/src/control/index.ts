@@ -9,3 +9,11 @@ export {
   type TestMessageDeps,
   type TestMessageRuntime,
 } from "./testMessage.ts";
+export {
+  bindBridgeOwner,
+  getBridgeMessages,
+  getBridgeStatus,
+  sendBridgeMessage,
+  type BridgeDeps,
+  type BridgeRuntime,
+} from "./bridge.ts";
