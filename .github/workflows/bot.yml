@@ -90,8 +90,9 @@ jobs:
           test -f bot-stage/dist/index.mjs
           test -d bot-stage/node_modules
           find bot-stage/node_modules -type f -name '*.node' -print
-          test -d bot-stage/node_modules/@node-rs/jieba-linux-x64-gnu
-          test -d bot-stage/node_modules/@resvg/resvg-js-linux-x64-gnu
+          # pnpm 的虚拟存储把平台专用包放在 .pnpm 目录下，不能按顶层路径断言，改为全树查找。
+          test -n "$(find bot-stage/node_modules -type d -name 'jieba-linux-x64-gnu' -print -quit)"
+          test -n "$(find bot-stage/node_modules -type d -name 'resvg-js-linux-x64-gnu' -print -quit)"
 
       - name: Smoke test native externals
         run: |
