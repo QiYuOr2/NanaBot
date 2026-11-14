@@ -23,13 +23,39 @@ function requireRuntime(deps: BridgeDeps, accountId: string): BridgeRuntime {
   return runtime;
 }
 
-/** 无需口令的状态探针：只暴露是否已绑定与最近入站 seq，不含任何消息内容。 */
-export function getBridgeStatus(deps: BridgeDeps, accountId: string) {
+const statusQuerySchema = z
+  .object({
+    since: z.coerce.number().int().min(0).default(0),
+    wait: z.coerce.number().int().min(0).max(55).default(0),
+  })
+  .strict();
+
+/**
+ * 无需口令的状态探针：只暴露是否已绑定与最近入站 seq，不含任何消息内容。
+ * 可选 since/wait 长轮询：wait 秒内 latestInboundSeq 未超过 since 就一直挂起，
+ * 有新入站立刻返回；wait=0（缺省）时立即返回当前值。
+ */
+export async function getBridgeStatus(
+  deps: BridgeDeps,
+  accountId: string,
+  query?: { since?: unknown; wait?: unknown },
+) {
   const runtime = requireRuntime(deps, accountId);
+  const parsed = statusQuerySchema.safeParse({
+    since: query?.since ?? undefined,
+    wait: query?.wait ?? undefined,
+  });
+  if (!parsed.success) {
+    throw new BotControlError(400, "since/wait 参数不合法。");
+  }
+  const latestInboundSeq = await runtime.store.waitForInboundAfter(
+    parsed.data.since,
+    parsed.data.wait * 1_000,
+  );
   const state = runtime.store.read();
   return {
     bound: Boolean(state.ownerId),
-    latestInboundSeq: runtime.store.latestInboundSeq(),
+    latestInboundSeq,
   };
 }
 

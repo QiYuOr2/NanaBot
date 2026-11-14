@@ -109,7 +109,10 @@ test("control：未绑定时返回候选，绑定后状态与发送走被动回�
   const app = fakeApp();
   const bridgeDeps = deps(store, app);
 
-  expect(getBridgeStatus(bridgeDeps, ACCOUNT_ID)).toEqual({ bound: false, latestInboundSeq: 0 });
+  await expect(getBridgeStatus(bridgeDeps, ACCOUNT_ID)).resolves.toEqual({
+    bound: false,
+    latestInboundSeq: 0,
+  });
   const before = getBridgeMessages(bridgeDeps, ACCOUNT_ID, 0);
   expect(before.bound).toBe(false);
   expect(before.candidates.map((candidate) => candidate.senderId)).toEqual(["OPENID_A"]);
@@ -126,7 +129,39 @@ test("control：未绑定时返回候选，绑定后状态与发送走被动回�
   const sent = await sendBridgeMessage(bridgeDeps, { accountId: ACCOUNT_ID, text: "收到" });
   expect(sent.via).toBe("reply");
   expect(app.calls).toEqual(["reply"]);
-  expect(getBridgeStatus(bridgeDeps, ACCOUNT_ID).bound).toBe(true);
+  expect((await getBridgeStatus(bridgeDeps, ACCOUNT_ID)).bound).toBe(true);
+});
+
+test("status 长轮询：已越过 since 立即返回，等待中新入站立刻唤醒，超时返回当前值", async () => {
+  const store = new BridgeStore({ rootDir: tempRoot(), accountId: ACCOUNT_ID });
+  store.addCandidate(privateMessage("OPENID_A", "你好"));
+  store.bindOwner("OPENID_A");
+  store.recordInbound(privateMessage("OPENID_A", "第一条"));
+  const bridgeDeps = deps(store, fakeApp());
+
+  // since 已被越过：即使带 wait 也立即返回。
+  await expect(getBridgeStatus(bridgeDeps, ACCOUNT_ID, { since: 0, wait: 30 })).resolves.toEqual({
+    bound: true,
+    latestInboundSeq: 1,
+  });
+
+  // 等待期间来新入站：不等超时，立刻带着新 seq 返回。
+  const waiting = getBridgeStatus(bridgeDeps, ACCOUNT_ID, { since: 1, wait: 30 });
+  setTimeout(() => store.recordInbound(privateMessage("OPENID_A", "第二条")), 50);
+  await expect(waiting).resolves.toEqual({ bound: true, latestInboundSeq: 2 });
+
+  // 超时仍无新入站：返回当前值，不报错。
+  const startedAt = Date.now();
+  await expect(getBridgeStatus(bridgeDeps, ACCOUNT_ID, { since: 2, wait: 1 })).resolves.toEqual({
+    bound: true,
+    latestInboundSeq: 2,
+  });
+  expect(Date.now() - startedAt).toBeGreaterThanOrEqual(900);
+
+  // wait 超过上限（55）拒绝。
+  await expect(
+    getBridgeStatus(bridgeDeps, ACCOUNT_ID, { since: 0, wait: 99 }),
+  ).rejects.toBeInstanceOf(BotControlError);
 });
 
 test("control：被动回复失败时回退主动发送，两次都失败则记录并报错", async () => {

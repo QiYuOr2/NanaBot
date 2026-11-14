@@ -53,6 +53,7 @@ function messageTime(message: IncomingMessage): string {
  */
 export class BridgeStore {
   readonly filePath: string;
+  private inboundWaiters = new Set<() => void>();
 
   constructor(options: { rootDir: string; accountId: string }) {
     this.filePath = join(options.rootDir, "db", `bridge-${options.accountId}.json`);
@@ -127,7 +128,14 @@ export class BridgeStore {
     state.lastInbound = message;
     state.messages = [...state.messages, record].slice(-MAX_MESSAGES);
     this.write(state);
+    this.notifyInbound();
     return record;
+  }
+
+  private notifyInbound(): void {
+    const waiters = [...this.inboundWaiters];
+    this.inboundWaiters.clear();
+    for (const waiter of waiters) waiter();
   }
 
   recordOutbound(text: string, via: "reply" | "proactive", error?: string): BridgeMessageRecord {
@@ -158,5 +166,32 @@ export class BridgeStore {
       if (record?.direction === "in") return record.seq;
     }
     return 0;
+  }
+
+  /**
+   * 长轮询：等到 latestInboundSeq 超过 after 才返回；waitMs 内没有新入站则返回当前值。
+   * waitMs <= 0 时等同于直接读当前值。主要靠 recordInbound 的通知唤醒，
+   * 另每 2 秒重读一次兜底，避免通知遗漏时干等到超时。
+   */
+  async waitForInboundAfter(after: number, waitMs: number): Promise<number> {
+    const current = this.latestInboundSeq();
+    if (current > after || waitMs <= 0) return current;
+    return new Promise<number>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        clearInterval(fallback);
+        this.inboundWaiters.delete(onNotify);
+        resolve(this.latestInboundSeq());
+      };
+      const onNotify = () => finish();
+      const timer = setTimeout(finish, waitMs);
+      const fallback = setInterval(() => {
+        if (this.latestInboundSeq() > after) finish();
+      }, 2_000);
+      this.inboundWaiters.add(onNotify);
+    });
   }
 }

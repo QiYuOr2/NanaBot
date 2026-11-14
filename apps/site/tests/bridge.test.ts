@@ -22,10 +22,12 @@ afterEach(() => {
 /** 起一个假 bot 控制接口：记录收到的口令，并按路径返回固定桥接结果。 */
 async function stubBotControl() {
   const seenAuth: (string | undefined)[] = [];
+  const seenStatusUrls: string[] = [];
   const server = createServer((request, response) => {
     seenAuth.push(request.headers.authorization);
     response.setHeader("Content-Type", "application/json");
     if (request.url?.startsWith("/bridge/status")) {
+      seenStatusUrls.push(request.url);
       // bot 侧多给一个字段，验证 site 只透出约定的两个数字。
       response.end(JSON.stringify({ ok: true, bound: true, latestInboundSeq: 7, extra: "x" }));
       return;
@@ -48,7 +50,12 @@ async function stubBotControl() {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("No stub address");
-  return { url: `http://127.0.0.1:${address.port}`, seenAuth, close: () => server.close() };
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    seenAuth,
+    seenStatusUrls,
+    close: () => server.close(),
+  };
 }
 
 async function withSite(
@@ -123,5 +130,18 @@ test("bridge 中转：status 公开且只回数字，messages/send/bind 只认�
     // site 转发给 bot 时用的也是桥接口令（服务端到服务端）。
     expect(bot.seenAuth).toContain(`Bearer ${BRIDGE_TOKEN}`);
     expect(bot.seenAuth).not.toContain(`Bearer ${MANAGEMENT_TOKEN}`);
+  });
+});
+
+test("bridge 中转：status 透传 since/wait 长轮询参数，非法参数拒绝", async () => {
+  await withSite(async (base, bot) => {
+    const res = await fetch(`${base}/api/bridge/status?account=777001&since=3&wait=5`);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ bound: true, latestInboundSeq: 7 });
+    expect(bot.seenStatusUrls.at(-1)).toContain("since=3");
+    expect(bot.seenStatusUrls.at(-1)).toContain("wait=5");
+
+    const bad = await fetch(`${base}/api/bridge/status?account=777001&wait=99`);
+    expect(bad.status).toBe(400);
   });
 });
