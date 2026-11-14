@@ -1,6 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { BOT_CONTROL_DEFAULT_PORT, BOT_CONTROL_TEST_MESSAGE_PATH } from "@nana/constants";
+import {
+  BOT_CONTROL_DEFAULT_PORT,
+  BOT_CONTROL_HEALTH_PATH,
+  BOT_CONTROL_TEST_MESSAGE_PATH,
+} from "@nana/constants";
 import { readProjectAuthToken } from "@nana/utils";
 import type { Logger } from "../core/logger.ts";
 import { BotControlError, sendTestMessage, type TestMessageRuntime } from "./testMessage.ts";
@@ -59,6 +63,12 @@ async function handleRequest(
   response: ServerResponse,
   options: BotControlServerOptions,
 ): Promise<void> {
+  // 健康检查只证明进程存活，不需要口令，也不返回任何运行细节。
+  if (request.method === "GET" && request.url === BOT_CONTROL_HEALTH_PATH) {
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
   if (request.method !== "POST" || request.url !== BOT_CONTROL_TEST_MESSAGE_PATH) {
     sendJson(response, 404, { ok: false, error: "接口不存在。" });
     return;

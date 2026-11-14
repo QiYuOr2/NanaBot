@@ -250,6 +250,8 @@ async function main(): Promise<void> {
         confirmCount: offlineConfig.confirmCount,
         notifyRecovery: offlineConfig.notifyRecovery,
         storage: { rootDir: projectRoot },
+        // 部署脚本在重启窗口内写下此标记，期间的告警改用「部署中」措辞。
+        deploymentMarkerPath: join(projectRoot, ".deploying.json"),
         // 首个配置账号的状态供站点「告警」页展示；
         // 其它账号各用一份状态文件，避免互相覆盖在线/离线状态机。
         store: createOfflineStateStore({

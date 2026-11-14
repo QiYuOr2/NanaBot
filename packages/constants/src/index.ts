@@ -81,6 +81,7 @@ export const ENV_KEYS = {
 export const BOT_CONTROL_DEFAULT_PORT = 6365;
 export const BOT_CONTROL_DEFAULT_URL = `http://127.0.0.1:${BOT_CONTROL_DEFAULT_PORT}`;
 export const BOT_CONTROL_TEST_MESSAGE_PATH = "/api/qq/test-message";
+export const BOT_CONTROL_HEALTH_PATH = "/health";
 
 /** Bark 推送服务地址。 */
 export const BARK_BASE_URL = "https://api.day.app/";

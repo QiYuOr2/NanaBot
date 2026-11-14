@@ -1,0 +1,159 @@
+name: Build bot
+
+on:
+  push:
+    branches: [v2]
+    paths:
+      - "apps/bot/**"
+      - "packages/bilibili-api/**"
+      - "packages/config/**"
+      - "packages/constants/**"
+      - "packages/live-summary/**"
+      - "packages/monitor/**"
+      - "packages/napcat/**"
+      - "packages/notify/**"
+      - "packages/offline-detector/**"
+      - "packages/qq/**"
+      - "packages/storage/**"
+      - "packages/utils/**"
+      - "packages/wordcloud/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "vite.config.ts"
+      - ".github/workflows/bot.yml"
+      - "scripts/deploy-bot-output.sh"
+      - "scripts/tests/deploy-bot-output.test.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bot-build-${{ github.ref }}
+  # 部署中途的取消会让 bot 停在重启窗口内，因此不取消进行中的运行。
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build bot dependencies
+        run: pnpm --filter "@nana/bot^..." --workspace-concurrency=1 run build
+
+      - name: Test bot
+        run: pnpm --filter "@nana/bot" run test
+
+      - name: Test offline detector
+        run: pnpm --filter "@nana/offline-detector" run test
+
+      - name: Test bot deployment script
+        run: pnpm exec vp test scripts/tests/deploy-bot-output.test.ts
+
+      - name: Build bot
+        run: pnpm build:bot
+
+      - name: Stage production artifact
+        run: |
+          set -euo pipefail
+          rm -rf bot-stage bot-deploy-scratch
+          mkdir -p bot-stage
+          # bot 的 bundle 把带原生绑定的包留作 external，运行时需要真实的 node_modules；
+          # 用 pnpm deploy 导出生产依赖，再放入刚构建的 dist。
+          pnpm --filter "@nana/bot" deploy --prod --legacy bot-deploy-scratch
+          cp -R bot-deploy-scratch/node_modules bot-stage/node_modules
+          cp -R apps/bot/dist bot-stage/dist
+          rm -rf bot-deploy-scratch
+
+      - name: Verify Linux artifact
+        run: |
+          set -euo pipefail
+          test -f bot-stage/dist/index.mjs
+          test -d bot-stage/node_modules
+          find bot-stage/node_modules -type f -name '*.node' -print
+          test -d bot-stage/node_modules/@node-rs/jieba-linux-x64-gnu
+          test -d bot-stage/node_modules/@resvg/resvg-js-linux-x64-gnu
+
+      - name: Smoke test native externals
+        run: |
+          set -euo pipefail
+          cd bot-stage
+          node --input-type=module -e 'await import("@node-rs/jieba"); await import("@resvg/resvg-js"); console.log("bot externals resolve ok")'
+
+      - name: Package bot artifact
+        run: tar -C bot-stage -czf bot-output.tar.gz .
+
+      - name: Upload bot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-output-${{ github.sha }}
+          path: bot-output.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Check deploy configuration
+        id: deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          if [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ] && [ -n "$DEPLOY_SSH_KEY" ] && [ -n "$DEPLOY_PATH" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEPLOY_* secrets are not configured; the artifact was built but not deployed."
+          fi
+
+      - name: Configure SSH
+        if: steps.deploy.outputs.enabled == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts"
+
+      - name: Deploy bot artifact
+        if: steps.deploy.outputs.enabled == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          remote_arch="$(ssh -p "$port" "${DEPLOY_USER}@${DEPLOY_HOST}" 'uname -m')"
+          if [ "$remote_arch" != "x86_64" ]; then
+            echo "::error::The bot artifact targets Linux x64, but the server reports $remote_arch."
+            exit 1
+          fi
+          scp -P "$port" bot-output.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/bot-output.tar.gz.next"
+          ssh -p "$port" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "cd '${DEPLOY_PATH}' && BOT_DEPLOY_REF='${{ github.sha }}' bash -s -- bot-output.tar.gz.next" \
+            < scripts/deploy-bot-output.sh
