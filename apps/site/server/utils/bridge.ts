@@ -7,6 +7,7 @@ import {
   BOT_CONTROL_BRIDGE_MESSAGES_PATH,
   BOT_CONTROL_BRIDGE_SEND_PATH,
   BOT_CONTROL_BRIDGE_STATUS_PATH,
+  BOT_CONTROL_BRIDGE_TYPING_PATH,
   BOT_CONTROL_DEFAULT_URL,
   ENV_KEYS,
 } from "@nana/constants";
@@ -131,10 +132,25 @@ export async function fetchBridgeMessages(accountId: string, after: number) {
   return callBridge(`${BOT_CONTROL_BRIDGE_MESSAGES_PATH}?${query.toString()}`, { method: "GET" });
 }
 
-export async function postBridgeSend(accountId: string, text: string) {
-  return callBridge(BOT_CONTROL_BRIDGE_SEND_PATH, {
+export async function postBridgeSend(
+  accountId: string,
+  message: { text?: string; markdown?: string; image?: string },
+) {
+  return callBridge(
+    BOT_CONTROL_BRIDGE_SEND_PATH,
+    {
+      method: "POST",
+      body: { accountId, ...message },
+    },
+    // 图片走 base64 时请求体远超默认 15 秒档的体量预期，超时给足上传余量。
+    message.image ? 60_000 : BOT_CONTROL_TIMEOUT_MS,
+  );
+}
+
+export async function postBridgeTyping(accountId: string, seconds: number) {
+  return callBridge(BOT_CONTROL_BRIDGE_TYPING_PATH, {
     method: "POST",
-    body: { accountId, text },
+    body: { accountId, seconds },
   });
 }
 

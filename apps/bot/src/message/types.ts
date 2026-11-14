@@ -29,6 +29,13 @@ export interface IncomingMessage {
 
 export interface OutgoingMessage {
   text: string;
+  /**
+   * Markdown 原文（官方 QQ 的 msg_type=2）。与 image 互斥，且此时 text 应为空字符串；
+   * 平台无 Markdown 权限时发送会失败，调用方需自行回退纯文本。
+   */
+  markdown?: string;
+  /** 附带的一张图片：URL、本地路径、base64:// 或字节。text 作为图片说明（官方 QQ / NapCat 均支持）。 */
+  image?: string | Uint8Array;
 }
 export type MessageReply = OutgoingMessage;
 
@@ -55,6 +62,8 @@ export interface MessagePlatformAdapter {
   onConnectionState(handler: (state: PlatformConnectionState) => void): () => void;
   reply(message: IncomingMessage, response: OutgoingMessage): Promise<void>;
   send(target: MessageTarget, message: OutgoingMessage): Promise<void>;
+  /** 私聊「输入中」状态；平台不支持时可以不实现，调用方需处理缺失。 */
+  sendTyping?(target: MessageTarget, durationSec: number): Promise<void>;
 }
 
 export interface MessageRule {

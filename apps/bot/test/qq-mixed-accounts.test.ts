@@ -143,6 +143,7 @@ function fakeApp(accountId: string): BotApp {
       return () => {};
     },
     async replyMessage() {},
+    async sendTyping() {},
     onConnectionState() {
       return () => {};
     },

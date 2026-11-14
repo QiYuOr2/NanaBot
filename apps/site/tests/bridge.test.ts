@@ -9,6 +9,7 @@ import status from "../server/api/bridge/status.get.ts";
 import messages from "../server/api/bridge/messages.get.ts";
 import send from "../server/api/bridge/send.post.ts";
 import bind from "../server/api/bridge/bind.post.ts";
+import typing from "../server/api/bridge/typing.post.ts";
 
 const MANAGEMENT_TOKEN = "project-management-token-123456";
 const BRIDGE_TOKEN = "bridge-only-token-123456";
@@ -38,6 +39,10 @@ async function stubBotControl() {
     }
     if (request.url?.startsWith("/bridge/send")) {
       response.end(JSON.stringify({ ok: true, via: "reply" }));
+      return;
+    }
+    if (request.url?.startsWith("/bridge/typing")) {
+      response.end(JSON.stringify({ ok: true, typing: true, seconds: 10 }));
       return;
     }
     if (request.url?.startsWith("/bridge/bind")) {
@@ -74,7 +79,8 @@ async function withSite(
     .get("/api/bridge/status", status)
     .get("/api/bridge/messages", messages)
     .post("/api/bridge/send", send)
-    .post("/api/bridge/bind", bind);
+    .post("/api/bridge/bind", bind)
+    .post("/api/bridge/typing", typing);
   const server = createServer(toNodeListener(createApp().use(auth).use(router)));
   try {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -143,5 +149,54 @@ test("bridge 中转：status 透传 since/wait 长轮询参数，非法参数拒
 
     const bad = await fetch(`${base}/api/bridge/status?account=777001&wait=99`);
     expect(bad.status).toBe(400);
+  });
+});
+
+test("bridge 中转：send 支持 markdown / image，typing 只认桥接专用口令", async () => {
+  await withSite(async (base) => {
+    const markdown = await fetch(`${base}/api/bridge/send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${BRIDGE_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: "777001", markdown: "# 你好" }),
+    });
+    expect(markdown.status).toBe(200);
+
+    const image = await fetch(`${base}/api/bridge/send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${BRIDGE_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: "777001",
+        text: "看图",
+        image: "https://example.com/a.png",
+      }),
+    });
+    expect(image.status).toBe(200);
+
+    // markdown 与 image 互斥。
+    const conflict = await fetch(`${base}/api/bridge/send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${BRIDGE_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: "777001",
+        markdown: "# x",
+        image: "https://example.com/a.png",
+      }),
+    });
+    expect(conflict.status).toBe(400);
+
+    const typingNoKey = await fetch(`${base}/api/bridge/typing`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: "777001" }),
+    });
+    expect(typingNoKey.status).toBe(401);
+
+    const typingOk = await fetch(`${base}/api/bridge/typing`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${BRIDGE_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: "777001", seconds: 20 }),
+    });
+    expect(typingOk.status).toBe(200);
+    await expect(typingOk.json()).resolves.toMatchObject({ ok: true, typing: true });
   });
 });

@@ -116,21 +116,33 @@ export class QQClient implements QQClientPort {
     this.bot.stop();
   }
 
+  /** 按 encode 后的形态分发：Markdown 走 msg_type=2，图片走富媒体（可带文本说明），其余纯文本。 */
+  private async sendEncoded(
+    target: { scope: "group" | "c2c"; targetId: string; msgId?: string },
+    encoded: ReturnType<typeof encodeQQMessage>,
+  ): Promise<QQSentMessage> {
+    if (encoded.markdown !== undefined) {
+      return readSentMessage(await this.bot.sendMarkdown(target, encoded.markdown));
+    }
+    if (encoded.image !== undefined) {
+      const result = await this.bot.sendImage(target, toSDKImageSource(encoded.image), {
+        content: encoded.text,
+      });
+      return readSentMessage(result.message);
+    }
+    return readSentMessage(await this.bot.sendText(target, encoded.text));
+  }
+
   async sendGroupMessage(
     groupOpenid: string,
     parts: readonly QQMessagePart[],
   ): Promise<QQSentMessage> {
     try {
       if (!groupOpenid.trim()) throw new QQSendError("官方 QQ 群 group_openid 不能为空。");
-      const message = encodeQQMessage(parts);
-      const target = { scope: "group" as const, targetId: groupOpenid };
-      if (message.image !== undefined) {
-        const result = await this.bot.sendImage(target, toSDKImageSource(message.image), {
-          content: message.text,
-        });
-        return readSentMessage(result.message);
-      }
-      return readSentMessage(await this.bot.sendText(target, message.text));
+      return await this.sendEncoded(
+        { scope: "group", targetId: groupOpenid },
+        encodeQQMessage(parts),
+      );
     } catch (error) {
       throw toQQSendError(error);
     }
@@ -142,11 +154,7 @@ export class QQClient implements QQClientPort {
   ): Promise<QQSentMessage> {
     try {
       if (!openid.trim()) throw new QQSendError("官方 QQ 用户 openid 不能为空。");
-      const message = encodeQQMessage(parts);
-      if (message.image !== undefined) throw new QQSendError("官方 QQ 私聊回复暂不支持图片。");
-      return readSentMessage(
-        await this.bot.sendText({ scope: "c2c", targetId: openid }, message.text),
-      );
+      return await this.sendEncoded({ scope: "c2c", targetId: openid }, encodeQQMessage(parts));
     } catch (error) {
       throw toQQSendError(error);
     }
@@ -157,9 +165,16 @@ export class QQClient implements QQClientPort {
     parts: readonly QQMessagePart[],
   ): Promise<QQSentMessage> {
     try {
-      const encoded = encodeQQMessage(parts);
-      if (encoded.image !== undefined) throw new QQSendError("官方 QQ 被动回复暂不支持图片。");
-      return readSentMessage(await this.bot.sendText(message.replyTarget, encoded.text));
+      return await this.sendEncoded(message.replyTarget, encodeQQMessage(parts));
+    } catch (error) {
+      throw toQQSendError(error);
+    }
+  }
+
+  async sendTyping(openid: string, durationSec = 10): Promise<void> {
+    try {
+      if (!openid.trim()) throw new QQSendError("官方 QQ 用户 openid 不能为空。");
+      await this.bot.sendTyping({ scope: "c2c", targetId: openid }, durationSec);
     } catch (error) {
       throw toQQSendError(error);
     }

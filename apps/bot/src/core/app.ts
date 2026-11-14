@@ -17,6 +17,10 @@ export interface BotApp extends Pick<
   | "sendMessage"
 > {
   readonly connected: boolean;
+  sendTyping(
+    target: import("../message/types.ts").MessageTarget,
+    durationSec: number,
+  ): Promise<void>;
   use<T>(feature: FeatureDefinition<T>, options: T): BotApp;
   onConnected(handler: () => void): () => void;
   onConnectionState(handler: (state: PlatformConnectionState) => void): () => void;

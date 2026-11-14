@@ -15,6 +15,7 @@ import {
   getBridgeMessages,
   getBridgeStatus,
   sendBridgeMessage,
+  sendBridgeTyping,
   startBotControlServer,
   type BridgeDeps,
 } from "../src/control/index.ts";
@@ -63,15 +64,24 @@ function privateMessage(senderId: string, text: string): IncomingMessage {
 
 function fakeApp(behavior: { replyFails?: boolean; sendFails?: boolean } = {}) {
   const calls: string[] = [];
+  const sent: unknown[] = [];
+  const typingCalls: number[] = [];
   return {
     calls,
-    async replyMessage() {
+    sent,
+    typingCalls,
+    async replyMessage(_message: unknown, outgoing: unknown) {
       calls.push("reply");
+      sent.push(outgoing);
       if (behavior.replyFails) throw new Error("被动回复窗口已过期");
     },
-    async sendMessage() {
+    async sendMessage(_target: unknown, outgoing: unknown) {
       calls.push("send");
+      sent.push(outgoing);
       if (behavior.sendFails) throw new Error("主动发送被平台拒绝");
+    },
+    async sendTyping(_target: unknown, seconds: number) {
+      typingCalls.push(seconds);
     },
   };
 }
@@ -240,4 +250,54 @@ test("HTTP：status 公开，messages/send/bind 只认桥接口令或管理口�
   } finally {
     await server.stop();
   }
+});
+
+test("control：富媒体发送（Markdown / 图片带说明）与输入中状态", async () => {
+  const store = new BridgeStore({ rootDir: tempRoot(), accountId: ACCOUNT_ID });
+  store.addCandidate(privateMessage("OPENID_A", "你好"));
+  store.bindOwner("OPENID_A");
+  store.recordInbound(privateMessage("OPENID_A", "在吗"));
+  const app = fakeApp();
+  const bridgeDeps = deps(store, app);
+
+  const markdown = await sendBridgeMessage(bridgeDeps, {
+    accountId: ACCOUNT_ID,
+    markdown: "# 标题\n**重点**",
+  });
+  expect(app.sent.at(-1)).toEqual({ text: "", markdown: "# 标题\n**重点**" });
+  expect(markdown.record.kind).toBe("markdown");
+  expect(markdown.via).toBe("reply");
+
+  const image = await sendBridgeMessage(bridgeDeps, {
+    accountId: ACCOUNT_ID,
+    text: "看这张",
+    image: "https://example.com/a.png",
+  });
+  expect(app.sent.at(-1)).toEqual({ text: "看这张", image: "https://example.com/a.png" });
+  expect(image.record.kind).toBe("image");
+  expect(image.record.text).toBe("看这张");
+
+  // markdown 与 image / text 互斥，三者皆空也拒绝。
+  await expect(
+    sendBridgeMessage(bridgeDeps, {
+      accountId: ACCOUNT_ID,
+      markdown: "# x",
+      image: "https://example.com/a.png",
+    }),
+  ).rejects.toBeInstanceOf(BotControlError);
+  await expect(sendBridgeMessage(bridgeDeps, { accountId: ACCOUNT_ID })).rejects.toBeInstanceOf(
+    BotControlError,
+  );
+
+  await expect(sendBridgeTyping(bridgeDeps, { accountId: ACCOUNT_ID })).resolves.toEqual({
+    typing: true,
+    seconds: 10,
+  });
+  expect(app.typingCalls).toEqual([10]);
+
+  // 未绑定时 typing 拒绝。
+  const unboundStore = new BridgeStore({ rootDir: tempRoot(), accountId: ACCOUNT_ID });
+  await expect(
+    sendBridgeTyping(deps(unboundStore, fakeApp()), { accountId: ACCOUNT_ID }),
+  ).rejects.toBeInstanceOf(BotControlError);
 });

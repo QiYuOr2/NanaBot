@@ -1,5 +1,5 @@
-import type { NapcatClientPort, NapcatIncomingEvent } from "@nana/napcat";
-import type { QQClientPort, QQIncomingMessage } from "@nana/qq";
+import type { NapcatClientPort, NapcatIncomingEvent, NapcatMessagePart } from "@nana/napcat";
+import type { QQClientPort, QQIncomingMessage, QQMessagePart } from "@nana/qq";
 import type {
   IncomingMessage,
   MessagePlatformAdapter,
@@ -9,6 +9,29 @@ import type {
 } from "./types.ts";
 
 const OFFICIAL_TRACKED_MESSAGES = 10_000;
+
+/** 业务层 OutgoingMessage → 官方 QQ 消息段。Markdown 独占整条消息，图片可带文本说明。 */
+export function toOfficialParts(message: OutgoingMessage): QQMessagePart[] {
+  if (message.markdown !== undefined) {
+    if (message.image !== undefined) throw new Error("官方 QQ Markdown 消息不能同时携带图片。");
+    return [{ type: "markdown", content: message.markdown }];
+  }
+  const parts: QQMessagePart[] = [];
+  if (message.text) parts.push({ type: "text", text: message.text });
+  if (message.image !== undefined) parts.push({ type: "image", source: message.image });
+  if (parts.length === 0) parts.push({ type: "text", text: message.text });
+  return parts;
+}
+
+/** 业务层 OutgoingMessage → NapCat 消息段。NapCat 不支持 Markdown。 */
+export function toNapcatParts(message: OutgoingMessage): NapcatMessagePart[] {
+  if (message.markdown !== undefined) throw new Error("NapCat 不支持 Markdown 消息。");
+  const parts: NapcatMessagePart[] = [];
+  if (message.text) parts.push({ type: "text", text: message.text });
+  if (message.image !== undefined) parts.push({ type: "image", source: message.image });
+  if (parts.length === 0) parts.push({ type: "text", text: message.text });
+  return parts;
+}
 
 function officialReplyPolicy(message: IncomingMessage) {
   const context = message.replyContext;
@@ -128,16 +151,20 @@ export class NapcatMessageAdapter implements MessagePlatformAdapter {
         text: message.text,
         isAtBot: message.isAtBot,
       },
-      [{ type: "text", text: response.text }],
+      toNapcatParts(response),
     );
   }
 
   async send(target: MessageTarget, message: OutgoingMessage): Promise<void> {
     if (target.accountId !== this.accountId || target.platform !== this.platform)
       throw new Error("NapCat 发送目标与当前账号不匹配。");
-    const parts = [{ type: "text" as const, text: message.text }];
+    const parts = toNapcatParts(message);
     if (target.scene === "group") await this.client.sendGroupMessage(target.conversationId, parts);
     else await this.client.sendPrivateMessage(target.conversationId, parts);
+  }
+
+  async sendTyping(_target: MessageTarget, _durationSec: number): Promise<void> {
+    throw new Error("NapCat 不支持输入中状态。");
   }
 }
 
@@ -247,7 +274,7 @@ export class OfficialMessageAdapter implements MessagePlatformAdapter {
       const latest = this.replies.get(message.id);
       if (!latest || latest.count + latest.inFlight - 1 >= policy.limit)
         throw new Error("官方 QQ 原消息的被动回复次数已达上限，不改用主动消息发送。");
-      await this.client.replyMessage(context, [{ type: "text", text: response.text }]);
+      await this.client.replyMessage(context, toOfficialParts(response));
       latest.count += 1;
     } finally {
       release();
@@ -259,9 +286,17 @@ export class OfficialMessageAdapter implements MessagePlatformAdapter {
   async send(target: MessageTarget, message: OutgoingMessage): Promise<void> {
     if (target.accountId !== this.accountId || target.platform !== this.platform)
       throw new Error("官方 QQ 发送目标与当前账号不匹配。");
-    const parts = [{ type: "text" as const, text: message.text }];
+    const parts = toOfficialParts(message);
     if (target.scene === "group") await this.client.sendGroupMessage(target.conversationId, parts);
     else await this.client.sendPrivateMessage(target.conversationId, parts);
+  }
+
+  async sendTyping(target: MessageTarget, durationSec: number): Promise<void> {
+    if (target.accountId !== this.accountId || target.platform !== this.platform)
+      throw new Error("官方 QQ 发送目标与当前账号不匹配。");
+    if (target.scene !== "private") throw new Error("官方 QQ 输入中状态仅支持私聊。");
+    if (!this.client.sendTyping) throw new Error("官方 QQ 客户端未提供输入中状态。");
+    await this.client.sendTyping(target.conversationId, durationSec);
   }
 
   private track(incoming: QQIncomingMessage): void {

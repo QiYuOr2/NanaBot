@@ -27,8 +27,17 @@ const { SDK, instances } = vi.hoisted(() => {
       this.sent.push({ target, text });
       return { id: "sent", timestamp: 1 };
     }
-    async sendImage() {
+    async sendImage(target: unknown, source: unknown, opts?: unknown) {
+      this.sent.push({ target, source, opts });
       return { message: { id: "sent", timestamp: 1 } };
+    }
+    async sendMarkdown(target: unknown, content: string) {
+      this.sent.push({ target, markdown: content });
+      return { id: "sent", timestamp: 1 };
+    }
+    async sendTyping(target: unknown, seconds?: number) {
+      this.sent.push({ target, typing: seconds });
+      return {};
     }
   }
   return { SDK, instances };
@@ -100,4 +109,54 @@ test("passive reply uses the original msg_id", async () => {
   expect(sdk.sent).toEqual([
     { target: { scope: "group", targetId: "GROUP", msgId: "msg-1" }, text: "ok" },
   ]);
+});
+
+test("C2C 富媒体：图片带说明走 sendImage，Markdown 走 sendMarkdown，互斥时报错", async () => {
+  const client = new QQClient({ appId: "app", appSecret: "secret" });
+  const sdk = instances.at(-1)!;
+
+  await client.sendPrivateMessage("user", [
+    { type: "text", text: "看图" },
+    { type: "image", source: "https://example.com/a.png" },
+  ]);
+  expect(sdk.sent.at(-1)).toEqual({
+    target: { scope: "c2c", targetId: "user" },
+    source: { url: "https://example.com/a.png" },
+    opts: { content: "看图" },
+  });
+
+  await client.sendPrivateMessage("user", [{ type: "markdown", content: "# 你好" }]);
+  expect(sdk.sent.at(-1)).toEqual({
+    target: { scope: "c2c", targetId: "user" },
+    markdown: "# 你好",
+  });
+
+  await expect(
+    client.sendPrivateMessage("user", [
+      { type: "markdown", content: "# x" },
+      { type: "image", source: "https://example.com/a.png" },
+    ]),
+  ).rejects.toThrow("不能与文本或图片合并");
+
+  await client.sendTyping("user", 15);
+  expect(sdk.sent.at(-1)).toEqual({ target: { scope: "c2c", targetId: "user" }, typing: 15 });
+});
+
+test("被动回复也可以发图片（带 msg_id 的 replyTarget）", async () => {
+  const client = new QQClient({ appId: "app", appSecret: "secret" });
+  const sdk = instances.at(-1)!;
+  const message: QQIncomingMessage = {
+    id: "msg-1",
+    kind: "private",
+    content: "在吗",
+    senderId: "user",
+    isAtBot: false,
+    replyTarget: { scope: "c2c", targetId: "user", msgId: "msg-1" },
+  };
+  await client.replyMessage(message, [{ type: "image", source: "https://example.com/b.png" }]);
+  expect(sdk.sent.at(-1)).toEqual({
+    target: { scope: "c2c", targetId: "user", msgId: "msg-1" },
+    source: { url: "https://example.com/b.png" },
+    opts: { content: "" },
+  });
 });
