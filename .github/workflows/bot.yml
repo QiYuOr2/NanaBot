@@ -77,12 +77,55 @@ jobs:
           set -euo pipefail
           rm -rf bot-stage bot-deploy-scratch
           mkdir -p bot-stage
-          # bot 的 bundle 把带原生绑定的包留作 external，运行时需要真实的 node_modules；
-          # 用 pnpm deploy 导出生产依赖，再放入刚构建的 dist。
-          pnpm --filter "@nana/bot" deploy --prod --legacy bot-deploy-scratch
+          # bot 的 bundle 把部分包留作 external，运行时需要真实的 node_modules。
+          # 必须用注入式 deploy：--legacy 不会带上 workspace 包自身的依赖
+          #（如 @nana/config 的 yaml、@nana/qq 的 @tencent-connect/qqbot-nodejs），
+          # 2026-11-14 首次部署就因缺 yaml 在启动时崩溃并回滚。
+          pnpm --config.inject-workspace-packages=true --filter "@nana/bot" deploy --prod bot-deploy-scratch
           cp -R bot-deploy-scratch/node_modules bot-stage/node_modules
           cp -R apps/bot/dist bot-stage/dist
           rm -rf bot-deploy-scratch
+          # bundle 顶层还会直接 import 个别并非 bot 直接依赖的包（同上例），
+          # 它们只存在于 .pnpm 虚拟存储里；为其在顶层补符号链接，保证从 dist 出发可解析。
+          cat > bot-link-externals.mjs <<'SCRIPT'
+          import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
+          import { dirname, join, relative } from "node:path";
+          const stageDir = process.argv[2];
+          const nmDir = join(stageDir, "node_modules");
+          const bundle = readFileSync(join(stageDir, "dist", "index.mjs"), "utf8");
+          import { builtinModules } from "node:module";
+          const builtins = new Set(builtinModules.flatMap((name) => [name, name.replace(/^node:/, "")]));
+          const specs = new Set();
+          for (const match of bundle.matchAll(/(?:from\s*|import\s*|import\s*\(|require\s*\()\s*["']([A-Za-z0-9@/._#-]+)["']/g)) {
+            const spec = match[1];
+            if (spec.startsWith(".") || spec.startsWith("/") || spec.startsWith("node:") || builtins.has(spec)) continue;
+            specs.add(spec);
+          }
+          const packageOf = (spec) => (spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0]);
+          const packages = [...new Set([...specs].map(packageOf))];
+          const findInStore = (pkg) => {
+            const storeDir = join(nmDir, ".pnpm");
+            if (!existsSync(storeDir)) return undefined;
+            for (const entry of readdirSync(storeDir)) {
+              const candidate = join(storeDir, entry, "node_modules", pkg);
+              if (existsSync(join(candidate, "package.json"))) return candidate;
+            }
+            return undefined;
+          };
+          let failed = false;
+          for (const pkg of packages) {
+            const dest = join(nmDir, pkg);
+            try { lstatSync(dest); continue; } catch { /* 顶层缺失，下面补链接 */ }
+            const target = findInStore(pkg);
+            if (!target) { console.error(`external ${pkg} is missing from the staged node_modules`); failed = true; continue; }
+            mkdirSync(dirname(dest), { recursive: true });
+            symlinkSync(relative(dirname(dest), target), dest);
+            console.log(`linked external ${pkg} -> ${target}`);
+          }
+          if (failed) process.exit(1);
+          SCRIPT
+          node bot-link-externals.mjs bot-stage
+          rm bot-link-externals.mjs
 
       - name: Verify Linux artifact
         run: |
@@ -93,12 +136,29 @@ jobs:
           # pnpm 的虚拟存储把平台专用包放在 .pnpm 目录下，不能按顶层路径断言，改为全树查找。
           test -n "$(find bot-stage/node_modules -type d -name 'jieba-linux-x64-gnu' -print -quit)"
           test -n "$(find bot-stage/node_modules -type d -name 'resvg-js-linux-x64-gnu' -print -quit)"
-
-      - name: Smoke test native externals
-        run: |
-          set -euo pipefail
-          cd bot-stage
-          node --input-type=module -e 'await import("@node-rs/jieba"); await import("@resvg/resvg-js"); console.log("bot externals resolve ok")'
+          # 从 bundle 自身的位置出发，逐个 import 全部 external 做冒烟测试；
+          # 任一缺失都会在这里失败，而不是等部署到服务器启动时才崩溃。
+          cat > bot-stage/dist/__verify_externals.mjs <<'SCRIPT'
+          import { readFileSync } from "node:fs";
+          const bundle = readFileSync(new URL("./index.mjs", import.meta.url), "utf8");
+          import { builtinModules } from "node:module";
+          const builtins = new Set(builtinModules.flatMap((name) => [name, name.replace(/^node:/, "")]));
+          const specs = new Set();
+          for (const match of bundle.matchAll(/(?:from\s*|import\s*|import\s*\(|require\s*\()\s*["']([A-Za-z0-9@/._#-]+)["']/g)) {
+            const spec = match[1];
+            if (spec.startsWith(".") || spec.startsWith("/") || spec.startsWith("node:") || builtins.has(spec)) continue;
+            specs.add(spec);
+          }
+          let failed = 0;
+          for (const spec of specs) {
+            try { await import(spec); console.log(`import ok: ${spec}`); }
+            catch (error) { failed += 1; console.error(`import failed: ${spec} (${error.code ?? error.message})`); }
+          }
+          if (failed > 0) process.exit(1);
+          console.log(`all ${specs.size} bundle externals import ok`);
+          SCRIPT
+          node bot-stage/dist/__verify_externals.mjs
+          rm bot-stage/dist/__verify_externals.mjs
 
       - name: Package bot artifact
         run: tar -C bot-stage -czf bot-output.tar.gz .
