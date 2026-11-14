@@ -22,6 +22,9 @@ dist-ssr
 # Runtime SQLite databases
 db/*.sqlite
 
+# Rei 桥接状态（含主人 openid 与私聊记录，只在本机运行时生成）
+db/bridge-*.json
+
 # CI 部署标记（部署脚本在重启窗口内临时写入项目根目录）
 /.deploying.json
 

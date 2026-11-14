@@ -1,18 +1,33 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import {
+  BOT_CONTROL_BRIDGE_BIND_PATH,
+  BOT_CONTROL_BRIDGE_MESSAGES_PATH,
+  BOT_CONTROL_BRIDGE_SEND_PATH,
+  BOT_CONTROL_BRIDGE_STATUS_PATH,
   BOT_CONTROL_DEFAULT_PORT,
   BOT_CONTROL_HEALTH_PATH,
   BOT_CONTROL_TEST_MESSAGE_PATH,
+  ENV_KEYS,
 } from "@nana/constants";
 import { readProjectAuthToken } from "@nana/utils";
 import type { Logger } from "../core/logger.ts";
+import {
+  bindBridgeOwner,
+  getBridgeMessages,
+  getBridgeStatus,
+  sendBridgeMessage,
+  type BridgeDeps,
+  type BridgeRuntime,
+} from "./bridge.ts";
 import { BotControlError, sendTestMessage, type TestMessageRuntime } from "./testMessage.ts";
 
 const MAX_BODY_BYTES = 16 * 1024;
 
 export interface BotControlServerOptions {
   runtimes: ReadonlyMap<string, TestMessageRuntime>;
+  /** 已启用桥接的账号运行时；未传或为空时桥接接口一律返回 503。 */
+  bridges?: ReadonlyMap<string, BridgeRuntime>;
   rootDir: string;
   logger: Logger;
   port?: number;
@@ -26,6 +41,17 @@ export interface BotControlServer {
 function readControlToken(rootDir: string): string | undefined {
   const token = readProjectAuthToken(rootDir);
   return token && token.length >= 16 ? token : undefined;
+}
+
+/** 桥接专用口令：只从 bot 进程环境读取（apps/bot/.env 由入口 dotenv 载入）。 */
+function readBridgeToken(): string | undefined {
+  const token = process.env[ENV_KEYS.NANA_BRIDGE_TOKEN]?.trim();
+  return token && token.length >= 16 ? token : undefined;
+}
+
+function readBearer(request: IncomingMessage): string {
+  const authorization = request.headers.authorization ?? "";
+  return authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
 }
 
 function tokensEqual(expected: string, provided: string): boolean {
@@ -58,18 +84,101 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
   }
 }
 
+const BRIDGE_PATHS = new Set([
+  BOT_CONTROL_BRIDGE_STATUS_PATH,
+  BOT_CONTROL_BRIDGE_MESSAGES_PATH,
+  BOT_CONTROL_BRIDGE_SEND_PATH,
+  BOT_CONTROL_BRIDGE_BIND_PATH,
+]);
+
+async function handleBridgeRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: BotControlServerOptions,
+  url: URL,
+): Promise<void> {
+  const bridges = options.bridges;
+  if (!bridges || bridges.size === 0) {
+    sendJson(response, 503, { ok: false, error: "桥接未启用。" });
+    return;
+  }
+  const deps: BridgeDeps = { bridges, logger: options.logger };
+  const path = url.pathname;
+  try {
+    // 状态探针不设口令：只返回是否绑定与最近入站 seq，供无秘密的轮询方判断有无新消息。
+    if (request.method === "GET" && path === BOT_CONTROL_BRIDGE_STATUS_PATH) {
+      const accountId = url.searchParams.get("account");
+      if (!accountId) throw new BotControlError(400, "缺少 account 参数。");
+      sendJson(response, 200, { ok: true, ...getBridgeStatus(deps, accountId) });
+      return;
+    }
+
+    // 其余桥接接口只认桥接专用口令或全站管理口令，且仅本机可达（site 中转或本机直连）。
+    const bridgeToken = readBridgeToken();
+    const controlToken = readControlToken(options.rootDir);
+    if (!bridgeToken && !controlToken) {
+      sendJson(response, 503, {
+        ok: false,
+        error: "桥接接口未配置口令，请设置 NANA_BRIDGE_TOKEN 或 NANA_AUTH_TOKEN。",
+      });
+      return;
+    }
+    const provided = readBearer(request);
+    const authorized =
+      provided.length > 0 &&
+      ((bridgeToken !== undefined && tokensEqual(bridgeToken, provided)) ||
+        (controlToken !== undefined && tokensEqual(controlToken, provided)));
+    if (!authorized) {
+      sendJson(response, 401, { ok: false, error: "桥接口令不正确。" });
+      return;
+    }
+
+    if (request.method === "GET" && path === BOT_CONTROL_BRIDGE_MESSAGES_PATH) {
+      const accountId = url.searchParams.get("account");
+      if (!accountId) throw new BotControlError(400, "缺少 account 参数。");
+      const result = getBridgeMessages(deps, accountId, url.searchParams.get("after") ?? 0);
+      sendJson(response, 200, { ok: true, ...result });
+      return;
+    }
+    if (request.method === "POST" && path === BOT_CONTROL_BRIDGE_SEND_PATH) {
+      const result = await sendBridgeMessage(deps, await readJson(request));
+      sendJson(response, 200, { ok: true, ...result });
+      return;
+    }
+    if (request.method === "POST" && path === BOT_CONTROL_BRIDGE_BIND_PATH) {
+      const result = bindBridgeOwner(deps, await readJson(request));
+      sendJson(response, 200, { ok: true, ...result });
+      return;
+    }
+    sendJson(response, 404, { ok: false, error: "接口不存在。" });
+  } catch (error) {
+    if (error instanceof BotControlError) {
+      sendJson(response, error.statusCode, { ok: false, error: error.message });
+      return;
+    }
+    options.logger.error("[control] 处理桥接请求失败", error);
+    sendJson(response, 500, { ok: false, error: "bot 处理桥接请求时发生内部错误。" });
+  }
+}
+
 async function handleRequest(
   request: IncomingMessage,
   response: ServerResponse,
   options: BotControlServerOptions,
 ): Promise<void> {
+  const url = new URL(request.url ?? "/", "http://127.0.0.1");
   // 健康检查只证明进程存活，不需要口令，也不返回任何运行细节。
-  if (request.method === "GET" && request.url === BOT_CONTROL_HEALTH_PATH) {
+  if (request.method === "GET" && url.pathname === BOT_CONTROL_HEALTH_PATH) {
     sendJson(response, 200, { ok: true });
     return;
   }
 
-  if (request.method !== "POST" || request.url !== BOT_CONTROL_TEST_MESSAGE_PATH) {
+  if (BRIDGE_PATHS.has(url.pathname)) {
+    await handleBridgeRequest(request, response, options, url);
+    return;
+  }
+
+  if (request.method !== "POST" || url.pathname !== BOT_CONTROL_TEST_MESSAGE_PATH) {
     sendJson(response, 404, { ok: false, error: "接口不存在。" });
     return;
   }
@@ -82,8 +191,7 @@ async function handleRequest(
     });
     return;
   }
-  const authorization = request.headers.authorization ?? "";
-  const provided = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  const provided = readBearer(request);
   if (!provided || !tokensEqual(expected, provided)) {
     sendJson(response, 401, { ok: false, error: "管理口令不正确。" });
     return;

@@ -187,3 +187,10 @@ wordcloud:
 # DeepSeek 摘要凭据 DEEPSEEK_API_KEY、Bark 凭据 BARK_KEY、NapCat 调试 NC_DEBUG
 # 均放在 apps/bot/.env；详细变量见 apps/bot/.env.example。
 # 全项目管理口令 NANA_AUTH_TOKEN 放在根目录 .env。
+
+# Rei 桥接（可选）：启用后，指定账号的私聊会被记录，供 Rei 经 site 的
+# /api/bridge/* 中转读取与回复。只处理该账号的私聊，群消息不进入桥接。
+# 桥接口令 NANA_BRIDGE_TOKEN 放在根目录 .env 与 apps/bot/.env（两处一致）。
+bridge:
+  enabled: false
+  accountId: main

@@ -36,5 +36,7 @@ export default defineEventHandler((event) => {
       throw createError({ statusCode: 403, statusMessage: "不允许跨站请求" });
     }
   }
+  // 桥接接口不走全站登录：status 只回数字（公开），其余由 handler 用桥接专用口令把关。
+  if (path === "/api/bridge" || path.startsWith("/api/bridge/")) return;
   if (!PUBLIC_API.has(path)) requireSiteConfigToken(event);
 });

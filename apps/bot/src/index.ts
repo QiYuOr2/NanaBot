@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { readProjectAuthToken, readOptionalNumberEnv, resolveProjectRoot } from "@nana/utils";
 import {
+  BOT_CONTROL_BRIDGE_MESSAGES_PATH,
   BOT_CONTROL_TEST_MESSAGE_PATH,
   ENV_KEYS,
   NANA_CONFIG_FILE,
@@ -57,6 +58,7 @@ import {
 } from "./config/notifications.ts";
 import { registerStartupNotice } from "./core/startupNotice.ts";
 import { createMessageFeature } from "./message/index.ts";
+import { BridgeStore, bridgeFeature, loadBridgeConfig } from "./bridge/index.ts";
 
 // 入口文件所在目录（开发时是 src/，构建后是 dist/），用于定位不依赖 cwd 的路径。
 const entryDir = dirname(fileURLToPath(import.meta.url));
@@ -167,6 +169,15 @@ async function main(): Promise<void> {
     appLogger.warn("[app] 未启用离线告警（缺少 adminEmail 配置）", error);
   }
 
+  // Rei 桥接只对配置指定的单个账号生效；未启用时不创建存储、不注册功能。
+  let bridgeConfig: ReturnType<typeof loadBridgeConfig>;
+  try {
+    bridgeConfig = loadBridgeConfig();
+  } catch (error) {
+    appLogger.warn("[bridge] 桥接配置读取失败，桥接未启用", error);
+  }
+  const bridgeStores = new Map<string, BridgeStore>();
+
   const runtimes: AccountRuntime[] = [];
   for (const account of accounts) {
     const streamers = streamersByAccount.get(account.id) ?? [];
@@ -206,6 +217,13 @@ async function main(): Promise<void> {
       () => resolveNotice(notices.online, "online", account),
       accountLogger,
     );
+
+    if (bridgeConfig?.accountId === account.id) {
+      const store = new BridgeStore({ rootDir: projectRoot, accountId: account.id });
+      bridgeStores.set(account.id, store);
+      app.use(bridgeFeature, { store });
+      accountLogger.info(`[bridge] 已为账号 ${account.id} 启用 Rei 桥接（仅私聊）`);
+    }
 
     // 每个主播只建一条 blive 长连接：开播通知与弹幕录制共用同一条连接的事件流。
     // 录制器要等监控 setup 才创建，轮询/停机必须拿这张 Map 的引用，不能提前拷贝。
@@ -328,6 +346,14 @@ async function main(): Promise<void> {
       `[control] ${ENV_KEYS.NANA_BOT_CONTROL_PORT}=${configuredControlPort} 不合法，使用默认端口`,
     );
   }
+  const bridges = new Map(
+    activeRuntimes
+      .filter((runtime) => bridgeStores.has(runtime.account.id))
+      .map((runtime) => [
+        runtime.account.id,
+        { app: runtime.app, store: bridgeStores.get(runtime.account.id)! },
+      ]),
+  );
   try {
     controlServer = await startBotControlServer({
       runtimes: new Map(
@@ -336,11 +362,15 @@ async function main(): Promise<void> {
           { account: runtime.account, app: runtime.app },
         ]),
       ),
+      ...(bridges.size > 0 ? { bridges } : {}),
       rootDir: projectRoot,
       logger: appLogger,
       ...(controlPort === undefined ? {} : { port: controlPort }),
     });
     appLogger.info(`[control] 测试消息接口：${controlServer.url}${BOT_CONTROL_TEST_MESSAGE_PATH}`);
+    if (bridges.size > 0) {
+      appLogger.info(`[control] 桥接接口：${controlServer.url}${BOT_CONTROL_BRIDGE_MESSAGES_PATH}`);
+    }
   } catch (error) {
     appLogger.error("[control] 启动测试消息接口失败，site 测试消息暂不可用", error);
   }
