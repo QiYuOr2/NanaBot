@@ -58,6 +58,7 @@ export function requireBridgeKey(event: H3Event): void {
 async function callBridge(
   path: string,
   init: { method: "GET" | "POST"; body?: unknown },
+  timeoutMs: number = BOT_CONTROL_TIMEOUT_MS,
 ): Promise<Record<string, unknown>> {
   const token = readConfiguredBridgeToken();
   const controlUrl = (
@@ -73,7 +74,7 @@ async function callBridge(
         ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-      signal: AbortSignal.timeout(BOT_CONTROL_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (cause) {
     const timeout = cause instanceof Error && cause.name === "TimeoutError";
@@ -105,10 +106,19 @@ async function callBridge(
 }
 
 /** 状态探针：bot 侧该接口本身不设口令，这里也只回是否绑定与最近入站 seq 两个数字。 */
-export async function fetchBridgeStatus(accountId: string) {
+export async function fetchBridgeStatus(
+  accountId: string,
+  options?: { since?: number; wait?: number },
+) {
+  const query = new URLSearchParams({ account: accountId });
+  if (options?.since !== undefined) query.set("since", String(options.since));
+  if (options?.wait !== undefined) query.set("wait", String(options.wait));
+  // 长轮询时 bot 会把响应挂到 wait 秒才返回，中转超时要比 wait 多留余量。
+  const timeoutMs = options?.wait ? (options.wait + 10) * 1_000 : BOT_CONTROL_TIMEOUT_MS;
   const payload = await callBridge(
-    `${BOT_CONTROL_BRIDGE_STATUS_PATH}?account=${encodeURIComponent(accountId)}`,
+    `${BOT_CONTROL_BRIDGE_STATUS_PATH}?${query.toString()}`,
     { method: "GET" },
+    timeoutMs,
   );
   return {
     bound: payload.bound === true,

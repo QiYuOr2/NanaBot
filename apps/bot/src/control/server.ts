@@ -109,7 +109,11 @@ async function handleBridgeRequest(
     if (request.method === "GET" && path === BOT_CONTROL_BRIDGE_STATUS_PATH) {
       const accountId = url.searchParams.get("account");
       if (!accountId) throw new BotControlError(400, "缺少 account 参数。");
-      sendJson(response, 200, { ok: true, ...getBridgeStatus(deps, accountId) });
+      const status = await getBridgeStatus(deps, accountId, {
+        since: url.searchParams.get("since") ?? undefined,
+        wait: url.searchParams.get("wait") ?? undefined,
+      });
+      sendJson(response, 200, { ok: true, ...status });
       return;
     }
 
