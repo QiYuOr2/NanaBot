@@ -123,6 +123,60 @@ export function getActivityStatusView(
   };
 }
 
+export interface PushActivityDayGroup<T> {
+  /** 本地日期键（YYYY-MM-DD），时间非法时为原始字符串。 */
+  key: string;
+  /** 分组标题：今天 / 昨天 / M月d日 周X。 */
+  label: string;
+  items: T[];
+}
+
+const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+function localDayKey(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * 把已按时间倒序排列的活动按本地日期分组，保持原顺序。
+ * 长列表里只有相对时间（「3 小时前」）很难定位某一天的推送，分组标题补上日期锚点。
+ */
+export function groupActivitiesByDay<T extends { latestAt: string }>(
+  activities: readonly T[],
+  now: Date = new Date(),
+): PushActivityDayGroup<T>[] {
+  const todayKey = localDayKey(now);
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = localDayKey(yesterday);
+
+  const groups: PushActivityDayGroup<T>[] = [];
+  for (const activity of activities) {
+    const date = new Date(activity.latestAt);
+    const valid = !Number.isNaN(date.getTime());
+    const key = valid ? localDayKey(date) : activity.latestAt;
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.items.push(activity);
+      continue;
+    }
+    let label = key;
+    if (valid) {
+      if (key === todayKey) {
+        label = "今天";
+      } else if (key === yesterdayKey) {
+        label = "昨天";
+      } else {
+        label = `${date.getMonth() + 1}月${date.getDate()}日 ${WEEKDAY_LABELS[date.getDay()]}`;
+      }
+    }
+    groups.push({ key, label, items: [activity] });
+  }
+  return groups;
+}
+
 /** 目标群摘要：单个群直接展示昵称，多个群展示数量与昵称列表。 */
 export function summarizeTargets(activity: PushActivity, maxNames = 3): string {
   const targets = activity.targets;
