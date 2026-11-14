@@ -21,6 +21,7 @@ import {
   createOfflineStateStore,
   loadOfflineDetectorConfig,
   offlineDetectorFeature,
+  readDeploymentMarker,
 } from "./offline";
 import {
   createBarkNotifier,
@@ -49,7 +50,11 @@ import {
 } from "./accounts";
 import { validateOfficialTargets } from "./qq";
 import { startBotControlServer, type BotControlServer } from "./control";
-import { parseBotNotifications, renderBotNotice } from "./config/notifications.ts";
+import {
+  parseBotNotifications,
+  renderBotNotice,
+  renderDeploymentNotice,
+} from "./config/notifications.ts";
 import { registerStartupNotice } from "./core/startupNotice.ts";
 import { createMessageFeature } from "./message/index.ts";
 
@@ -101,6 +106,20 @@ async function main(): Promise<void> {
   const { provider, accounts, unavailable, disabled, statusAccountId, configuredCount } =
     resolveQQAccounts(config);
   const notices = parseBotNotifications(config);
+  // 部署标记由部署脚本在重启前写入项目根目录；上/下线提示与离线告警共用这一判断。
+  const deploymentMarkerPath = join(projectRoot, ".deploying.json");
+  // 提示文案在发送时求值：部署窗口内改为部署文案，其余时候用配置模板。
+  // 对应提示被配置关闭时，部署文案同样不发。
+  const resolveNotice = (
+    notice: Parameters<typeof renderBotNotice>[0],
+    kind: "online" | "offline",
+    account: Parameters<typeof renderBotNotice>[1],
+  ): string | undefined => {
+    const base = renderBotNotice(notice, account);
+    if (base === undefined) return undefined;
+    const deployment = readDeploymentMarker(deploymentMarkerPath);
+    return deployment ? renderDeploymentNotice(kind, deployment) : base;
+  };
   const officialAccounts = accounts.filter((account) => account.provider === "official");
   appLogger.info(`[app] QQ 通道：${provider}`);
   const unavailableAccountIds = new Set([...disabled, ...unavailable.map((account) => account.id)]);
@@ -182,7 +201,11 @@ async function main(): Promise<void> {
       logger: accountLogger,
     });
 
-    registerStartupNotice(app, renderBotNotice(notices.online, account), accountLogger);
+    registerStartupNotice(
+      app,
+      () => resolveNotice(notices.online, "online", account),
+      accountLogger,
+    );
 
     // 每个主播只建一条 blive 长连接：开播通知与弹幕录制共用同一条连接的事件流。
     // 录制器要等监控 setup 才创建，轮询/停机必须拿这张 Map 的引用，不能提前拷贝。
@@ -251,7 +274,7 @@ async function main(): Promise<void> {
         notifyRecovery: offlineConfig.notifyRecovery,
         storage: { rootDir: projectRoot },
         // 部署脚本在重启窗口内写下此标记，期间的告警改用「部署中」措辞。
-        deploymentMarkerPath: join(projectRoot, ".deploying.json"),
+        deploymentMarkerPath,
         // 首个配置账号的状态供站点「告警」页展示；
         // 其它账号各用一份状态文件，避免互相覆盖在线/离线状态机。
         store: createOfflineStateStore({
@@ -276,7 +299,8 @@ async function main(): Promise<void> {
   registerShutdown(
     runtimes.map(({ app, account }) => ({
       app,
-      announce: renderBotNotice(notices.offline, account),
+      // 下线文案在真正停机时才求值：部署脚本在发信号前刚写下标记，启动时算会错过。
+      announce: () => resolveNotice(notices.offline, "offline", account),
     })),
     () => controlServer?.stop(),
   );
@@ -371,7 +395,7 @@ function withAccountLabel(notifier: Notifier, account: { name: string }): Notifi
 
 /** 多 App 共用 SIGINT / SIGTERM：所有连接都收尾，但每个账号只发一次下线消息。 */
 function registerShutdown(
-  apps: readonly { app: BotApp; announce?: string }[],
+  apps: readonly { app: BotApp; announce?: string | (() => string | undefined) }[],
   stopExtra?: () => Promise<void> | undefined,
 ): void {
   let stopping = false;
@@ -386,7 +410,9 @@ function registerShutdown(
       appLogger.error("[app] 关闭控制接口时发生错误", error);
     }
     const results = await Promise.allSettled(
-      apps.map(({ app, announce }) => app.stop({ announce })),
+      apps.map(({ app, announce }) =>
+        app.stop({ announce: typeof announce === "function" ? announce() : announce }),
+      ),
     );
     for (const result of results) {
       if (result.status === "rejected") {
