@@ -12,6 +12,8 @@ export interface BridgeMessageRecord {
   senderName?: string;
   /** 出站消息的实际发送方式：被动回复 / 主动发送。 */
   via?: "reply" | "proactive";
+  /** 出站消息的形态：纯文本 / Markdown / 图片（可带说明）。缺省视为 text。 */
+  kind?: "text" | "markdown" | "image";
   /** 出站发送失败时的错误摘要。 */
   error?: string;
 }
@@ -138,7 +140,12 @@ export class BridgeStore {
     for (const waiter of waiters) waiter();
   }
 
-  recordOutbound(text: string, via: "reply" | "proactive", error?: string): BridgeMessageRecord {
+  recordOutbound(
+    text: string,
+    via: "reply" | "proactive",
+    error?: string,
+    kind?: "text" | "markdown" | "image",
+  ): BridgeMessageRecord {
     const state = this.read();
     const record: BridgeMessageRecord = {
       seq: state.nextSeq,
@@ -146,6 +153,7 @@ export class BridgeStore {
       text,
       at: new Date().toISOString(),
       via,
+      ...(kind && kind !== "text" ? { kind } : {}),
       ...(error ? { error } : {}),
     };
     state.nextSeq += 1;

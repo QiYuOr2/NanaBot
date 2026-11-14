@@ -5,6 +5,7 @@ import {
   BOT_CONTROL_BRIDGE_MESSAGES_PATH,
   BOT_CONTROL_BRIDGE_SEND_PATH,
   BOT_CONTROL_BRIDGE_STATUS_PATH,
+  BOT_CONTROL_BRIDGE_TYPING_PATH,
   BOT_CONTROL_DEFAULT_PORT,
   BOT_CONTROL_HEALTH_PATH,
   BOT_CONTROL_TEST_MESSAGE_PATH,
@@ -17,12 +18,15 @@ import {
   getBridgeMessages,
   getBridgeStatus,
   sendBridgeMessage,
+  sendBridgeTyping,
   type BridgeDeps,
   type BridgeRuntime,
 } from "./bridge.ts";
 import { BotControlError, sendTestMessage, type TestMessageRuntime } from "./testMessage.ts";
 
 const MAX_BODY_BYTES = 16 * 1024;
+/** 桥接 send 允许 base64 图片，请求体上限单独放宽（约对应 8MB 以内的原图）。 */
+const BRIDGE_SEND_MAX_BODY_BYTES = 12 * 1024 * 1024;
 
 export interface BotControlServerOptions {
   runtimes: ReadonlyMap<string, TestMessageRuntime>;
@@ -67,13 +71,16 @@ function sendJson(response: ServerResponse, statusCode: number, body: unknown): 
   response.end(JSON.stringify(body));
 }
 
-async function readJson(request: IncomingMessage): Promise<unknown> {
+async function readJson(
+  request: IncomingMessage,
+  maxBodyBytes: number = MAX_BODY_BYTES,
+): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.length;
-    if (size > MAX_BODY_BYTES) throw new BotControlError(413, "请求体过大。");
+    if (size > maxBodyBytes) throw new BotControlError(413, "请求体过大。");
     chunks.push(buffer);
   }
   if (!chunks.length) throw new BotControlError(400, "请求体不能为空。");
@@ -89,6 +96,7 @@ const BRIDGE_PATHS = new Set([
   BOT_CONTROL_BRIDGE_MESSAGES_PATH,
   BOT_CONTROL_BRIDGE_SEND_PATH,
   BOT_CONTROL_BRIDGE_BIND_PATH,
+  BOT_CONTROL_BRIDGE_TYPING_PATH,
 ]);
 
 async function handleBridgeRequest(
@@ -145,7 +153,15 @@ async function handleBridgeRequest(
       return;
     }
     if (request.method === "POST" && path === BOT_CONTROL_BRIDGE_SEND_PATH) {
-      const result = await sendBridgeMessage(deps, await readJson(request));
+      const result = await sendBridgeMessage(
+        deps,
+        await readJson(request, BRIDGE_SEND_MAX_BODY_BYTES),
+      );
+      sendJson(response, 200, { ok: true, ...result });
+      return;
+    }
+    if (request.method === "POST" && path === BOT_CONTROL_BRIDGE_TYPING_PATH) {
+      const result = await sendBridgeTyping(deps, await readJson(request));
       sendJson(response, 200, { ok: true, ...result });
       return;
     }

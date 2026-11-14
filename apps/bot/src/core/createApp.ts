@@ -42,6 +42,7 @@ export interface App {
   onMessage(handler: (message: IncomingMessage) => void | Promise<void>): () => void;
   replyMessage(message: IncomingMessage, response: OutgoingMessage): Promise<void>;
   sendMessage(target: MessageTarget, message: OutgoingMessage): Promise<void>;
+  sendTyping(target: MessageTarget, durationSec: number): Promise<void>;
   onCleanup(cleanup: Cleanup): void;
   sendAdminText(text: string, purpose?: PushPurposeInput): Promise<void>;
   sendAdminMsg(
@@ -147,6 +148,10 @@ export function createApp(options: CreateAppOptions): App {
 
   const app: App = {
     ...featureContext,
+    async sendTyping(target, durationSec) {
+      if (!adapter.sendTyping) throw new Error("当前平台不支持输入中状态。");
+      await adapter.sendTyping(target, durationSec);
+    },
     get connected() {
       return connection.isConnected;
     },

@@ -14,6 +14,7 @@ export {
   getBridgeMessages,
   getBridgeStatus,
   sendBridgeMessage,
+  sendBridgeTyping,
   type BridgeDeps,
   type BridgeRuntime,
 } from "./bridge.ts";

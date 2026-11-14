@@ -89,6 +89,7 @@ export const BOT_CONTROL_BRIDGE_STATUS_PATH = "/bridge/status";
 export const BOT_CONTROL_BRIDGE_MESSAGES_PATH = "/bridge/messages";
 export const BOT_CONTROL_BRIDGE_SEND_PATH = "/bridge/send";
 export const BOT_CONTROL_BRIDGE_BIND_PATH = "/bridge/bind";
+export const BOT_CONTROL_BRIDGE_TYPING_PATH = "/bridge/typing";
 
 /** Bark 推送服务地址。 */
 export const BARK_BASE_URL = "https://api.day.app/";

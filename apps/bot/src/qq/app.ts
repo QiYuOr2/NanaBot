@@ -155,6 +155,10 @@ export function createOfficialApp(options: OfficialAppOptions): BotApp {
     replyMessage(message: IncomingMessage, response: MessageReply) {
       return context.replyMessage(message, response);
     },
+    async sendTyping(target, durationSec) {
+      if (!adapter.sendTyping) throw new Error("当前平台不支持输入中状态。");
+      await adapter.sendTyping(target, durationSec);
+    },
     get connected() {
       return connectedState;
     },

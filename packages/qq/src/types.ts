@@ -21,7 +21,8 @@ export type QQImageSource = string | Uint8Array;
 export type QQMessagePart =
   | { type: "text"; text: string }
   | { type: "atAll" }
-  | { type: "image"; source: QQImageSource };
+  | { type: "image"; source: QQImageSource }
+  | { type: "markdown"; content: string };
 
 export interface QQSentMessage {
   id: string;
@@ -74,4 +75,6 @@ export interface QQClientPort {
   sendGroupMessage(groupOpenid: string, parts: readonly QQMessagePart[]): Promise<QQSentMessage>;
   sendPrivateMessage(openid: string, parts: readonly QQMessagePart[]): Promise<QQSentMessage>;
   replyMessage(message: QQIncomingMessage, parts: readonly QQMessagePart[]): Promise<QQSentMessage>;
+  /** C2C「输入中」状态（官方 msg_type=6）；不支持的通道可以不实现。 */
+  sendTyping?(openid: string, durationSec?: number): Promise<void>;
 }
