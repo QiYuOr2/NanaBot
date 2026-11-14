@@ -58,6 +58,7 @@ module.exports = { apps: [{
 const fs = require("node:fs");
 const path = require("node:path");
 const root = process.env.TEST_DEPLOY_ROOT;
+if (process.argv[2] === "logs") { console.log("stub pm2 log line"); process.exit(0); }
 const countPath = path.join(root, "restarts");
 const count = Number(fs.existsSync(countPath) ? fs.readFileSync(countPath, "utf8") : 0) + 1;
 fs.writeFileSync(countPath, String(count));

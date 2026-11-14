@@ -2,7 +2,7 @@
 set -euo pipefail
 
 artifact="${1:-}"
-health_attempts="${BOT_HEALTH_ATTEMPTS:-20}"
+health_attempts="${BOT_HEALTH_ATTEMPTS:-30}"
 pm2_config="${BOT_PM2_CONFIG:-apps/bot/ecosystem.config.cjs}"
 
 if [ -z "$artifact" ] || [ ! -f "$artifact" ]; then
@@ -106,8 +106,16 @@ rollback() {
   pm2 startOrRestart "$pm2_config" || true
 }
 
+dump_bot_logs() {
+  # 失败时把 bot 最近的 PM2 日志打到部署输出里，便于从 CI 日志直接定位（例如模块缺失）。
+  echo "----- pm2 logs (@nana/bot, last 60 lines) -----" >&2
+  pm2 logs "@nana/bot" --lines 60 --nostream 2>/dev/null | tail -80 >&2 || true
+  echo "----- end pm2 logs -----" >&2
+}
+
 if ! pm2 startOrRestart "$pm2_config"; then
   echo "PM2 restart failed; rolling back." >&2
+  dump_bot_logs
   rollback
   exit 1
 fi
@@ -123,6 +131,7 @@ done
 
 if [ "$healthy" -ne 1 ]; then
   echo "Bot health check failed at $health_url; rolling back." >&2
+  dump_bot_logs
   rollback
   exit 1
 fi
