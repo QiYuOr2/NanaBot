@@ -5,6 +5,7 @@ import type { OfflineAlert, OfflineStateStore } from "@nana/offline-detector";
 import { OfflineDetector, renderOfflineAlert } from "@nana/offline-detector";
 import { appendOfflineAlert, type StorageOptions } from "@nana/storage";
 import { createOfflineStateStore } from "./store.ts";
+import { readDeploymentMarker } from "./deployment.ts";
 
 /** 重连成功后迟迟收不到心跳时的兜底时长（毫秒）。 */
 export const DEFAULT_RECOVERY_FALLBACK_MS = 90_000;
@@ -19,6 +20,11 @@ export interface OfflineDetectorOptions {
   storage?: StorageOptions;
   /** 记下这条告警，供站点告警页读取。缺省写入 `app-state.sqlite`。 */
   recordAlert?: (alert: OfflineAlert) => void;
+  /**
+   * 部署标记文件路径。部署脚本在重启前写入、健康检查后删除；
+   * 标记有效期间产生的告警改用「部署中」措辞，避免把计划内重启误报成故障掉线。
+   */
+  deploymentMarkerPath?: string;
   /**
    * 重连后等多久没有心跳就退回「重连即恢复」，默认 {@link DEFAULT_RECOVERY_FALLBACK_MS}。
    * 正常配置下 NapCat 的心跳远快于这个值，计时器会被心跳清掉。
@@ -73,7 +79,10 @@ export const offlineDetectorFeature = defineFeature<OfflineDetectorOptions>({
         logger.error("[离线检测] 记录告警失败", error);
       }
       try {
-        await notifier.send(renderOfflineAlert(result));
+        const deployment = options.deploymentMarkerPath
+          ? readDeploymentMarker(options.deploymentMarkerPath)
+          : undefined;
+        await notifier.send(renderOfflineAlert(result, { deployment }));
       } catch (error) {
         logger.error("[离线检测] 发送告警失败", error);
       }

@@ -22,6 +22,9 @@ dist-ssr
 # Runtime SQLite databases
 db/*.sqlite
 
+# CI 部署标记（部署脚本在重启窗口内临时写入项目根目录）
+/.deploying.json
+
 # Local runtime config (contains private IDs and notification targets)
 /nana.config.*
 !/nana.config.yaml.example

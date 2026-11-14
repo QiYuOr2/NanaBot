@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { BOT_CONTROL_TEST_MESSAGE_PATH } from "@nana/constants";
+import { BOT_CONTROL_HEALTH_PATH, BOT_CONTROL_TEST_MESSAGE_PATH } from "@nana/constants";
 import { readPushLogs } from "@nana/storage";
 import type { QQClientPort, QQMessagePart } from "@nana/qq";
 import { parseQQConfig, resolveOfficialAccounts } from "../src/qq/config.ts";
@@ -283,4 +283,13 @@ test("发送失败返回 502，且响应与推送记录不泄露机器人密钥"
     expect(await response.text()).not.toContain("super-secret");
   });
   expect(readPushLogs({ rootDir })[0].error).not.toContain("super-secret");
+});
+
+test("健康检查不需要口令，只返回存活状态", async () => {
+  const { rootDir, logger } = harness();
+  await withControl(new Map(), rootDir, logger, async (url) => {
+    const response = await fetch(`${url}${BOT_CONTROL_HEALTH_PATH}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+  });
 });
