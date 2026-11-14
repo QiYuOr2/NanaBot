@@ -1,5 +1,9 @@
 import { expect, test, vi } from "vite-plus/test";
-import { parseBotNotifications, renderBotNotice } from "../src/config/notifications.ts";
+import {
+  parseBotNotifications,
+  renderBotNotice,
+  renderDeploymentNotice,
+} from "../src/config/notifications.ts";
 import { registerStartupNotice } from "../src/core/startupNotice.ts";
 
 const account = { id: "main", name: "主号", provider: "napcat" };
@@ -45,6 +49,46 @@ test("关闭上线提醒或缺少管理群时不注册发送回调", () => {
   registerStartupNotice({ adminGroupId: undefined, onConnected, sendAdminText }, "我来了~", logger);
   expect(onConnected).not.toHaveBeenCalled();
 });
+test("部署文案带版本号，缺省时不带", () => {
+  expect(renderDeploymentNotice("offline", { ref: "abc1234" })).toBe(
+    "部署新版本中，我先下去一下，马上回来~（部署版本: abc1234）",
+  );
+  expect(renderDeploymentNotice("online", { ref: "abc1234" })).toBe(
+    "部署完成，我回来啦~（部署版本: abc1234）",
+  );
+  expect(renderDeploymentNotice("online", {})).toBe("部署完成，我回来啦~");
+});
+
+test("上线文案支持延迟求值，以连接时状态为准", async () => {
+  const handlers: (() => void)[] = [];
+  const sendAdminText = vi.fn(async () => {});
+  const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  let current: string | undefined;
+  registerStartupNotice(
+    {
+      adminGroupId: 123,
+      onConnected(handler: () => void) {
+        handlers.push(handler);
+        return () => {};
+      },
+      sendAdminText,
+    },
+    () => current,
+    logger,
+  );
+  // 注册时还没有文案，连接也不发。
+  handlers.forEach((handler) => handler());
+  expect(sendAdminText).not.toHaveBeenCalled();
+  current = "部署完成，我回来啦~（部署版本: abc1234）";
+  handlers.forEach((handler) => handler());
+  await vi.waitFor(() => {
+    expect(sendAdminText).toHaveBeenCalledExactlyOnceWith(
+      "部署完成，我回来啦~（部署版本: abc1234）",
+      { purpose: "app.online" },
+    );
+  });
+});
+
 test("两种提醒可独立关闭或替换模板", () => {
   const config = parseBotNotifications({
     botNotifications: {
