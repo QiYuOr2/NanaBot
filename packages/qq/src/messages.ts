@@ -13,6 +13,7 @@ export function encodeQQMessage(parts: readonly QQMessagePart[]) {
   let text = "";
   let image: QQImageSource | undefined;
   let markdown: string | undefined;
+  let voice: QQImageSource | undefined;
   for (const part of parts) {
     switch (part.type) {
       case "text":
@@ -29,23 +30,33 @@ export function encodeQQMessage(parts: readonly QQMessagePart[]) {
         if (markdown !== undefined) throw new QQSendError("官方 QQ 单条消息仅支持一段 Markdown。");
         markdown = part.content;
         break;
+      case "voice":
+        if (voice !== undefined) throw new QQSendError("官方 QQ 单条消息仅支持一段语音。");
+        voice = part.source;
+        break;
       default:
         throw new QQSendError("不支持的官方 QQ 消息类型。");
     }
   }
   text = text.trim();
+  if (voice !== undefined) {
+    // 语音是独立的富媒体消息（file_type=3），不与文本、图片或 Markdown 合并。
+    if (image !== undefined || markdown !== undefined || text)
+      throw new QQSendError("官方 QQ 语音消息不能与文本、图片或 Markdown 合并发送。");
+    return { text: "", image: undefined, markdown: undefined, voice };
+  }
   if (markdown !== undefined) {
     // 官方规定：带 markdown 时 content 必须为空，且媒体消息不能与 Markdown 合并。
     if (image !== undefined || text)
       throw new QQSendError("官方 QQ Markdown 消息不能与文本或图片合并发送。");
     if (!markdown.trim()) throw new QQSendError("官方 QQ 消息内容为空。");
-    return { text: "", image: undefined, markdown };
+    return { text: "", image: undefined, markdown, voice: undefined };
   }
   if (image !== undefined && text.includes(AT_ALL_MARKER)) {
     throw new QQSendError("官方 QQ @全体成员仅支持文本或 Markdown，不能与图片媒体消息合并发送。");
   }
   if (image === undefined && !text) throw new QQSendError("官方 QQ 消息内容为空。");
-  return { text, image, markdown: undefined };
+  return { text, image, markdown: undefined, voice: undefined };
 }
 
 export function toSDKImageSource(source: QQImageSource): {

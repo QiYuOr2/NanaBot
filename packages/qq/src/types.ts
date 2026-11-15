@@ -22,7 +22,8 @@ export type QQMessagePart =
   | { type: "text"; text: string }
   | { type: "atAll" }
   | { type: "image"; source: QQImageSource }
-  | { type: "markdown"; content: string };
+  | { type: "markdown"; content: string }
+  | { type: "voice"; source: QQImageSource };
 
 export interface QQSentMessage {
   id: string;

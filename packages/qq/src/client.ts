@@ -116,13 +116,17 @@ export class QQClient implements QQClientPort {
     this.bot.stop();
   }
 
-  /** 按 encode 后的形态分发：Markdown 走 msg_type=2，图片走富媒体（可带文本说明），其余纯文本。 */
+  /** 按 encode 后的形态分发：Markdown 走 msg_type=2，图片/语音走富媒体，其余纯文本。 */
   private async sendEncoded(
     target: { scope: "group" | "c2c"; targetId: string; msgId?: string },
     encoded: ReturnType<typeof encodeQQMessage>,
   ): Promise<QQSentMessage> {
     if (encoded.markdown !== undefined) {
       return readSentMessage(await this.bot.sendMarkdown(target, encoded.markdown));
+    }
+    if (encoded.voice !== undefined) {
+      const result = await this.bot.sendVoice(target, toSDKImageSource(encoded.voice));
+      return readSentMessage(result.message);
     }
     if (encoded.image !== undefined) {
       const result = await this.bot.sendImage(target, toSDKImageSource(encoded.image), {

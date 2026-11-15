@@ -10,8 +10,13 @@ import type {
 
 const OFFICIAL_TRACKED_MESSAGES = 10_000;
 
-/** 业务层 OutgoingMessage → 官方 QQ 消息段。Markdown 独占整条消息，图片可带文本说明。 */
+/** 业务层 OutgoingMessage → 官方 QQ 消息段。Markdown 与语音各自独占整条消息，图片可带文本说明。 */
 export function toOfficialParts(message: OutgoingMessage): QQMessagePart[] {
+  if (message.voice !== undefined) {
+    if (message.text || message.markdown !== undefined || message.image !== undefined)
+      throw new Error("官方 QQ 语音消息不能与文本、Markdown 或图片合并发送。");
+    return [{ type: "voice", source: message.voice }];
+  }
   if (message.markdown !== undefined) {
     if (message.image !== undefined) throw new Error("官方 QQ Markdown 消息不能同时携带图片。");
     return [{ type: "markdown", content: message.markdown }];
@@ -23,9 +28,10 @@ export function toOfficialParts(message: OutgoingMessage): QQMessagePart[] {
   return parts;
 }
 
-/** 业务层 OutgoingMessage → NapCat 消息段。NapCat 不支持 Markdown。 */
+/** 业务层 OutgoingMessage → NapCat 消息段。NapCat 不支持 Markdown 与语音。 */
 export function toNapcatParts(message: OutgoingMessage): NapcatMessagePart[] {
   if (message.markdown !== undefined) throw new Error("NapCat 不支持 Markdown 消息。");
+  if (message.voice !== undefined) throw new Error("NapCat 不支持语音消息。");
   const parts: NapcatMessagePart[] = [];
   if (message.text) parts.push({ type: "text", text: message.text });
   if (message.image !== undefined) parts.push({ type: "image", source: message.image });

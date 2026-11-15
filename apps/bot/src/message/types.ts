@@ -36,6 +36,8 @@ export interface OutgoingMessage {
   markdown?: string;
   /** 附带的一张图片：URL、本地路径、base64:// 或字节。text 作为图片说明（官方 QQ / NapCat 均支持）。 */
   image?: string | Uint8Array;
+  /** 一段语音（官方 QQ 富媒体 file_type=3）。独立发送：与 text / markdown / image 互斥，此时 text 应为空字符串。 */
+  voice?: string | Uint8Array;
 }
 export type MessageReply = OutgoingMessage;
 
