@@ -119,6 +119,7 @@ async function handleBridgeRequest(
       if (!accountId) throw new BotControlError(400, "缺少 account 参数。");
       const status = await getBridgeStatus(deps, accountId, {
         since: url.searchParams.get("since") ?? undefined,
+        gsince: url.searchParams.get("gsince") ?? undefined,
         wait: url.searchParams.get("wait") ?? undefined,
       });
       sendJson(response, 200, { ok: true, ...status });
@@ -148,7 +149,12 @@ async function handleBridgeRequest(
     if (request.method === "GET" && path === BOT_CONTROL_BRIDGE_MESSAGES_PATH) {
       const accountId = url.searchParams.get("account");
       if (!accountId) throw new BotControlError(400, "缺少 account 参数。");
-      const result = getBridgeMessages(deps, accountId, url.searchParams.get("after") ?? 0);
+      const result = getBridgeMessages(
+        deps,
+        accountId,
+        url.searchParams.get("after") ?? 0,
+        url.searchParams.get("group") ?? undefined,
+      );
       sendJson(response, 200, { ok: true, ...result });
       return;
     }

@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: "缺少 account 参数" });
   }
   const since = parseLongPollParam(query.since, "since", Number.MAX_SAFE_INTEGER);
+  const gsince = parseLongPollParam(query.gsince, "gsince", Number.MAX_SAFE_INTEGER);
   const wait = parseLongPollParam(query.wait, "wait", 55);
-  return fetchBridgeStatus(account, { since, wait });
+  return fetchBridgeStatus(account, { since, gsince, wait });
 });
