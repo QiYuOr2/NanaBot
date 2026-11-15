@@ -159,9 +159,9 @@ export async function postBridgeTyping(accountId: string, seconds: number) {
   });
 }
 
-export async function postBridgeBind(accountId: string, senderId: string) {
+export async function postBridgeBind(accountId: string, senderId: string, groupId?: string) {
   return callBridge(BOT_CONTROL_BRIDGE_BIND_PATH, {
     method: "POST",
-    body: { accountId, senderId },
+    body: { accountId, senderId, ...(groupId ? { groupId } : {}) },
   });
 }

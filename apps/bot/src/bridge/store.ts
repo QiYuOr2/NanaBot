@@ -12,6 +12,8 @@ export interface BridgeMessageRecord {
   senderName?: string;
   /** 群消息的发送者标识（member_openid 等）；私聊记录不带。 */
   senderId?: string;
+  /** 群入站是否为 @ 到 bot 的消息（false 表示主人未 @ 的普通发言，仅主人消息会出现）；私聊记录不带。 */
+  atBot?: boolean;
   /** 出站消息的实际发送方式：被动回复 / 主动发送。 */
   via?: "reply" | "proactive";
   /** 出站消息的形态：纯文本 / Markdown / 图片（可带说明）/ 语音。缺省视为 text。 */
@@ -50,6 +52,11 @@ export interface BridgeState {
   /** 已发现的群（键为 group_openid）。不限定群：任何群里 @ 到 bot 都会建档。 */
   groups: Record<string, BridgeGroupState>;
   groupNextSeq: number;
+  /**
+   * 每个群里「主人本人」的发送者标识（member_openid 与私聊 openid 可能不同，需要时单独绑定）。
+   * 绑定后主人在该群未 @ 的普通发言也会被记录，供 Rei 自行判断是否主动回复。
+   */
+  groupOwners: Record<string, string>;
 }
 
 const MAX_MESSAGES = 300;
@@ -112,6 +119,12 @@ export class BridgeStore {
         typeof groupsSource.groupNextSeq === "number" && groupsSource.groupNextSeq >= 1
           ? groupsSource.groupNextSeq
           : 1,
+      groupOwners:
+        groupsSource.groupOwners &&
+        typeof groupsSource.groupOwners === "object" &&
+        !Array.isArray(groupsSource.groupOwners)
+          ? (groupsSource.groupOwners as Record<string, string>)
+          : {},
     };
   }
 
@@ -123,9 +136,9 @@ export class BridgeStore {
   }
 
   private write(state: BridgeState): void {
-    const { groups, groupNextSeq, ...privateState } = state;
+    const { groups, groupNextSeq, groupOwners, ...privateState } = state;
     this.writeJson(this.filePath, privateState);
-    this.writeJson(this.groupFilePath, { groups, groupNextSeq });
+    this.writeJson(this.groupFilePath, { groups, groupNextSeq, groupOwners });
   }
 
   /** 未绑定时记录候选发送者；同一发送者只保留最近一条。 */
@@ -220,6 +233,7 @@ export class BridgeStore {
       text: message.text,
       at: messageTime(message),
       senderId: message.senderId,
+      atBot: message.isAtBot,
       ...(message.senderName ? { senderName: message.senderName } : {}),
     };
     state.groupNextSeq += 1;
@@ -258,6 +272,26 @@ export class BridgeStore {
 
   groupState(groupId: string): BridgeGroupState | undefined {
     return this.read().groups[groupId];
+  }
+
+  /** 该群里绑定为主人的发送者标识；未绑定时为 undefined（此时私聊 openid 仍可直接匹配）。 */
+  groupOwnerSender(groupId: string): string | undefined {
+    return this.read().groupOwners[groupId];
+  }
+
+  /** 把某个已在该群记录里出现过的发送者绑定为该群的主人标识。 */
+  bindGroupOwner(groupId: string, senderId: string): void {
+    const state = this.read();
+    const group = state.groups[groupId];
+    if (!group) throw new Error(`群 ${groupId} 尚未建档，无法绑定主人标识。`);
+    const known = group.messages.some(
+      (record) => record.direction === "in" && record.senderId === senderId,
+    );
+    if (!known) {
+      throw new Error(`发送者 ${senderId} 没有在群 ${groupId} 的记录中出现过，拒绝绑定。`);
+    }
+    state.groupOwners[groupId] = senderId;
+    this.write(state);
   }
 
   groupMessagesAfter(groupId: string, seq: number): BridgeMessageRecord[] {

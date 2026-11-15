@@ -425,3 +425,26 @@ test("control：群发送先走被动回复，未知群拒绝，状态带群 seq
   expect(groupView.groups).toHaveLength(1);
   expect(targets).toHaveLength(0);
 });
+
+test("control：群内主人标识绑定后，messages 带 ownerSenderId；未出现过的发送者拒绝绑定", async () => {
+  const store = new BridgeStore({ rootDir: tempRoot(), accountId: ACCOUNT_ID });
+  store.recordGroupInbound(groupMessage("GROUP_1", "MEMBER_9", "@机器人 你好"));
+  const app = fakeApp();
+  const bridgeDeps = deps(store, app);
+
+  expect(() =>
+    bindBridgeOwner(bridgeDeps, { accountId: ACCOUNT_ID, groupId: "GROUP_1", senderId: "NOBODY" }),
+  ).toThrow(BotControlError);
+
+  const bound = bindBridgeOwner(bridgeDeps, {
+    accountId: ACCOUNT_ID,
+    groupId: "GROUP_1",
+    senderId: "MEMBER_9",
+  });
+  expect(bound).toEqual({ bound: true, groupId: "GROUP_1", ownerSenderId: "MEMBER_9" });
+  expect(store.groupOwnerSender("GROUP_1")).toBe("MEMBER_9");
+
+  const groupView = getBridgeMessages(bridgeDeps, ACCOUNT_ID, 0, "GROUP_1");
+  expect(groupView.ownerSenderId).toBe("MEMBER_9");
+  expect(groupView.messages[0]?.atBot).toBe(true);
+});
