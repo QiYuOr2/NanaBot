@@ -90,6 +90,7 @@ export function getBridgeMessages(
       ownerId: state.ownerId ?? null,
       candidates: [],
       groupId: groupIdRaw as string | null,
+      ownerSenderId: runtime.store.groupOwnerSender(groupIdRaw) ?? null,
       groups,
       messages: runtime.store.groupMessagesAfter(groupIdRaw, parsed.data),
     };
@@ -106,6 +107,7 @@ export function getBridgeMessages(
           at: candidate.at,
         })),
     groupId: null as string | null,
+    ownerSenderId: null,
     groups,
     messages: runtime.store.messagesAfter(parsed.data),
   };
@@ -115,17 +117,32 @@ const bindSchema = z
   .object({
     accountId: z.string().min(1),
     senderId: z.string().min(1),
+    /** 带此字段时改为把 senderId 绑定为该群的主人标识（群内 member_openid 与私聊 openid 可能不同）。 */
+    groupId: z.string().min(1).optional(),
   })
   .strict();
 
-/** 把候选发送者绑定为主人；不在候选列表中的 senderId 一律拒绝。 */
+/**
+ * 把候选发送者绑定为主人；不在候选列表中的 senderId 一律拒绝。
+ * 带 groupId 时改为群内主人标识绑定：senderId 必须已在该群的入站记录中出现过。
+ */
 export function bindBridgeOwner(deps: BridgeDeps, payload: unknown) {
   const parsed = bindSchema.safeParse(payload);
   if (!parsed.success) {
-    throw new BotControlError(400, "请求参数不合法，只支持 accountId 与 senderId。");
+    throw new BotControlError(
+      400,
+      "请求参数不合法，只支持 accountId 与 senderId（可带 groupId）。",
+    );
   }
   const runtime = requireRuntime(deps, parsed.data.accountId);
   try {
+    if (parsed.data.groupId) {
+      runtime.store.bindGroupOwner(parsed.data.groupId, parsed.data.senderId);
+      deps.logger.info(
+        `[bridge] 账号 ${parsed.data.accountId} 已绑定群 ${parsed.data.groupId} 的主人标识 ${parsed.data.senderId}`,
+      );
+      return { bound: true, groupId: parsed.data.groupId, ownerSenderId: parsed.data.senderId };
+    }
     const state = runtime.store.bindOwner(parsed.data.senderId);
     deps.logger.info(`[bridge] 账号 ${parsed.data.accountId} 已绑定主人 ${parsed.data.senderId}`);
     return { bound: true, ownerId: state.ownerId ?? null };

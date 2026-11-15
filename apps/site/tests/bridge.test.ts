@@ -245,3 +245,14 @@ test("bridge 中转：send 支持 groupId 透传，messages 支持 group 读取"
     expect(groupMessages.status).toBe(200);
   });
 });
+
+test("bridge 中转：bind 支持 groupId 透传（群内主人标识绑定）", async () => {
+  await withSite(async (base) => {
+    const response = await fetch(`${base}/api/bridge/bind`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${BRIDGE_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: "777001", senderId: "MEMBER_9", groupId: "GROUP_1" }),
+    });
+    expect(response.status).toBe(200);
+  });
+});
