@@ -301,3 +301,28 @@ test("control：富媒体发送（Markdown / 图片带说明）与输入中状�
     sendBridgeTyping(deps(unboundStore, fakeApp()), { accountId: ACCOUNT_ID }),
   ).rejects.toBeInstanceOf(BotControlError);
 });
+
+test("control：语音独立发送，与文本同时提供时拒绝", async () => {
+  const store = new BridgeStore({ rootDir: tempRoot(), accountId: ACCOUNT_ID });
+  store.addCandidate(privateMessage("OPENID_A", "你好"));
+  store.bindOwner("OPENID_A");
+  store.recordInbound(privateMessage("OPENID_A", "在吗"));
+  const app = fakeApp();
+  const bridgeDeps = deps(store, app);
+
+  const voice = await sendBridgeMessage(bridgeDeps, {
+    accountId: ACCOUNT_ID,
+    voice: "base64://AAAA",
+  });
+  expect(app.sent.at(-1)).toEqual({ text: "", voice: "base64://AAAA" });
+  expect(voice.record.kind).toBe("voice");
+  expect(voice.record.text).toBe("[语音]");
+
+  await expect(
+    sendBridgeMessage(bridgeDeps, {
+      accountId: ACCOUNT_ID,
+      voice: "base64://AAAA",
+      text: "听这个",
+    }),
+  ).rejects.toBeInstanceOf(BotControlError);
+});

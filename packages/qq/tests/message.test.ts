@@ -35,6 +35,10 @@ const { SDK, instances } = vi.hoisted(() => {
       this.sent.push({ target, markdown: content });
       return { id: "sent", timestamp: 1 };
     }
+    async sendVoice(target: unknown, source: unknown) {
+      this.sent.push({ target, voice: source });
+      return { message: { id: "sent", timestamp: 1 } };
+    }
     async sendTyping(target: unknown, seconds?: number) {
       this.sent.push({ target, typing: seconds });
       return {};
@@ -159,4 +163,22 @@ test("被动回复也可以发图片（带 msg_id 的 replyTarget）", async () 
     source: { url: "https://example.com/b.png" },
     opts: { content: "" },
   });
+});
+
+test("C2C 语音：独立走 sendVoice，与文本合并时报错", async () => {
+  const client = new QQClient({ appId: "app", appSecret: "secret" });
+  const sdk = instances.at(-1)!;
+
+  await client.sendPrivateMessage("user", [{ type: "voice", source: "https://example.com/a.wav" }]);
+  expect(sdk.sent.at(-1)).toEqual({
+    target: { scope: "c2c", targetId: "user" },
+    voice: { url: "https://example.com/a.wav" },
+  });
+
+  await expect(
+    client.sendPrivateMessage("user", [
+      { type: "text", text: "听这个" },
+      { type: "voice", source: "https://example.com/a.wav" },
+    ]),
+  ).rejects.toThrow("语音消息不能与文本");
 });

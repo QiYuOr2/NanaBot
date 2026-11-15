@@ -200,3 +200,21 @@ test("bridge 中转：send 支持 markdown / image，typing 只认桥接专用�
     await expect(typingOk.json()).resolves.toMatchObject({ ok: true, typing: true });
   });
 });
+
+test("bridge 中转：send 支持 voice 独立发送，与 text 同时提供时拒绝", async () => {
+  await withSite(async (base) => {
+    const voice = await fetch(`${base}/api/bridge/send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${BRIDGE_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: "777001", voice: "base64://AAAA" }),
+    });
+    expect(voice.status).toBe(200);
+
+    const conflict = await fetch(`${base}/api/bridge/send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${BRIDGE_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: "777001", voice: "base64://AAAA", text: "听这个" }),
+    });
+    expect(conflict.status).toBe(400);
+  });
+});

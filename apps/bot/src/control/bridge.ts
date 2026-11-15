@@ -114,20 +114,24 @@ const sendSchema = z
     text: z.string().trim().max(2_000).optional(),
     markdown: z.string().trim().min(1).max(4_000).optional(),
     image: z.string().trim().min(1).max(8_000_000).optional(),
+    voice: z.string().trim().min(1).max(8_000_000).optional(),
   })
   .strict()
-  .refine((value) => (value.text ?? "") !== "" || value.markdown || value.image, {
-    message: "text、markdown、image 至少提供一项。",
+  .refine((value) => (value.text ?? "") !== "" || value.markdown || value.image || value.voice, {
+    message: "text、markdown、image、voice 至少提供一项。",
   })
   .refine((value) => !(value.markdown && value.image), {
     message: "markdown 与 image 不能同时提供。",
   })
   .refine((value) => !(value.markdown && value.text), {
     message: "markdown 不能与 text 同时提供（官方要求带 markdown 时 content 为空）。",
+  })
+  .refine((value) => !(value.voice && (value.text || value.markdown || value.image)), {
+    message: "voice 独立发送，不能与 text、markdown、image 同时提供。",
   });
 
 /**
- * 经 bot 向主人发送一条私聊（纯文本 / Markdown / 图片带说明）。
+ * 经 bot 向主人发送一条私聊（纯文本 / Markdown / 图片带说明 / 语音）。
  * 优先走最近入站消息的被动回复（官方 C2C 窗口 60 分钟）；窗口过期或次数用尽时
  * 适配层会抛错，再回退主动发送。两次都失败则记录失败并返回 502，不假装送达。
  */
@@ -136,23 +140,32 @@ export async function sendBridgeMessage(deps: BridgeDeps, payload: unknown) {
   if (!parsed.success) {
     throw new BotControlError(
       400,
-      "请求参数不合法：支持 accountId 与 text / markdown / image（markdown 与 image、text 互斥）。",
+      "请求参数不合法：支持 accountId 与 text / markdown / image / voice（互斥规则见接口说明）。",
     );
   }
   const { accountId } = parsed.data;
-  const kind = parsed.data.markdown ? "markdown" : parsed.data.image ? "image" : "text";
+  const kind = parsed.data.markdown
+    ? "markdown"
+    : parsed.data.image
+      ? "image"
+      : parsed.data.voice
+        ? "voice"
+        : "text";
   const outgoing: OutgoingMessage = {
-    text: parsed.data.markdown ? "" : (parsed.data.text ?? ""),
+    text: parsed.data.markdown || parsed.data.voice ? "" : (parsed.data.text ?? ""),
     ...(parsed.data.markdown ? { markdown: parsed.data.markdown } : {}),
     ...(parsed.data.image ? { image: parsed.data.image } : {}),
+    ...(parsed.data.voice ? { voice: parsed.data.voice } : {}),
   };
-  // 记录里留可读文本：图片留说明或占位，Markdown 留原文。
+  // 记录里留可读文本：图片留说明或占位，Markdown 留原文，语音留占位。
   const recordText =
     kind === "markdown"
       ? (parsed.data.markdown as string)
       : kind === "image"
         ? (parsed.data.text ?? "[图片]")
-        : (parsed.data.text as string);
+        : kind === "voice"
+          ? "[语音]"
+          : (parsed.data.text as string);
   const runtime = requireRuntime(deps, accountId);
   const state = runtime.store.read();
   if (!state.ownerId) {

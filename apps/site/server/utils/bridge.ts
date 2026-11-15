@@ -134,7 +134,7 @@ export async function fetchBridgeMessages(accountId: string, after: number) {
 
 export async function postBridgeSend(
   accountId: string,
-  message: { text?: string; markdown?: string; image?: string },
+  message: { text?: string; markdown?: string; image?: string; voice?: string },
 ) {
   return callBridge(
     BOT_CONTROL_BRIDGE_SEND_PATH,
@@ -142,8 +142,8 @@ export async function postBridgeSend(
       method: "POST",
       body: { accountId, ...message },
     },
-    // 图片走 base64 时请求体远超默认 15 秒档的体量预期，超时给足上传余量。
-    message.image ? 60_000 : BOT_CONTROL_TIMEOUT_MS,
+    // 图片/语音走 base64 时请求体远超默认 15 秒档的体量预期，超时给足上传余量。
+    message.image || message.voice ? 60_000 : BOT_CONTROL_TIMEOUT_MS,
   );
 }
 
