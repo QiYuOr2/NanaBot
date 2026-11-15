@@ -27,49 +27,73 @@ function requireRuntime(deps: BridgeDeps, accountId: string): BridgeRuntime {
 const statusQuerySchema = z
   .object({
     since: z.coerce.number().int().min(0).default(0),
+    gsince: z.coerce.number().int().min(0).default(0),
     wait: z.coerce.number().int().min(0).max(55).default(0),
   })
   .strict();
 
 /**
- * 无需口令的状态探针：只暴露是否已绑定与最近入站 seq，不含任何消息内容。
- * 可选 since/wait 长轮询：wait 秒内 latestInboundSeq 未超过 since 就一直挂起，
- * 有新入站立刻返回；wait=0（缺省）时立即返回当前值。
+ * 无需口令的状态探针：只暴露是否已绑定与最近入站 seq（私聊 since / 群 gsince 两条线），
+ * 不含任何消息内容。可选长轮询：wait 秒内任一侧有新入站立刻返回两边的当前值；
+ * wait=0（缺省）时立即返回。
  */
 export async function getBridgeStatus(
   deps: BridgeDeps,
   accountId: string,
-  query?: { since?: unknown; wait?: unknown },
+  query?: { since?: unknown; gsince?: unknown; wait?: unknown },
 ) {
   const runtime = requireRuntime(deps, accountId);
   const parsed = statusQuerySchema.safeParse({
     since: query?.since ?? undefined,
+    gsince: query?.gsince ?? undefined,
     wait: query?.wait ?? undefined,
   });
   if (!parsed.success) {
-    throw new BotControlError(400, "since/wait 参数不合法。");
+    throw new BotControlError(400, "since/gsince/wait 参数不合法。");
   }
-  const latestInboundSeq = await runtime.store.waitForInboundAfter(
-    parsed.data.since,
+  const latest = await runtime.store.waitForAnyInboundAfter(
+    { c2c: parsed.data.since, group: parsed.data.gsince },
     parsed.data.wait * 1_000,
   );
   const state = runtime.store.read();
+  const latestGroup = runtime.store.latestGroupInbound();
   return {
     bound: Boolean(state.ownerId),
-    latestInboundSeq,
+    latestInboundSeq: latest.c2c,
+    latestGroupInboundSeq: latest.group,
+    latestGroupId: latestGroup?.groupId ?? null,
   };
 }
 
 const afterSchema = z.coerce.number().int().min(0).default(0);
 
-/** 读取 seq 大于 after 的消息；未绑定时附带候选发送者（不含回复上下文）。 */
-export function getBridgeMessages(deps: BridgeDeps, accountId: string, afterRaw: unknown) {
+/**
+ * 读取 seq 大于 after 的消息；未绑定时附带候选发送者（不含回复上下文）。
+ * 带 groupId 时改读该群的记录；两种情况都附带已发现群的摘要列表。
+ */
+export function getBridgeMessages(
+  deps: BridgeDeps,
+  accountId: string,
+  afterRaw: unknown,
+  groupIdRaw?: unknown,
+) {
   const runtime = requireRuntime(deps, accountId);
   const parsed = afterSchema.safeParse(afterRaw ?? 0);
   if (!parsed.success) {
     throw new BotControlError(400, "after 参数不合法。");
   }
   const state = runtime.store.read();
+  const groups = runtime.store.listGroups();
+  if (typeof groupIdRaw === "string" && groupIdRaw) {
+    return {
+      bound: Boolean(state.ownerId),
+      ownerId: state.ownerId ?? null,
+      candidates: [],
+      groupId: groupIdRaw as string | null,
+      groups,
+      messages: runtime.store.groupMessagesAfter(groupIdRaw, parsed.data),
+    };
+  }
   return {
     bound: Boolean(state.ownerId),
     ownerId: state.ownerId ?? null,
@@ -81,6 +105,8 @@ export function getBridgeMessages(deps: BridgeDeps, accountId: string, afterRaw:
           text: candidate.text,
           at: candidate.at,
         })),
+    groupId: null as string | null,
+    groups,
     messages: runtime.store.messagesAfter(parsed.data),
   };
 }
@@ -111,6 +137,8 @@ export function bindBridgeOwner(deps: BridgeDeps, payload: unknown) {
 const sendSchema = z
   .object({
     accountId: z.string().min(1),
+    /** 目标群的 group_openid；缺省为私聊主人。带此字段时 text 等形态规则相同，发送目标改为该群。 */
+    groupId: z.string().min(1).optional(),
     text: z.string().trim().max(2_000).optional(),
     markdown: z.string().trim().min(1).max(4_000).optional(),
     image: z.string().trim().min(1).max(8_000_000).optional(),
@@ -167,6 +195,17 @@ export async function sendBridgeMessage(deps: BridgeDeps, payload: unknown) {
           ? "[语音]"
           : (parsed.data.text as string);
   const runtime = requireRuntime(deps, accountId);
+  if (parsed.data.groupId) {
+    return sendBridgeGroupMessage(
+      deps,
+      runtime,
+      accountId,
+      parsed.data.groupId,
+      outgoing,
+      recordText,
+      kind,
+    );
+  }
   const state = runtime.store.read();
   if (!state.ownerId) {
     throw new BotControlError(409, "尚未绑定主人，无法发送。");
@@ -206,6 +245,67 @@ export async function sendBridgeMessage(deps: BridgeDeps, payload: unknown) {
     runtime.store.recordOutbound(recordText, "proactive", message.slice(0, 500), kind);
     deps.logger.warn(`[bridge] 账号 ${accountId} 发送给主人失败：${message}`);
     void replyError;
+    throw new BotControlError(502, message.slice(0, 500) || "发送失败");
+  }
+}
+
+/**
+ * 向某个群发送一条消息（形态规则与私聊相同）。群必须先被 @ 建档（有 lastInbound 上下文），
+ * 否则 409。优先被动回复该群最近一条 @ 消息；失败回退主动发送（官方群主动发言需要
+ * 群主授权，未授权时平台会拒绝并如实返回 502）。群发送不要求先绑定主人。
+ */
+async function sendBridgeGroupMessage(
+  deps: BridgeDeps,
+  runtime: BridgeRuntime,
+  accountId: string,
+  groupId: string,
+  outgoing: OutgoingMessage,
+  recordText: string,
+  kind: "text" | "markdown" | "image" | "voice",
+) {
+  const group = runtime.store.groupState(groupId);
+  if (!group?.lastInbound) {
+    throw new BotControlError(409, "这个群还没有被 @ 记录过，无法发送（先在群里 @ 一次机器人）。");
+  }
+  try {
+    await runtime.app.replyMessage(group.lastInbound, outgoing);
+    const record = runtime.store.recordGroupOutbound(groupId, recordText, "reply", undefined, kind);
+    deps.logger.info(`[bridge] 账号 ${accountId} 已在群 ${groupId} 被动回复（seq=${record.seq}）`);
+    return { record, via: "reply" as const };
+  } catch (error) {
+    deps.logger.info(
+      `[bridge] 账号 ${accountId} 群 ${groupId} 被动回复不可用，改为主动发送：${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  try {
+    await runtime.app.sendMessage(
+      {
+        platform: group.lastInbound.platform,
+        accountId,
+        scene: "group",
+        conversationId: groupId,
+      },
+      outgoing,
+    );
+    const record = runtime.store.recordGroupOutbound(
+      groupId,
+      recordText,
+      "proactive",
+      undefined,
+      kind,
+    );
+    deps.logger.info(`[bridge] 账号 ${accountId} 已在群 ${groupId} 主动发送（seq=${record.seq}）`);
+    return { record, via: "proactive" as const };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "发送失败";
+    runtime.store.recordGroupOutbound(
+      groupId,
+      recordText,
+      "proactive",
+      message.slice(0, 500),
+      kind,
+    );
+    deps.logger.warn(`[bridge] 账号 ${accountId} 向群 ${groupId} 发送失败：${message}`);
     throw new BotControlError(502, message.slice(0, 500) || "发送失败");
   }
 }

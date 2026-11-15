@@ -5,6 +5,7 @@ import { postBridgeSend, requireBridgeKey } from "../../utils/bridge.ts";
 const schema = z
   .object({
     accountId: z.string().min(1),
+    groupId: z.string().min(1).optional(),
     text: z.string().trim().max(2_000).optional(),
     markdown: z.string().trim().min(1).max(4_000).optional(),
     image: z.string().trim().min(1).max(8_000_000).optional(),

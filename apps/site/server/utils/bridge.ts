@@ -106,13 +106,14 @@ async function callBridge(
   return payload;
 }
 
-/** 状态探针：bot 侧该接口本身不设口令，这里也只回是否绑定与最近入站 seq 两个数字。 */
+/** 状态探针：bot 侧该接口本身不设口令，这里也只回是否绑定与最近入站 seq（私聊/群两条线）。 */
 export async function fetchBridgeStatus(
   accountId: string,
-  options?: { since?: number; wait?: number },
+  options?: { since?: number; gsince?: number; wait?: number },
 ) {
   const query = new URLSearchParams({ account: accountId });
   if (options?.since !== undefined) query.set("since", String(options.since));
+  if (options?.gsince !== undefined) query.set("gsince", String(options.gsince));
   if (options?.wait !== undefined) query.set("wait", String(options.wait));
   // 长轮询时 bot 会把响应挂到 wait 秒才返回，中转超时要比 wait 多留余量。
   const timeoutMs = options?.wait ? (options.wait + 10) * 1_000 : BOT_CONTROL_TIMEOUT_MS;
@@ -124,17 +125,21 @@ export async function fetchBridgeStatus(
   return {
     bound: payload.bound === true,
     latestInboundSeq: typeof payload.latestInboundSeq === "number" ? payload.latestInboundSeq : 0,
+    latestGroupInboundSeq:
+      typeof payload.latestGroupInboundSeq === "number" ? payload.latestGroupInboundSeq : 0,
+    latestGroupId: typeof payload.latestGroupId === "string" ? payload.latestGroupId : null,
   };
 }
 
-export async function fetchBridgeMessages(accountId: string, after: number) {
+export async function fetchBridgeMessages(accountId: string, after: number, groupId?: string) {
   const query = new URLSearchParams({ account: accountId, after: String(after) });
+  if (groupId) query.set("group", groupId);
   return callBridge(`${BOT_CONTROL_BRIDGE_MESSAGES_PATH}?${query.toString()}`, { method: "GET" });
 }
 
 export async function postBridgeSend(
   accountId: string,
-  message: { text?: string; markdown?: string; image?: string; voice?: string },
+  message: { text?: string; markdown?: string; image?: string; voice?: string; groupId?: string },
 ) {
   return callBridge(
     BOT_CONTROL_BRIDGE_SEND_PATH,

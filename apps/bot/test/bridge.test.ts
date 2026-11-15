@@ -122,6 +122,8 @@ test("control：未绑定时返回候选，绑定后状态与发送走被动回�
   await expect(getBridgeStatus(bridgeDeps, ACCOUNT_ID)).resolves.toEqual({
     bound: false,
     latestInboundSeq: 0,
+    latestGroupInboundSeq: 0,
+    latestGroupId: null,
   });
   const before = getBridgeMessages(bridgeDeps, ACCOUNT_ID, 0);
   expect(before.bound).toBe(false);
@@ -153,18 +155,27 @@ test("status 长轮询：已越过 since 立即返回，等待中新入站立刻
   await expect(getBridgeStatus(bridgeDeps, ACCOUNT_ID, { since: 0, wait: 30 })).resolves.toEqual({
     bound: true,
     latestInboundSeq: 1,
+    latestGroupInboundSeq: 0,
+    latestGroupId: null,
   });
 
   // 等待期间来新入站：不等超时，立刻带着新 seq 返回。
   const waiting = getBridgeStatus(bridgeDeps, ACCOUNT_ID, { since: 1, wait: 30 });
   setTimeout(() => store.recordInbound(privateMessage("OPENID_A", "第二条")), 50);
-  await expect(waiting).resolves.toEqual({ bound: true, latestInboundSeq: 2 });
+  await expect(waiting).resolves.toEqual({
+    bound: true,
+    latestInboundSeq: 2,
+    latestGroupInboundSeq: 0,
+    latestGroupId: null,
+  });
 
   // 超时仍无新入站：返回当前值，不报错。
   const startedAt = Date.now();
   await expect(getBridgeStatus(bridgeDeps, ACCOUNT_ID, { since: 2, wait: 1 })).resolves.toEqual({
     bound: true,
     latestInboundSeq: 2,
+    latestGroupInboundSeq: 0,
+    latestGroupId: null,
   });
   expect(Date.now() - startedAt).toBeGreaterThanOrEqual(900);
 
@@ -325,4 +336,92 @@ test("control：语音独立发送，与文本同时提供时拒绝", async () =
       text: "听这个",
     }),
   ).rejects.toBeInstanceOf(BotControlError);
+});
+
+function groupMessage(groupId: string, senderId: string, text: string): IncomingMessage {
+  return {
+    id: `gmsg-${groupId}-${text}`,
+    accountId: ACCOUNT_ID,
+    platform: "official",
+    scene: "group",
+    conversationId: groupId,
+    senderId,
+    senderName: "群友",
+    text,
+    timestamp: 1_700_000_000_000,
+    isAtBot: true,
+    replyContext: {
+      platform: "official",
+      messageId: "gm-1",
+      scene: "group",
+      groupOpenId: groupId,
+      userOpenId: senderId,
+    },
+  };
+}
+
+test("store：群记录与私聊严格分开（独立文件与 seq）", async () => {
+  const { existsSync, readFileSync } = await import("node:fs");
+  const rootDir = tempRoot();
+  const store = new BridgeStore({ rootDir, accountId: ACCOUNT_ID });
+  store.recordInbound(privateMessage("OPENID_A", "私聊内容"));
+  const groupRecord = store.recordGroupInbound(
+    groupMessage("GROUP_1", "MEMBER_1", "群里 @ 机器人"),
+  );
+
+  expect(groupRecord.seq).toBe(1); // 群 seq 独立从 1 开始，不占用私聊 seq
+  expect(store.latestInboundSeq()).toBe(1);
+  expect(store.latestGroupInbound()).toEqual({ seq: 1, groupId: "GROUP_1" });
+  expect(store.groupMessagesAfter("GROUP_1", 0).map((r) => r.text)).toEqual(["群里 @ 机器人"]);
+  expect(store.messagesAfter(0).map((r) => r.text)).toEqual(["私聊内容"]);
+  expect(store.listGroups()).toHaveLength(1);
+
+  // 物理分离：私聊文件不含群内容，群文件不含私聊内容。
+  const privateRaw = readFileSync(store.filePath, "utf8");
+  const groupRaw = readFileSync(store.groupFilePath, "utf8");
+  expect(privateRaw).not.toContain("群里 @ 机器人");
+  expect(groupRaw).not.toContain("私聊内容");
+  expect(existsSync(store.groupFilePath)).toBe(true);
+});
+
+test("control：群发送先走被动回复，未知群拒绝，状态带群 seq", async () => {
+  const store = new BridgeStore({ rootDir: tempRoot(), accountId: ACCOUNT_ID });
+  const targets: unknown[] = [];
+  const app = {
+    async replyMessage(_message: unknown, _outgoing: unknown) {},
+    async sendMessage(target: unknown, _outgoing: unknown) {
+      targets.push(target);
+    },
+    async sendTyping() {},
+  };
+  const bridgeDeps: BridgeDeps = {
+    bridges: new Map([[ACCOUNT_ID, { app: app as never, store }]]),
+    logger: logger(),
+  };
+
+  await expect(
+    sendBridgeMessage(bridgeDeps, { accountId: ACCOUNT_ID, groupId: "GROUP_X", text: "大家好" }),
+  ).rejects.toBeInstanceOf(BotControlError);
+
+  store.recordGroupInbound(groupMessage("GROUP_1", "MEMBER_1", "@机器人 在吗"));
+  const sent = await sendBridgeMessage(bridgeDeps, {
+    accountId: ACCOUNT_ID,
+    groupId: "GROUP_1",
+    text: "在的",
+  });
+  expect(sent.via).toBe("reply");
+  expect(sent.record.text).toBe("在的");
+
+  const status = await getBridgeStatus(bridgeDeps, ACCOUNT_ID, {});
+  expect(status.latestGroupInboundSeq).toBe(1);
+  expect(status.latestGroupId).toBe("GROUP_1");
+  expect(status.latestInboundSeq).toBe(0);
+
+  const groupView = getBridgeMessages(bridgeDeps, ACCOUNT_ID, 0, "GROUP_1");
+  expect(groupView.messages.map((r) => `${r.direction}:${r.text}`)).toEqual([
+    "in:@机器人 在吗",
+    "out:在的",
+  ]);
+  expect(groupView.groups).toHaveLength(1);
+  expect(targets).toHaveLength(0);
 });

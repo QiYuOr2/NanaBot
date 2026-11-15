@@ -101,7 +101,12 @@ test("bridge 中转：status 公开且只回数字，messages/send/bind 只认�
   await withSite(async (base, bot) => {
     const statusResponse = await fetch(`${base}/api/bridge/status?account=777001`);
     expect(statusResponse.status).toBe(200);
-    await expect(statusResponse.json()).resolves.toEqual({ bound: true, latestInboundSeq: 7 });
+    await expect(statusResponse.json()).resolves.toEqual({
+      bound: true,
+      latestInboundSeq: 7,
+      latestGroupInboundSeq: 0,
+      latestGroupId: null,
+    });
 
     const noKey = await fetch(`${base}/api/bridge/messages?account=777001`);
     expect(noKey.status).toBe(401);
@@ -143,7 +148,12 @@ test("bridge 中转：status 透传 since/wait 长轮询参数，非法参数拒
   await withSite(async (base, bot) => {
     const res = await fetch(`${base}/api/bridge/status?account=777001&since=3&wait=5`);
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ bound: true, latestInboundSeq: 7 });
+    await expect(res.json()).resolves.toEqual({
+      bound: true,
+      latestInboundSeq: 7,
+      latestGroupInboundSeq: 0,
+      latestGroupId: null,
+    });
     expect(bot.seenStatusUrls.at(-1)).toContain("since=3");
     expect(bot.seenStatusUrls.at(-1)).toContain("wait=5");
 
@@ -216,5 +226,22 @@ test("bridge 中转：send 支持 voice 独立发送，与 text 同时提供时�
       body: JSON.stringify({ accountId: "777001", voice: "base64://AAAA", text: "听这个" }),
     });
     expect(conflict.status).toBe(400);
+  });
+});
+
+test("bridge 中转：send 支持 groupId 透传，messages 支持 group 读取", async () => {
+  await withSite(async (base) => {
+    const groupSend = await fetch(`${base}/api/bridge/send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${BRIDGE_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: "777001", groupId: "GROUP_1", text: "大家好" }),
+    });
+    expect(groupSend.status).toBe(200);
+
+    const groupMessages = await fetch(
+      `${base}/api/bridge/messages?account=777001&after=0&group=GROUP_1`,
+      { headers: { Authorization: `Bearer ${BRIDGE_TOKEN}` } },
+    );
+    expect(groupMessages.status).toBe(200);
   });
 });

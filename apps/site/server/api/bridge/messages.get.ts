@@ -13,5 +13,6 @@ export default defineEventHandler(async (event) => {
   if (!Number.isSafeInteger(after) || after < 0) {
     throw createError({ statusCode: 400, statusMessage: "after 参数不合法" });
   }
-  return fetchBridgeMessages(account, after);
+  const group = typeof query.group === "string" && query.group ? query.group : undefined;
+  return fetchBridgeMessages(account, after, group);
 });
