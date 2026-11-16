@@ -94,7 +94,7 @@ Vercel 项目 Root Directory 指向 `deploy/vercel-site-proxy`。不连接 Nuxt 
 }
 ```
 
-实施时将 `<ORIGIN_PUBLIC_IP>` 替换为腾讯云公网 IPv4，不要把占位符提交为可部署配置。若 Vercel 对正则 rewrite 的配置校验不接受该表达式，先按 Vercel 当前文档调整并在 Preview Deployment 验证；不得退化成会把 bridge 请求转发到源站的无条件 catch-all。
+实施时将 `<ORIGIN_PUBLIC_IP>` 替换为腾讯云公网 IPv4。注意：`vercel.json` 的 rewrite destination 不支持从 Vercel 环境变量插值，因此不能把源站地址写成运行时环境变量。源站公网 IP 本身不是凭据；本仓库为私有仓库，可将实际 IP 写入代理项目配置。若部署者不希望把 IP 放进 Git，应改用 Vercel Dashboard 的项目级路由配置，或在本地维护未提交的部署配置，而不是假设 `vercel.json` 会读取环境变量。若 Vercel 对正则 rewrite 的配置校验不接受该表达式，先按 Vercel 当前文档调整并在 Preview Deployment 验证；不得退化成会把 bridge 请求转发到源站的无条件 catch-all。
 
 路由行为：
 
