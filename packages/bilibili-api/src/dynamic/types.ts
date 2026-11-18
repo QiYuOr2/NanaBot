@@ -50,6 +50,12 @@ export interface DynamicFeedOptions {
   emptyRetryDelayMs?: number;
   /** 注入时钟（毫秒），便于测试 WBI 签名与缓存过期。 */
   now?: () => number;
+  /**
+   * 登录态 Cookie（原始 Cookie 头字符串，如 `SESSDATA=...; bili_jct=...`）。
+   * 配置后随每次请求发送：匿名 feed 在数据中心 IP 上常被风控（HTTP 412），登录态可绕过。
+   * 只来自调用方显式配置，绝不从响应中吸收，也不会写入日志。
+   */
+  cookie?: string;
 }
 
 // ---------------------------------------------------------------------------

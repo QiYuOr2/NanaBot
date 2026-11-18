@@ -1,4 +1,5 @@
 import { dynamic as bilibiliDynamic } from "@nana/bilibili-api";
+import { ENV_KEYS } from "@nana/constants";
 import { defineFeature, type FeatureContext } from "../core/index.ts";
 import type { StorageOptions } from "@nana/storage";
 import {
@@ -26,7 +27,10 @@ export interface DynamicFeatureRegistration extends StorageOptions {
 }
 
 function createDefaultFetch(): DynamicFetcher {
-  return new bilibiliDynamic.BilibiliDynamicClient();
+  // 登录态 Cookie 只从 bot 的 .env 读（BILIBILI_COOKIE），不入配置文件、不写日志。
+  // 匿名 feed 在数据中心 IP 上会被风控（HTTP 412），配置后走登录态取数。
+  const cookie = process.env[ENV_KEYS.BILIBILI_COOKIE];
+  return new bilibiliDynamic.BilibiliDynamicClient(cookie ? { cookie } : {});
 }
 
 /** 把 FeatureContext 的 logger 适配成 DynamicLogger。 */
@@ -124,6 +128,9 @@ export const createDynamicMonitorFeature = defineFeature<DynamicFeatureRegistrat
     logger.info(
       `[动态监控] 账号 ${context.accountId} 启动 ${registration.streamers.length} 个 UP 主动态监控`,
     );
+    if (!registration.fetcher && process.env[ENV_KEYS.BILIBILI_COOKIE]) {
+      logger.info("[动态监控] 已启用 Bilibili 登录态 Cookie（BILIBILI_COOKIE）");
+    }
 
     return () => {
       clearInterval(flushTimer);

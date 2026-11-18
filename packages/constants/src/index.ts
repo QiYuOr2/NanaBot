@@ -86,6 +86,11 @@ export const ENV_KEYS = {
   SERVER_EMAIL_PASSWORD: "SERVER_EMAIL_PASSWORD",
   /** DeepSeek 直播摘要。机器人与站点补生成都读这个变量。 */
   DEEPSEEK_API_KEY: "DEEPSEEK_API_KEY",
+  /**
+   * 动态监控用的 Bilibili 登录 Cookie（原始 Cookie 头，如 SESSDATA=...; bili_jct=...）。
+   * 只写在 bot 的 .env 里；匿名 feed 被风控（HTTP 412）时靠它取数。绝不写日志。
+   */
+  BILIBILI_COOKIE: "BILIBILI_COOKIE",
 } as const;
 
 /** bot 内部控制接口：仅监听本机，site 通过同一管理口令调用。 */

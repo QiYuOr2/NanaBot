@@ -279,3 +279,49 @@ test("拒绝非正整数 UID", async () => {
   const client = new dynamic.BilibiliDynamicClient({ fetch: createFakeFetch(feedBody) });
   await expect(client.fetchUserDynamics(0)).rejects.toThrow("uid 必须是正整数");
 });
+
+test("纯文字动态（WORD）按 opus 解析，正文取 desc", async () => {
+  const wordFeed = {
+    code: 0,
+    message: "0",
+    data: {
+      has_more: false,
+      items: [
+        {
+          id_str: "900000000000000010",
+          type: "DYNAMIC_TYPE_WORD",
+          modules: {
+            module_author: { mid: 10001, name: "测试UP", face: "", pub_ts: 1700000600 },
+            module_dynamic: { desc: { text: "这是一条纯文字动态" }, major: null },
+            module_tag: null,
+          },
+        },
+      ],
+    },
+  };
+  const client = new dynamic.BilibiliDynamicClient({
+    fetch: createFakeFetch(wordFeed),
+    now: () => 1_700_000_000_000,
+  });
+  const items = await client.fetchUserDynamics(10001);
+  expect(items).toHaveLength(1);
+  expect(items[0]?.type).toBe("opus");
+  expect(items[0]?.text).toBe("这是一条纯文字动态");
+});
+
+test("配置登录 Cookie 后，请求携带 SESSDATA 且与匿名 Cookie 并存", async () => {
+  const requests: RecordedRequest[] = [];
+  const client = new dynamic.BilibiliDynamicClient({
+    fetch: createFakeFetch(feedBody, { requests }),
+    now: () => 1_700_000_000_000,
+    cookie: "SESSDATA=fake-sessdata; bili_jct=fake-jct; DedeUserID=10001",
+  });
+  await client.fetchUserDynamics(10001);
+  const feedRequest = requests.find((request) =>
+    request.url.includes("/x/polymer/web-dynamic/v1/feed/space"),
+  );
+  expect(feedRequest).toBeDefined();
+  expect(feedRequest!.headers.Cookie).toContain("SESSDATA=fake-sessdata");
+  expect(feedRequest!.headers.Cookie).toContain("bili_jct=fake-jct");
+  expect(feedRequest!.headers.Cookie).toContain("buvid3=");
+});
