@@ -9,6 +9,10 @@
 
 ![NanaBot 工程架构图](./docs/architecture/nanabot-architecture.svg)
 
+## 技术设计
+
+- [Bilibili UP 主动态推送](./docs/design/bilibili-dynamic-monitor.md)：动态 API、轮询调度、去重持久化、QQ 推送与分阶段实施方案。
+
 ## 功能
 
 - 多 B 站直播间开播 / 下播监控
