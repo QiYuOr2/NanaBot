@@ -110,7 +110,9 @@ function formatSize(size: number) {
             >
               <span :class="row.timestampClass">{{ row.timestamp }}</span>
               <span :class="row.levelClass">{{ row.levelText }}</span>
-              <span :class="row.sourceClass" :title="row.source ?? undefined">{{ row.source }}</span>
+              <span :class="row.sourceClass" :title="row.source ?? undefined">{{
+                row.source
+              }}</span>
             </div>
             <span class="min-w-0 flex-1 whitespace-pre-wrap break-words">{{ row.message }}</span>
           </div>

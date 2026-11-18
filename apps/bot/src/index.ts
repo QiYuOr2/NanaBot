@@ -19,6 +19,11 @@ import {
   type MonitorStreamerConfig,
 } from "./monitor";
 import {
+  createDynamicMonitorFeature,
+  loadDynamicMonitorConfig,
+  type DynamicStreamerConfig,
+} from "./dynamic/index.ts";
+import {
   createOfflineStateStore,
   loadOfflineDetectorConfig,
   offlineDetectorFeature,
@@ -143,6 +148,15 @@ async function main(): Promise<void> {
         `[app] 主播 ${streamer.streamer} 未配置 qqAccount，已跳过账号推送与监控功能。`,
       );
   }
+
+  // 动态监控独立读取所有 up（只看 dynamic: true，不要求 live: true），按 qqAccount 路由。
+  const dynamicConfig = loadDynamicMonitorConfig();
+  const dynamicByAccount = groupDynamicStreamersByAccount(
+    dynamicConfig.streamers,
+    accounts,
+    unavailableAccountIds,
+    appLogger,
+  );
   for (const account of officialAccounts) {
     try {
       validateOfficialTargets(
@@ -280,6 +294,20 @@ async function main(): Promise<void> {
       app.use(wordCloudFeature, wordCloudOptions);
     }
 
+    // 动态监控独立于直播监控：即使该账号没有直播主播，只要有动态 UP 主就启用。
+    const dynamicStreamers = dynamicByAccount.get(account.id) ?? [];
+    if (dynamicStreamers.length > 0) {
+      app.use(createDynamicMonitorFeature, {
+        rootDir: projectRoot,
+        provider: account.provider,
+        streamers: dynamicStreamers,
+        concurrency: dynamicConfig.concurrency,
+      });
+      accountLogger.info(
+        `[动态监控] 账号 ${account.id} 将监控 ${dynamicStreamers.length} 个 UP 主动态`,
+      );
+    }
+
     if (offlineConfig) {
       const notifiers = [createEmailNotifier(offlineConfig.notifier)];
       if (process.env[ENV_KEYS.BARK_KEY]) {
@@ -411,6 +439,45 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * 按 `qqAccount` 把动态监控 UP 主分组到账号。
+ *
+ * 与直播的 `groupStreamersByAccount` 不同，这里对缺失 / 未知 / 不可用账号只告警并跳过，
+ * 绝不回退到默认账号：动态通知是账号归属明确的推送。
+ */
+function groupDynamicStreamersByAccount(
+  streamers: readonly DynamicStreamerConfig[],
+  accounts: readonly { id: string }[],
+  unavailableAccountIds: ReadonlySet<string>,
+  logger: Logger,
+): Map<string, DynamicStreamerConfig[]> {
+  const known = new Set(accounts.map((account) => account.id));
+  const groups = new Map<string, DynamicStreamerConfig[]>();
+  for (const streamer of streamers) {
+    const accountId = streamer.qqAccount;
+    if (!accountId) {
+      logger.warn(`[动态监控] UP 主 ${streamer.streamer} 未配置 qqAccount，已跳过动态推送。`);
+      continue;
+    }
+    if (unavailableAccountIds.has(accountId)) {
+      logger.warn(
+        `[动态监控] UP 主 ${streamer.streamer} 指定的账号 ${accountId} 不可用，已跳过（不转发到其它账号）。`,
+      );
+      continue;
+    }
+    if (!known.has(accountId)) {
+      logger.warn(
+        `[动态监控] UP 主 ${streamer.streamer} 指定的账号 ${accountId} 不存在，已跳过（不转发到其它账号）。`,
+      );
+      continue;
+    }
+    const list = groups.get(accountId) ?? [];
+    list.push(streamer);
+    groups.set(accountId, list);
+  }
+  return groups;
+}
+
 /** 给离线告警加上账号名，便于同一收件箱区分哪个 QQ 账号掉线。 */
 function withAccountLabel(notifier: Notifier, account: { name: string }): Notifier {
   return {
@@ -421,9 +488,7 @@ function withAccountLabel(notifier: Notifier, account: { name: string }): Notifi
       await notifier.close?.();
     },
   };
-}
-
-/** 多 App 共用 SIGINT / SIGTERM：所有连接都收尾，但每个账号只发一次下线消息。 */
+} /** 多 App 共用 SIGINT / SIGTERM：所有连接都收尾，但每个账号只发一次下线消息。 */
 function registerShutdown(
   apps: readonly { app: BotApp; announce?: string | (() => string | undefined) }[],
   stopExtra?: () => Promise<void> | undefined,

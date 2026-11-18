@@ -138,9 +138,20 @@ up:
     wordcloud:
       enabled: true
       notifyGroups: [100000004]
-    # 动态监控目前未启用，保留配置兼容字段。
-    dynamic: false
-    dynamicMonitorConfig: {}
+    # 动态监控与直播监控互相独立：dynamic 为 true 时，即使 live 为 false 也会轮询该 UP 主动态。
+    dynamic: true
+    dynamicMonitorConfig:
+      # 是否把新动态推送到 notifyGroups；false 时仍抓取记录，但不发送。
+      enableNotify: true
+      # 动态通知群，与直播通知群独立。留空表示只监控记录、不推送。
+      notifyGroups: [100000003]
+      # 订阅的动态类型：video 视频 / opus 新版图文 / draw 旧式图片 / article 专栏。
+      types:
+        - video
+        - opus
+        - draw
+      # 轮询间隔（分钟），取值范围 1-60，默认 5。
+      pollIntervalMinutes: 5
 
   - uname: 示例主播（NapCat 推送）
     uid: 1
@@ -156,8 +167,13 @@ up:
     wordcloud:
       enabled: false
       notifyGroups: []
-    dynamic: false
-    dynamicMonitorConfig: {}
+    # 只监控动态、不监控直播的示例：live 为 false，dynamic 为 true。
+    dynamic: true
+    dynamicMonitorConfig:
+      enableNotify: true
+      notifyGroups: [100000001]
+      types: [video, opus, draw]
+      pollIntervalMinutes: 10
 
 # 配置此段后启用邮件离线告警；发件凭据在 apps/bot/.env 中填写
 # SERVER_EMAIL 与 SERVER_EMAIL_PASSWORD。删除本段可关闭邮件告警。

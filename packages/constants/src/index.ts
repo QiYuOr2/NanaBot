@@ -25,6 +25,9 @@ export const APP_STATE_FILE = "app-state.sqlite";
 export const DANMU_FILE = "danmu.sqlite";
 export const QQ_GROUP_FILE = "qq-group.sqlite";
 
+/** UP 主动态监控的 SQLite 数据库文件名（独立于直播状态与推送日志）。 */
+export const DYNAMIC_FILE = "dynamic.sqlite";
+
 /** 推送目的的事件名，用于标记一次推送的类型。 */
 export const PUSH_LOG_PURPOSES = [
   "live.start",
@@ -37,6 +40,9 @@ export const PUSH_LOG_PURPOSES = [
   "message.test",
   "message.command",
   "message.auto-reply",
+  "dynamic.video",
+  "dynamic.opus",
+  "dynamic.article",
 ] as const;
 
 /** 推送目的的类型。 */
@@ -54,6 +60,9 @@ export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
   "message.test": "测试消息",
   "message.command": "命令回复",
   "message.auto-reply": "自动回复",
+  "dynamic.video": "视频动态",
+  "dynamic.opus": "图文动态",
+  "dynamic.article": "专栏动态",
 };
 
 /** QQ 连接通道的展示名称。 */

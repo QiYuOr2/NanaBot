@@ -35,22 +35,43 @@ const StreamerWordCloudConfigSchema = z.object({
   notifyGroups: z.array(z.number().int().positive()).default([]),
 });
 
-const UpMonitorConfigSchema = z.object({
-  live: z.boolean(),
-  liveMonitorConfig: z.object({
-    enableNotify: z.boolean().default(true),
-    notifyGroups: z.array(z.number().int()),
-    messageTemplate: z.object({
-      start: z.string(),
-    }),
-  }),
-  /** 不写则不为该主播录制或推送词云。 */
-  wordcloud: StreamerWordCloudConfigSchema.optional(),
-  qqAccount: z.string().min(1).optional(),
-  uid: z.number().int(),
-  liveRoomId: z.number().int(),
-  uname: z.string().min(1),
-});
+const UpMonitorConfigSchema = z
+  .object({
+    live: z.boolean(),
+    // 直播相关字段在 live:false 时可以省略（例如只开启动态监控的 UP 主）。
+    liveMonitorConfig: z
+      .object({
+        enableNotify: z.boolean().default(true),
+        notifyGroups: z.array(z.number().int()),
+        messageTemplate: z.object({
+          start: z.string(),
+        }),
+      })
+      .optional(),
+    /** 不写则不为该主播录制或推送词云。 */
+    wordcloud: StreamerWordCloudConfigSchema.optional(),
+    qqAccount: z.string().min(1).optional(),
+    uid: z.number().int(),
+    liveRoomId: z.number().int().optional(),
+    uname: z.string().min(1),
+  })
+  .superRefine((entry, context) => {
+    if (!entry.live) return;
+    if (entry.liveRoomId === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["liveRoomId"],
+        message: "live: true 时必须配置 liveRoomId",
+      });
+    }
+    if (entry.liveMonitorConfig === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["liveMonitorConfig"],
+        message: "live: true 时必须配置 liveMonitorConfig",
+      });
+    }
+  });
 
 type UpMonitorConfig = z.infer<typeof UpMonitorConfigSchema>;
 
@@ -68,6 +89,12 @@ export function loadMonitorConfig(): MonitorConfig {
 }
 
 function toMonitorStreamerConfig(config: UpMonitorConfig): MonitorStreamerConfig {
+  // schema 的 superRefine 已保证 live:true 的条目一定有这两个字段。
+  if (config.liveRoomId === undefined || config.liveMonitorConfig === undefined) {
+    throw new Error(
+      `主播 ${config.uname} 启用了直播监控，但缺少 liveRoomId 或 liveMonitorConfig。`,
+    );
+  }
   return {
     uid: config.uid,
     roomId: config.liveRoomId,
