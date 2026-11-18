@@ -46,7 +46,7 @@ Boku 是 Go 实现；NanaBot 是 TypeScript monorepo。实施时移植协议逻�
 
 ## 3. 总体架构
 
-~~~mermaid
+```mermaid
 flowchart TD
   A["nana.config.yaml"] --> B["Dynamic config loader"]
   B --> C["Dynamic Monitor / Scheduler"]
@@ -58,7 +58,7 @@ flowchart TD
   H --> I["Account-scoped QQ sender"]
   I --> J["QQ official API or NapCat"]
   I --> K["push-log.sqlite"]
-~~~
+```
 
 职责边界：
 
@@ -73,9 +73,9 @@ flowchart TD
 
 优先沿用 Boku 当前实现的 Web 动态 Feed：
 
-~~~http
+```http
 GET https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space
-~~~
+```
 
 关键参数按 Boku 实现核对，通常包含 host_mid、platform=web、features=itemOpusStyle，并按要求附加 WBI 签名参数。不要仅凭本文硬编码接口参数；以 Boku 当前源码、真实响应 fixture 和本次测试结果为准。
 
@@ -83,7 +83,7 @@ GET https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space
 
 在 packages/bilibili-api/src 内扩展：
 
-~~~text
+```text
 dynamic/
   index.ts       # 动态 API 对外导出
   client.ts      # Feed 请求与分页/请求参数
@@ -91,7 +91,7 @@ dynamic/
   wbi.ts         # mixin key、签名参数生成
   parser.ts      # 响应解析与统一 DynamicItem
   types.ts       # API 原始响应与标准化类型
-~~~
+```
 
 可根据现有 package 的命名与模块规模调整，但不要为了目录对称而过度拆分。
 
@@ -99,7 +99,7 @@ dynamic/
 
 API 层向 Bot 输出稳定的领域类型，避免 Bot 直接依赖 B 站嵌套响应：
 
-~~~ts
+```ts
 type BilibiliDynamicType = "video" | "opus" | "draw" | "article" | "forward" | "unknown";
 
 interface BilibiliDynamic {
@@ -113,7 +113,7 @@ interface BilibiliDynamic {
   coverUrl: string | null;
   imageUrls: string[];
 }
-~~~
+```
 
 实际实现应结合现有 TypeScript 风格补充 author 信息及可选字段。动态 ID 始终按字符串保存。原始响应类型应对未知字段保持兼容，解析器遇到未知动态类型时返回 unknown，不能让单条未知动态导致整页解析失败。
 
@@ -149,7 +149,7 @@ interface BilibiliDynamic {
 
 建议新增 apps/bot/src/dynamic/：
 
-~~~text
+```text
 dynamic/
   index.ts
   config.ts
@@ -158,7 +158,7 @@ dynamic/
   deduplicator.ts
   formatter.ts
   sender.ts
-~~~
+```
 
 可以按现有 Bot feature / account runtime 模式调整，不要求机械照搬文件拆分。
 
@@ -166,7 +166,7 @@ dynamic/
 
 主播列表仍然使用现有顶层 up，动态监控开关与直播监控开关互相独立：
 
-~~~yaml
+```yaml
 up:
   - uname: 示例主播
     uid: 10001
@@ -189,7 +189,7 @@ up:
         - draw
         # article 可选
       pollIntervalMinutes: 5
-~~~
+```
 
 Schema 约束：
 

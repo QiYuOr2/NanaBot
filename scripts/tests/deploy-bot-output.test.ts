@@ -106,7 +106,9 @@ process.exit(process.env.TEST_FAIL_HEALTH === "1" || active !== "new" || url !==
 function leftovers(app: string) {
   return readdirSync(app).filter(
     (name) =>
-      name.startsWith(".bot-output.") || name.startsWith("dist.") || name.startsWith("node_modules."),
+      name.startsWith(".bot-output.") ||
+      name.startsWith("dist.") ||
+      name.startsWith("node_modules."),
   );
 }
 

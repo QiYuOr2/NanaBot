@@ -1,0 +1,147 @@
+{
+  "code": 0,
+  "message": "0",
+  "data": {
+    "has_more": true,
+    "offset": "12345",
+    "items": [
+      {
+        "id_str": "900000000000000001",
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": {
+            "mid": 10001,
+            "name": "测试UP",
+            "face": "https://i0.hdslb.com/bfs/face/avatar.jpg",
+            "pub_ts": 1700000000
+          },
+          "module_dynamic": {
+            "desc": null,
+            "major": {
+              "archive": {
+                "bvid": "BV1xx411c7mD",
+                "title": "一个测试视频",
+                "jump_url": "//www.bilibili.com/video/BV1xx411c7mD",
+                "cover": "https://i0.hdslb.com/bfs/archive/cover.jpg",
+                "desc": "视频简介"
+              }
+            }
+          },
+          "module_tag": null
+        }
+      },
+      {
+        "id_str": "900000000000000002",
+        "type": "DYNAMIC_TYPE_OPUS",
+        "modules": {
+          "module_author": {
+            "mid": 10001,
+            "name": "测试UP",
+            "face": "https://i0.hdslb.com/bfs/face/avatar.jpg",
+            "pub_ts": "1700000100"
+          },
+          "module_dynamic": {
+            "desc": null,
+            "major": {
+              "opus": {
+                "jump_url": "//www.bilibili.com/opus/900000000000000002",
+                "title": "",
+                "summary": { "text": "这是[微笑]一条图文动态正文" },
+                "pics": [
+                  { "url": "https://i0.hdslb.com/bfs/new_dyn/a.jpg" },
+                  { "url": "https://i0.hdslb.com/bfs/new_dyn/b.jpg" }
+                ]
+              }
+            }
+          },
+          "module_tag": null
+        }
+      },
+      {
+        "id_str": "900000000000000003",
+        "type": "DYNAMIC_TYPE_DRAW",
+        "modules": {
+          "module_author": {
+            "mid": 10001,
+            "name": "测试UP",
+            "face": "https://i0.hdslb.com/bfs/face/avatar.jpg",
+            "pub_ts": 1700000200
+          },
+          "module_dynamic": {
+            "desc": { "text": "旧式图片动态描述" },
+            "major": {
+              "draw": {
+                "items": [
+                  { "src": "https://i0.hdslb.com/bfs/draw/1.jpg" },
+                  { "src": "https://i0.hdslb.com/bfs/draw/2.jpg" },
+                  { "src": "https://i0.hdslb.com/bfs/draw/3.jpg" }
+                ]
+              }
+            }
+          },
+          "module_tag": null
+        }
+      },
+      {
+        "id_str": "900000000000000004",
+        "type": "DYNAMIC_TYPE_ARTICLE",
+        "modules": {
+          "module_author": {
+            "mid": 10001,
+            "name": "测试UP",
+            "face": "",
+            "pub_ts": 1700000300
+          },
+          "module_dynamic": {
+            "major": {
+              "article": {
+                "jump_url": "//www.bilibili.com/read/cv123",
+                "title": "专栏标题",
+                "cover": "https://i0.hdslb.com/bfs/article/cover.jpg",
+                "summary": { "text": "专栏摘要正文" }
+              }
+            }
+          },
+          "module_tag": null
+        }
+      },
+      {
+        "id_str": "900000000000000005",
+        "type": "DYNAMIC_TYPE_FORWARD",
+        "modules": {
+          "module_author": {
+            "mid": 10001,
+            "name": "测试UP",
+            "face": "",
+            "pub_ts": 1700000400
+          },
+          "module_dynamic": {
+            "desc": { "text": "转发理由" },
+            "major": {
+              "archive": {
+                "bvid": "BV1yy411c7mE",
+                "title": "被转发的视频",
+                "jump_url": "//www.bilibili.com/video/BV1yy411c7mE"
+              }
+            }
+          },
+          "module_tag": null
+        }
+      },
+      {
+        "id_str": "900000000000000006",
+        "type": "DYNAMIC_TYPE_NEW_UNKNOWN",
+        "modules": {
+          "module_author": {
+            "mid": 10001,
+            "name": "测试UP",
+            "face": "",
+            "pub_ts": 1700000500
+          },
+          "module_dynamic": {},
+          "module_tag": null
+        }
+      }
+    ]
+  }
+}

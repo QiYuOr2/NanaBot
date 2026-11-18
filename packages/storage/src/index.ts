@@ -7,10 +7,14 @@ export type {
   DanmuSession,
   DanmuSessionCloseReason,
   DanmuSessionWithStats,
+  DynamicItemRecord,
+  DynamicMonitorState,
+  DynamicPushStatus,
   LiveStatus,
   LiveSummaryRecord,
   LiveSummarySource,
   LiveSummaryStatus,
+  NewDynamicItem,
   PushLog,
   PushLogPurpose,
   StorageOptions,
@@ -40,6 +44,17 @@ export {
   readLiveSummary,
 } from "./danmu.ts";
 export { resolveDbPath } from "./paths.ts";
+export {
+  hasDynamicItem,
+  listPendingDynamics,
+  markDynamicFailed,
+  markDynamicSkipped,
+  markDynamicSuccess,
+  readDynamicItem,
+  readDynamicMonitorState,
+  recordDiscoveredDynamics,
+  touchMonitorCheck,
+} from "./dynamic.ts";
 export { readStore, updateStore, writeStore } from "./yaml-store.ts";
 export type { LiveStatusRecord } from "./live-status.ts";
 export { readAllLiveStatus, readLiveStatus, writeLiveStatus } from "./live-status.ts";

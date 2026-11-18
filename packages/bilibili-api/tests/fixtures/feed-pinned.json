@@ -1,0 +1,51 @@
+{
+  "code": 0,
+  "message": "0",
+  "data": {
+    "has_more": false,
+    "offset": "",
+    "items": [
+      {
+        "id_str": "900000000000000101",
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {
+          "module_author": {
+            "mid": 10001,
+            "name": "测试UP",
+            "face": "https://i0.hdslb.com/bfs/face/avatar.jpg",
+            "pub_ts": 1699000000
+          },
+          "module_dynamic": {
+            "major": {
+              "archive": {
+                "bvid": "BV1pinned",
+                "title": "置顶的老视频",
+                "jump_url": "//www.bilibili.com/video/BV1pinned"
+              }
+            }
+          },
+          "module_tag": { "text": "置顶" }
+        }
+      },
+      {
+        "id_str": "900000000000000102",
+        "type": "DYNAMIC_TYPE_DRAW",
+        "modules": {
+          "module_author": {
+            "mid": 10001,
+            "name": "测试UP",
+            "face": "",
+            "pub_ts": 1700001000
+          },
+          "module_dynamic": {
+            "desc": { "text": "真正的新动态" },
+            "major": {
+              "draw": { "items": [{ "src": "https://i0.hdslb.com/bfs/draw/x.jpg" }] }
+            }
+          },
+          "module_tag": null
+        }
+      }
+    ]
+  }
+}

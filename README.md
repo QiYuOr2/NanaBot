@@ -16,10 +16,12 @@
 ## 功能
 
 - 多 B 站直播间开播 / 下播监控
+- B 站 UP 主动态监控（独立于直播监控）：轮询视频、图文、专栏动态，去重后推送到配置群，
+  支持 QQ 官方机器人 / NapCat 两种通道；图片发送失败自动降级为文本 + 原动态链接
 - 直播与连接状态 QQ 群通知，支持 QQ 官方机器人 / NapCat 两种通道
-- 推送记录：所有群推送（开播、应用上线 / 下线、管理员通知）无论成功或失败都写入
+- 推送记录：所有群推送（开播、应用上线 / 下线、管理员通知、动态）无论成功或失败都写入
   `db/push-log.sqlite`，并可在 Web 面板查看最近推送与送达状态
-- 直播状态持久化到 SQLite（`db/live-status.sqlite`）
+- 直播状态持久化到 SQLite（`db/live-status.sqlite`），动态记录持久化到 `db/dynamic.sqlite`
 - Web 面板展示主播实时直播状态、标题、分区与人数，卡片可手动刷新；并排展示
   「最近推送活动」时间轴（`apps/site`）
 
@@ -218,6 +220,44 @@ up:
 | `liveMonitorConfig.enableNotify`          | 是否发送 QQ 群通知                             |
 | `liveMonitorConfig.notifyGroups`          | 通知群号                                       |
 | `liveMonitorConfig.messageTemplate.start` | 开播文案，支持 `{uname}`、`{roomId}`、`{@all}` |
+
+### 动态监控
+
+动态监控与直播监控**互相独立**：读取所有 `up`，只以 `dynamic: true` 为准，不要求
+`live: true`。因此可以只监控动态、不监控直播。首次启用某个 UP 主时只做一次「首次同步」
+（bootstrap），记录当前可见动态但**不推送**历史动态；之后成功轮询发现的新动态才入队推送。
+
+```yaml
+up:
+  - uname: 示例主播
+    uid: 10001
+    liveRoomId: 1000001
+    qqAccount: live # 动态通知复用该账号，未配置则不发送，绝不回退到默认账号
+    live: false # 直播可关闭，动态仍可工作
+    dynamic: true
+    dynamicMonitorConfig:
+      enableNotify: true # 是否推送；false 时仍抓取记录
+      notifyGroups: [123456789] # 动态通知群，与直播通知群独立；留空表示只监控不推送
+      types: [video, opus, draw] # 订阅类型：video / opus / draw / article
+      pollIntervalMinutes: 5 # 轮询间隔，1-60 分钟，默认 5
+```
+
+| 字段                                       | 说明                                                   |
+| ------------------------------------------ | ------------------------------------------------------ |
+| `dynamic`                                  | 是否监控该 UP 主动态（默认 false，保持旧配置兼容）     |
+| `dynamicMonitorConfig.enableNotify`        | 是否推送新动态（默认 true，仅 `dynamic: true` 时生效） |
+| `dynamicMonitorConfig.notifyGroups`        | 动态通知群，与直播独立；空数组表示只监控记录           |
+| `dynamicMonitorConfig.types`               | 订阅类型，默认 `[video, opus, draw]`，可选加 `article` |
+| `dynamicMonitorConfig.pollIntervalMinutes` | 轮询间隔（分钟），1-60，默认 5                         |
+
+说明：
+
+- 置顶动态不会作为新动态推送；转发与未知类型默认不推送（记录为 skipped）。
+- 全局并发默认 3，UID 之间互相隔离，单个 UID 失败不影响其它 UID，失败按指数退避重试。
+- 同一动态 ID 只入队一次；请求失败/风控不会推进游标，也不会被当成「没有新动态」。
+- 图片按通道能力发送：NapCat 单条最多 3 张，官方 QQ 单条仅 1 张；图片发送失败降级为
+  文本 + 原动态链接，不会丢失整条通知。
+- 进程重启后会自动续发待推送（pending）的动态。
 
 ### QQ 官方机器人（推荐用于新接入）
 

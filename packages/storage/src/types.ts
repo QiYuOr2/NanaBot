@@ -142,3 +142,48 @@ export interface DanmuSessionWithStats extends DanmuSession {
   /** 期间参与发言的人数（按 user_id 去重）。 */
   participantCount: number;
 }
+
+/**
+ * 动态推送状态：
+ * - `bootstrap`：首次同步写入的「已知历史动态」，只记录、不推送。
+ * - `pending`：待推送（含发送失败后保留的可重试状态）。
+ * - `success`：已成功推送。
+ * - `failed`：预留的终态（当前发送失败仍保留 pending 以便重试）。
+ * - `skipped`：被跳过（类型过滤或账号不可用等）。
+ */
+export type DynamicPushStatus = "bootstrap" | "pending" | "success" | "failed" | "skipped";
+
+/** 写入一条新发现动态所需字段。 */
+export interface NewDynamicItem {
+  dynamicId: string;
+  uid: number;
+  type: string;
+  title: string | null;
+  content: string | null;
+  url: string;
+  coverUrl: string | null;
+  imageUrls: string[];
+  authorName: string | null;
+  publishedAt: string | null;
+}
+
+/** 一条动态记录（`dynamic_item` 表一行）。 */
+export interface DynamicItemRecord extends NewDynamicItem {
+  discoveredAt: string;
+  pushStatus: DynamicPushStatus;
+  pushedAt: string | null;
+  lastError: string | null;
+}
+
+/** 某个 UID 的动态监控状态（`dynamic_monitor_state` 表一行）。 */
+export interface DynamicMonitorState {
+  uid: number;
+  /** 是否已完成首次同步（bootstrap）。只有成功后才置 true。 */
+  initialized: boolean;
+  /** 最近一次成功同步看到的最新动态 ID。 */
+  lastDynamicId: string | null;
+  /** 最近一次检查时间（ISO 字符串）。 */
+  lastCheckedAt: string | null;
+  /** 状态更新时间（ISO 字符串）。 */
+  updatedAt: string;
+}

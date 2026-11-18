@@ -171,10 +171,7 @@ test("清理时取消未触发的心跳兜底计时器", async () => {
 test("部署标记有效时，离线与恢复通知改用部署措辞", async () => {
   const dir = mkdtempSync(join(tmpdir(), "nana-deploy-marker-"));
   const marker = join(dir, ".deploying.json");
-  writeFileSync(
-    marker,
-    JSON.stringify({ startedAt: new Date().toISOString(), ref: "abc1234" }),
-  );
+  writeFileSync(marker, JSON.stringify({ startedAt: new Date().toISOString(), ref: "abc1234" }));
   const harness = await createHarness(30, { deploymentMarkerPath: marker });
 
   await harness.emit("socket.close", SOCKET_CLOSE);
