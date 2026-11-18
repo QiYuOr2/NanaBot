@@ -44,6 +44,7 @@ export class BilibiliDynamicClient {
       fetchImpl,
       this.timeoutMs,
       this.now,
+      options.cookie,
     );
   }
 

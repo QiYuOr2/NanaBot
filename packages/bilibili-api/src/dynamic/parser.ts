@@ -122,7 +122,9 @@ function classifyType(item: RawDynamicItem, dynamic: RawModuleDynamic): Bilibili
   if (type.includes("ARTICLE") || major.article?.jump_url) return "article";
   if (type.includes("OPUS") || major.opus?.jump_url) return "opus";
   if (type.includes("DRAW") || major.draw?.jump_url) return "draw";
-  if (type.includes("WORD") || dynamic.desc) return "unknown";
+  // 纯文字动态（旧 WORD 类型）正文在 desc 中，按 opus 订阅与推送（订阅方要的就是文字动态）。
+  if (type.includes("WORD")) return "opus";
+  if (dynamic.desc) return "unknown";
   return "unknown";
 }
 

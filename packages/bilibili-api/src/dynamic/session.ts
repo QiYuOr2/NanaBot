@@ -7,7 +7,8 @@ const NAV_PATH = "/x/web-interface/nav";
 const WBI_KEY_TTL_MS = 6 * 60 * 60 * 1000;
 
 /**
- * 需要保留的匿名 Cookie 名。其余（含用户登录态）一律丢弃，避免误用用户凭据。
+ * 需要保留的匿名 Cookie 名。响应带回的其余 Cookie（含登录态）一律丢弃，避免误用用户凭据。
+ * 登录态只允许来自调用方显式配置（见 {@link WbiSession} 的 staticCookies），绝不从响应吸收。
  * 移植自 Boku `session.go` 的 `anonymousCookie`。
  */
 const ANONYMOUS_COOKIE_NAMES: ReadonlySet<string> = new Set([
@@ -41,9 +42,29 @@ export function browserHeaders(cookieHeader?: string): Record<string, string> {
   return headers;
 }
 
-/** 匿名会话：维护 Cookie、缓存 WBI key，并在需要时刷新。 */
+/** 解析原始 Cookie 头字符串为名值表（跳过无等号的片段）。 */
+export function parseCookieHeader(header: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) continue;
+    const name = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1).trim();
+    if (name && value) map.set(name, value);
+  }
+  return map;
+}
+
+/**
+ * 会话：维护 Cookie、缓存 WBI key，并在需要时刷新。
+ *
+ * Cookie 有两个来源：响应带回的匿名 Cookie（白名单吸收），与调用方显式配置的
+ * 静态 Cookie（登录态，来自 `DynamicFeedOptions.cookie`）。同名时响应吸收的值优先
+ * （如 buvid 会被服务端刷新）；登录态的名字不在吸收白名单内，不会被覆盖或丢弃。
+ */
 export class WbiSession {
   private readonly cookies = new Map<string, string>();
+  private readonly staticCookies: ReadonlyMap<string, string>;
   private cachedKeys: WbiKeys | undefined;
   private keysTime = 0;
 
@@ -53,13 +74,22 @@ export class WbiSession {
     private readonly fetchImpl: typeof globalThis.fetch,
     private readonly timeoutMs: number,
     private readonly now: () => number,
-  ) {}
+    cookieHeader?: string,
+  ) {
+    this.staticCookies = cookieHeader ? parseCookieHeader(cookieHeader) : new Map();
+  }
 
-  /** 当前 Cookie 头（按名排序，保持稳定）。 */
+  /** 是否配置了登录态 Cookie（只报有无，绝不报值）。 */
+  get hasStaticCookies(): boolean {
+    return this.staticCookies.size > 0;
+  }
+
+  /** 当前 Cookie 头（静态配置与吸收值合并，按名排序，保持稳定）。 */
   cookieHeader(): string {
-    return [...this.cookies.keys()]
+    const merged = new Map([...this.staticCookies, ...this.cookies]);
+    return [...merged.keys()]
       .sort()
-      .map((name) => `${name}=${this.cookies.get(name)}`)
+      .map((name) => `${name}=${merged.get(name)}`)
       .join("; ");
   }
 
