@@ -4,12 +4,23 @@ import { readAllLiveStatus, writeLiveStatus, type LiveStatus } from "@nana/stora
 import type { LiveStatusInfo } from "@nana/bilibili-api";
 import { z } from "zod";
 
-const UpSchema = z.object({
-  live: z.boolean().optional().default(true),
-  uid: z.number().int(),
-  liveRoomId: z.number().int(),
-  uname: z.string().min(1),
-});
+const UpSchema = z
+  .object({
+    live: z.boolean().optional().default(true),
+    uid: z.number().int(),
+    // 只开启动态监控的 UP 主（live: false）可以没有直播间；与 bot 侧 monitor/config 的规则一致。
+    liveRoomId: z.number().int().optional(),
+    uname: z.string().min(1),
+  })
+  .superRefine((entry, context) => {
+    if (entry.live && entry.liveRoomId === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["liveRoomId"],
+        message: "live: true 时必须配置 liveRoomId",
+      });
+    }
+  });
 
 const ConfigSchema = z.object({
   up: z.array(UpSchema).optional().default([]),
@@ -35,11 +46,17 @@ export function loadStreamerConfigs(): StreamerConfig[] {
   const config = ConfigSchema.parse(readConfig());
   return config.up
     .filter((entry) => entry.live)
-    .map((entry) => ({
-      uid: entry.uid,
-      roomId: entry.liveRoomId,
-      streamer: entry.uname,
-    }));
+    .map((entry) => {
+      // UpSchema 的 superRefine 已保证 live 的条目一定有 liveRoomId。
+      if (entry.liveRoomId === undefined) {
+        throw new Error(`主播 ${entry.uname} 启用了直播监控，但缺少 liveRoomId。`);
+      }
+      return {
+        uid: entry.uid,
+        roomId: entry.liveRoomId,
+        streamer: entry.uname,
+      };
+    });
 }
 
 /** 合并配置中的主播列表与数据库中的直播状态。 */
