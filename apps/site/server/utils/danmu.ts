@@ -3,6 +3,7 @@ import {
   listDanmuSessions,
   readDanmuMessages,
   readDanmuSession,
+  readDanmuSessionCutOffs,
   readLiveSummary,
   type DanmuSession,
   type DanmuSessionWithStats,
@@ -200,13 +201,20 @@ export function buildDanmuSessionDetail(id: number): DanmuSessionDetailResponse 
       content: message.content,
     }));
 
+  const cutOffs = readDanmuSessionCutOffs(session.id).map((item) => ({
+    id: item.id,
+    cutOffAt: item.cutOffAt,
+    reason: item.reason,
+  }));
+
   return {
     session: toDanmuSessionSummary(
-      { ...session, participantCount: summary.participantCount },
+      { ...session, participantCount: summary.participantCount, cutOffCount: cutOffs.length },
       duration,
       toDanmuWordCounts(summary.topWords),
     ),
     stats: toDanmuSessionStats(summary),
+    cutOffs,
     topWords: toDanmuWordCounts(summary.topWords),
     messages: recent,
     messagesTruncated: session.msgCount > recent.length,

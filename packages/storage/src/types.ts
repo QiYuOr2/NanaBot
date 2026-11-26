@@ -50,8 +50,24 @@ export interface PushLog {
   subject?: string | null;
 }
 
-/** 场次的结束原因：下播事件 / 轮询兜底 / 进程退出 / 开新场时清理的残留场次。 */
-export type DanmuSessionCloseReason = "live.ended" | "poll" | "shutdown" | "stale";
+/** 场次的结束原因：正常下播 / 超管切断 / 轮询兜底 / 进程退出 / 开新场时清理的残留场次。 */
+export type DanmuSessionCloseReason = "live.ended" | "cut_off" | "poll" | "shutdown" | "stale";
+
+/** 一次超管切断记录（对应 `danmu_session_cutoff` 表的一行）。 */
+export interface DanmuSessionCutOff {
+  /** 切断记录自增 ID。 */
+  id: number;
+  /** 关联的弹幕场次 ID；未开启弹幕录制或当时无活跃场次时为 null。 */
+  sessionId: number | null;
+  /** 直播间号（字符串形式，与 SQLite 一致）。 */
+  roomId: string;
+  /** 主播名。 */
+  streamer: string;
+  /** 切断时间（ISO 字符串）。 */
+  cutOffAt: string;
+  /** B 站返回的切断原因，缺省为空字符串。 */
+  reason: string;
+}
 
 /**
  * 一场弹幕记录（对应 `danmu_session` 表的一行）。
@@ -141,6 +157,8 @@ export interface UnpushedLiveSummary {
 export interface DanmuSessionWithStats extends DanmuSession {
   /** 期间参与发言的人数（按 user_id 去重）。 */
   participantCount: number;
+  /** 本场期间记录到的超管切断次数。 */
+  cutOffCount: number;
 }
 
 /**

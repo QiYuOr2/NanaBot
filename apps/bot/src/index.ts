@@ -11,6 +11,7 @@ import {
   QQ_PROVIDER_LABELS,
 } from "@nana/constants";
 import { readConfig } from "@nana/config";
+import type { MonitorController } from "@nana/monitor";
 import { createLoggerManager, type BotApp, type Logger } from "./core";
 import {
   createMonitorFeature,
@@ -101,6 +102,8 @@ interface AccountRuntime {
   account: QQRuntimeAccount;
   app: BotApp;
   streamers: MonitorStreamerConfig[];
+  recorders: Map<number, DanmuRecorder>;
+  monitors: Map<number, MonitorController>;
   sendWordCloud: WordCloudSender;
   onSessionClosed?: SessionClosedHandler;
   logger: Logger;
@@ -240,8 +243,9 @@ async function main(): Promise<void> {
     }
 
     // 每个主播只建一条 blive 长连接：开播通知与弹幕录制共用同一条连接的事件流。
-    // 录制器要等监控 setup 才创建，轮询/停机必须拿这张 Map 的引用，不能提前拷贝。
+    // 录制器与监控控制器要等监控 setup 才创建，轮询/停机必须拿这两张 Map 的引用，不能提前拷贝。
     const recorders = new Map<number, DanmuRecorder>();
+    const monitors = new Map<number, MonitorController>();
     // 词云发到该主播自己配置的群。
     const sendWordCloud = toWordCloudSender(app);
     const wordCloudEnabled = streamers.some((streamer) => streamer.wordCloud.enabled);
@@ -265,6 +269,7 @@ async function main(): Promise<void> {
           rootDir: projectRoot,
           sendWordCloud,
           recorders,
+          onPollOffline: (roomId: number) => monitors.get(roomId)?.handlePollOffline() ?? false,
           onSessionClosed,
           logger: accountLogger,
         }
@@ -277,6 +282,7 @@ async function main(): Promise<void> {
       app.use(
         createMonitorFeature({
           rootDir: projectRoot,
+          monitors,
           createSink: () => danmuSinkFactory?.(streamerConfig),
         }),
         {
@@ -286,6 +292,8 @@ async function main(): Promise<void> {
           notifyEnabled: streamerConfig.notifyEnabled,
           notifyGroupIds: streamerConfig.notifyGroups,
           messages: streamerConfig.messages,
+          gracePeriodMs: streamerConfig.gracePeriodMs,
+          minNormalLiveMs: streamerConfig.minNormalLiveMs,
         },
       );
     }
@@ -334,6 +342,8 @@ async function main(): Promise<void> {
       account,
       app,
       streamers,
+      recorders,
+      monitors,
       sendWordCloud,
       onSessionClosed,
       logger: accountLogger,
@@ -407,6 +417,11 @@ async function main(): Promise<void> {
     await syncLiveStatus(monitorConfig.streamers, {
       rootDir: projectRoot,
       logger: appLogger,
+      onSynced: (roomId, state) => {
+        for (const runtime of activeRuntimes) {
+          runtime.monitors.get(roomId)?.syncLiveState(state);
+        }
+      },
     });
   } catch (error) {
     appLogger.error("[app] 同步启动时的直播状态失败", error);
@@ -431,6 +446,7 @@ async function main(): Promise<void> {
       streamers: runtime.streamers,
       config: wordCloudConfig,
       rootDir: projectRoot,
+      recorders: runtime.recorders,
       isLive: (streamer) => fetchIsLive(streamer),
       sendWordCloud: runtime.sendWordCloud,
       onSessionClosed: runtime.onSessionClosed,

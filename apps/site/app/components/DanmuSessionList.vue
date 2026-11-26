@@ -45,27 +45,50 @@ function topWordsLabel(session: DanmuSessionSummaryDto): string {
     .map((item) => item.word)
     .join(" · ");
 }
+
+function dotClass(session: DanmuSessionSummaryDto): string {
+  if (session.active) {
+    return "bg-live";
+  }
+  if (session.closeReason === "cut_off") {
+    return "bg-status-red";
+  }
+  return "bg-ink-muted";
+}
+
+function closeReasonTagClass(session: DanmuSessionSummaryDto): string {
+  if (session.closeReason === "cut_off") {
+    return `${TAG_CLASS} bg-status-red/10 text-status-red`;
+  }
+  return `${TAG_CLASS} bg-recessed text-ink-secondary`;
+}
 </script>
 
 <template>
-  <section class="card flex h-full flex-col p-4">
-    <div class="flex items-end justify-between gap-3">
-      <div class="min-w-0">
-        <h2 class="text-[14px] font-medium tracking-tight text-ink">历史场次</h2>
-        <p class="mt-0.5 text-[12px] text-ink-muted">按开播时间倒序</p>
+  <section class="card flex min-h-0 flex-col overflow-hidden">
+    <div class="shrink-0 px-4 pb-3 pt-4" :class="sessions.length > 0 ? 'border-b border-line' : ''">
+      <div class="flex items-end justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-[14px] font-medium tracking-tight text-ink">历史场次</h2>
+          <p class="mt-0.5 text-[12px] text-ink-muted">按开播时间倒序</p>
+        </div>
+        <span class="shrink-0 text-[13px] text-ink-muted">{{ sessions.length }} 场</span>
       </div>
-      <span class="shrink-0 text-[13px] text-ink-muted">{{ sessions.length }} 场</span>
+
+      <p v-if="liveCount > 0" class="mt-2 text-[12px] text-ink-muted">
+        其中 {{ liveCount }} 场仍在直播中。
+      </p>
     </div>
 
-    <p v-if="liveCount > 0" class="mt-2 text-[12px] text-ink-muted">
-      其中 {{ liveCount }} 场仍在直播中。
-    </p>
-
-    <p v-if="sessions.length === 0" class="mt-4 text-[13px] text-ink-muted">
+    <p v-if="sessions.length === 0" class="px-4 pb-4 text-[13px] text-ink-muted">
       暂无弹幕记录。主播开播并收到弹幕后，这里会出现对应场次。
     </p>
 
-    <ul v-else class="mt-3 space-y-1.5">
+    <ul
+      v-else
+      class="min-h-0 flex-auto space-y-1.5 overflow-y-auto overscroll-contain px-2 py-2"
+      aria-label="历史场次列表"
+    >
       <li v-for="session in sessions" :key="session.id">
         <button
           type="button"
@@ -78,20 +101,23 @@ function topWordsLabel(session: DanmuSessionSummaryDto): string {
           :aria-pressed="session.id === selectedId"
           @click="emit('select', session.id)"
         >
-          <div class="flex min-w-0 items-center gap-2">
+          <div class="flex min-w-0 items-center gap-1.5">
             <span
               class="dot"
-              :class="session.active ? 'bg-live' : 'bg-ink-muted'"
+              :class="dotClass(session)"
               :title="session.active ? '直播中' : (session.closeReasonLabel ?? '已结束')"
             />
             <span class="min-w-0 flex-1 truncate text-[13px] text-ink">
               {{ session.streamer }}
             </span>
-            <span v-if="session.active" :class="`${TAG_CLASS} bg-live/10 text-live`"> 直播中 </span>
             <span
-              v-else-if="session.closeReason"
-              :class="`${TAG_CLASS} bg-recessed text-ink-secondary`"
+              v-if="session.cutOffCount > 0 && session.closeReason !== 'cut_off'"
+              :class="`${TAG_CLASS} bg-status-red/10 text-status-red`"
             >
+              {{ session.cutOffCount > 1 ? `切断 ${session.cutOffCount} 次` : "曾被切断" }}
+            </span>
+            <span v-if="session.active" :class="`${TAG_CLASS} bg-live/10 text-live`"> 直播中 </span>
+            <span v-else-if="session.closeReason" :class="closeReasonTagClass(session)">
               {{ session.closeReasonLabel }}
             </span>
           </div>

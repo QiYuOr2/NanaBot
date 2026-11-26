@@ -26,6 +26,7 @@ export { buildWordCloudSummary, extractSessionWords, toWordOptions } from "./wor
 /** 收尾原因的中文说明，用于日志与面板展示。 */
 export const CLOSE_REASON_LABELS: Record<DanmuSessionCloseReason, string> = {
   "live.ended": "正常下播",
+  cut_off: "超管切断",
   poll: "轮询兜底",
   shutdown: "进程退出",
   stale: "异常中断",

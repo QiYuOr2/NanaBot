@@ -1,5 +1,10 @@
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
-import { closeDanmuSession, findActiveDanmuSession, openDanmuSession } from "@nana/storage";
+import {
+  closeDanmuSession,
+  findActiveDanmuSession,
+  openDanmuSession,
+  recordDanmuSessionCutOff,
+} from "@nana/storage";
 import type { DanmuSession, StorageOptions } from "@nana/storage";
 import { consoleLogger, type Logger } from "../core/logger.ts";
 import type { WordCloudConfig } from "./config.ts";
@@ -105,6 +110,30 @@ export class DanmuRecorder {
     });
   }
 
+  /** 记录一次超管切断事件，绑定到当前活跃场次（无活跃场次时 sessionId 为 null）。 */
+  recordCutOff(timestamp: Date, reason: string): void {
+    const trimmed = reason.trim();
+    try {
+      recordDanmuSessionCutOff(
+        {
+          sessionId: this.session?.id ?? null,
+          roomId: this.options.roomId,
+          streamer: this.options.streamer,
+          cutOffAt: timestamp.toISOString(),
+          reason: trimmed,
+        },
+        this.storage,
+      );
+      this.logger.info(
+        `[弹幕录制] ${this.options.streamer} 记录超管切断（场次 #${this.session?.id ?? "无"}${
+          trimmed ? `，原因：${trimmed}` : ""
+        }）`,
+      );
+    } catch (error) {
+      this.logger.error(`[弹幕录制] ${this.options.streamer} 记录超管切断失败`, error);
+    }
+  }
+
   /**
    * 收尾：停止录制、落库并推送本场词云。
    * `closeReason` 区分正常下播（`live.ended`）与兜底收尾（`poll` / `stale` / `shutdown`）。
@@ -182,6 +211,14 @@ export function createDanmuSink(recorder: DanmuRecorder): MonitorSink {
         case "live.started":
           recorder.start(event.timestamp);
           return;
+        case "live.resumed":
+          if (!recorder.active) {
+            recorder.start(event.timestamp);
+          }
+          return;
+        case "live.cutoff":
+          recorder.recordCutOff(event.timestamp, event.reason);
+          return;
         case "danmu.received":
           recorder.append({
             userId: String(event.userId),
@@ -191,7 +228,10 @@ export function createDanmuSink(recorder: DanmuRecorder): MonitorSink {
           });
           return;
         case "live.ended":
-          await recorder.finish("live.ended", event.timestamp);
+          await recorder.finish(
+            event.reason === "cut_off" ? "cut_off" : "live.ended",
+            event.timestamp,
+          );
           return;
         default:
           return;

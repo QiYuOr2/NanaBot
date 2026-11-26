@@ -1,5 +1,5 @@
-import type { DanmuMsg, Message } from "blive-message-listener";
-import { expect, test } from "vite-plus/test";
+import type { DanmuMsg, Message, RoomWarnMsg } from "blive-message-listener";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 import {
   createMonitor,
   type MonitorController,
@@ -11,7 +11,11 @@ import {
   type MonitorSubscription,
 } from "../src/index.ts";
 // source 的映射函数刻意不进 barrel（不扩大包对外面），测试直接从源文件引
-import { toDanmuHandlerEvent } from "../src/source.ts";
+import { toDanmuHandlerEvent, toRoomCutOffEvent } from "../src/source.ts";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const T0 = new Date("2026-08-22T10:00:00.000Z");
 
@@ -69,9 +73,12 @@ function createRecordingSink(): { sink: MonitorSink; events: MonitorEvent[] } {
 type SetupOptions = {
   roomId?: number;
   streamer?: string;
-  messages?: { liveStart?: string; liveEnd?: string };
+  messages?: { liveStart?: string; liveEnd?: string; liveResume?: string; liveCutOff?: string };
   sinks?: MonitorSink[];
   logger?: MonitorLogger;
+  gracePeriodMs?: number;
+  minNormalLiveMs?: number;
+  checkLiveStatus?: () => Promise<boolean>;
 };
 
 /** 用假 source + 记录型 sink 创建并启动一个 monitor。 */
@@ -87,6 +94,9 @@ function setup(options: SetupOptions = {}): {
     roomId: options.roomId ?? 123,
     streamer: options.streamer ?? "Nana",
     messages: options.messages,
+    gracePeriodMs: options.gracePeriodMs,
+    minNormalLiveMs: options.minNormalLiveMs,
+    checkLiveStatus: options.checkLiveStatus,
     source: fake.source,
     sinks: options.sinks ?? [recording.sink],
     logger: options.logger ?? silentLogger,
@@ -184,6 +194,7 @@ test("下播事件保留自定义文案模板", () => {
       streamer: "Nana",
       message: "Nana 在 123 下播了",
       timestamp: T0,
+      reason: "normal",
     },
   ]);
 });
@@ -319,4 +330,254 @@ test("source 映射：user 上缺 uid / uname 时分别兜底，不抛错", () =
   const message = createDanmuMessage({ user: { uid: undefined, uname: undefined } });
 
   expect(toDanmuHandlerEvent(message)).toMatchObject({ userId: 0, username: "" });
+});
+
+test("source 映射：仅把 CUT_OFF 映射为超管切断事件，普通 WARNING 忽略", () => {
+  const cutMessage: Message<RoomWarnMsg> = {
+    id: "warn-1",
+    timestamp: T0.getTime(),
+    type: "CUT_OFF",
+    body: { type: "cut", msg: "  画面违规  " },
+    raw: {},
+  };
+  const warnMessage: Message<RoomWarnMsg> = {
+    id: "warn-2",
+    timestamp: T0.getTime(),
+    type: "WARNING",
+    body: { type: "warning", msg: "请注意言行" },
+    raw: {},
+  };
+
+  expect(toRoomCutOffEvent(cutMessage)).toEqual({ timestamp: T0, reason: "画面违规" });
+  expect(toRoomCutOffEvent(warnMessage)).toBeUndefined();
+});
+
+test("直播时长 ≥ 30 分钟的普通下播立即发出 live.ended，不进宽限期", async () => {
+  vi.useFakeTimers();
+  const ctx = setup({
+    roomId: 123,
+    streamer: "Nana",
+    messages: { liveStart: "{uname}开播了 {@all}" },
+  });
+
+  const endAt = new Date(T0.getTime() + 30 * 60 * 1000);
+  await ctx.handlers().onLiveStart({ timestamp: T0, hasLiveTime: true });
+  await ctx.handlers().onLiveEnd({ timestamp: endAt });
+
+  expect(ctx.monitor.isInGracePeriod()).toBe(false);
+  expect(ctx.events.map((item) => item.type)).toEqual(["live.started", "live.ended"]);
+  expect(ctx.events[1]).toMatchObject({ type: "live.ended", timestamp: endAt, reason: "normal" });
+});
+
+test("直播时长 < 30 分钟触发下播进入宽限期，期间重开不带 @all 且不发 live.ended", async () => {
+  vi.useFakeTimers();
+  const ctx = setup({
+    roomId: 123,
+    streamer: "Nana",
+    messages: { liveStart: "{uname}开播了 https://live.bilibili.com/{roomId} {@all}" },
+    gracePeriodMs: 10 * 60 * 1000,
+    minNormalLiveMs: 30 * 60 * 1000,
+  });
+
+  const dropAt = new Date(T0.getTime() + 15 * 60 * 1000);
+  const resumeAt = new Date(T0.getTime() + 18 * 60 * 1000);
+  const finalEndAt = new Date(T0.getTime() + 40 * 60 * 1000);
+
+  await ctx.handlers().onLiveStart({ timestamp: T0, hasLiveTime: true });
+  await ctx.handlers().onLiveEnd({ timestamp: dropAt });
+
+  expect(ctx.monitor.isInGracePeriod()).toBe(true);
+  expect(ctx.events.map((item) => item.type)).toEqual(["live.started"]);
+
+  // 宽限期内重新开播：发 live.resumed，且消息去掉 {@all}
+  await ctx.handlers().onLiveStart({ timestamp: resumeAt, hasLiveTime: true });
+  expect(ctx.monitor.isInGracePeriod()).toBe(false);
+  expect(ctx.events[1]).toEqual({
+    type: "live.resumed",
+    roomId: 123,
+    streamer: "Nana",
+    interruptedBy: "short_live",
+    message: "Nana开播了 https://live.bilibili.com/123",
+    timestamp: resumeAt,
+  });
+
+  // 推进超过原宽限期，不会误触发旧定时器
+  vi.advanceTimersByTime(15 * 60 * 1000);
+  expect(ctx.events).toHaveLength(2);
+
+  // 总时长累计达到 40 分钟后再下播：立即正常下播
+  await ctx.handlers().onLiveEnd({ timestamp: finalEndAt });
+  expect(ctx.events[2]).toMatchObject({
+    type: "live.ended",
+    timestamp: finalEndAt,
+    reason: "normal",
+  });
+});
+
+test("直播时长 < 30 分钟进入宽限期且未重开，到期后以原始断流时间发出 live.ended", async () => {
+  vi.useFakeTimers();
+  const ctx = setup({
+    roomId: 123,
+    streamer: "Nana",
+    gracePeriodMs: 10 * 60 * 1000,
+    minNormalLiveMs: 30 * 60 * 1000,
+  });
+
+  const dropAt = new Date(T0.getTime() + 10 * 60 * 1000);
+  await ctx.handlers().onLiveStart({ timestamp: T0, hasLiveTime: true });
+  await ctx.handlers().onLiveEnd({ timestamp: dropAt });
+
+  expect(ctx.monitor.isInGracePeriod()).toBe(true);
+  expect(ctx.events).toHaveLength(1);
+
+  await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+  expect(ctx.monitor.isInGracePeriod()).toBe(false);
+  expect(ctx.events[1]).toMatchObject({
+    type: "live.ended",
+    timestamp: dropAt,
+    reason: "short_live",
+  });
+});
+
+test("超管切断即使直播已超过 30 分钟也立刻发 live.cutoff 并进入宽限期，吸收紧随的 PREPARING", async () => {
+  vi.useFakeTimers();
+  const ctx = setup({
+    roomId: 123,
+    streamer: "Nana",
+    gracePeriodMs: 10 * 60 * 1000,
+    minNormalLiveMs: 30 * 60 * 1000,
+  });
+
+  const cutAt = new Date(T0.getTime() + 60 * 60 * 1000);
+  const preparingAt = new Date(cutAt.getTime() + 1_000);
+
+  await ctx.handlers().onLiveStart({ timestamp: T0, hasLiveTime: true });
+  await ctx.handlers().onRoomCutOff({ timestamp: cutAt, reason: "涉嫌违规" });
+  await ctx.handlers().onLiveEnd({ timestamp: preparingAt });
+
+  expect(ctx.monitor.isInGracePeriod()).toBe(true);
+  expect(ctx.events.map((item) => item.type)).toEqual(["live.started", "live.cutoff"]);
+  expect(ctx.events[1]).toEqual({
+    type: "live.cutoff",
+    roomId: 123,
+    streamer: "Nana",
+    reason: "涉嫌违规",
+    message: "Nana 直播间被超管切断（原因：涉嫌违规）",
+    timestamp: cutAt,
+  });
+
+  // 宽限期到期仍未开播 -> 发出 live.ended，reason 为 cut_off
+  await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+  expect(ctx.monitor.isInGracePeriod()).toBe(false);
+  expect(ctx.events[2]).toMatchObject({
+    type: "live.ended",
+    timestamp: cutAt,
+    reason: "cut_off",
+    cutOffReason: "涉嫌违规",
+  });
+});
+
+test("超管切断后宽限期内重新开播：不发 live.ended，且重开消息去掉 @all", async () => {
+  vi.useFakeTimers();
+  const ctx = setup({
+    roomId: 123,
+    streamer: "Nana",
+    messages: {
+      liveStart: "{uname}开播了 {@all}",
+      liveResume: "{uname} 回来啦 {@all}",
+    },
+    gracePeriodMs: 10 * 60 * 1000,
+  });
+
+  const cutAt = new Date(T0.getTime() + 45 * 60 * 1000);
+  const resumeAt = new Date(cutAt.getTime() + 3 * 60 * 1000);
+
+  await ctx.handlers().onLiveStart({ timestamp: T0, hasLiveTime: true });
+  await ctx.handlers().onRoomCutOff({ timestamp: cutAt, reason: "画面违规" });
+  await ctx.handlers().onLiveStart({ timestamp: resumeAt, hasLiveTime: true });
+
+  expect(ctx.monitor.isInGracePeriod()).toBe(false);
+  expect(ctx.events.map((item) => item.type)).toEqual([
+    "live.started",
+    "live.cutoff",
+    "live.resumed",
+  ]);
+  expect(ctx.events[2]).toEqual({
+    type: "live.resumed",
+    roomId: 123,
+    streamer: "Nana",
+    interruptedBy: "cut_off",
+    message: "Nana 回来啦",
+    timestamp: resumeAt,
+  });
+
+  await vi.advanceTimersByTimeAsync(15 * 60 * 1000);
+  expect(ctx.events).toHaveLength(3);
+});
+
+test("宽限期到期二次校验发现仍在直播时，取消下播并静默恢复", async () => {
+  vi.useFakeTimers();
+  const checkLiveStatus = vi.fn(async () => true);
+  const ctx = setup({
+    roomId: 123,
+    streamer: "Nana",
+    gracePeriodMs: 10 * 60 * 1000,
+    checkLiveStatus,
+  });
+
+  await ctx.handlers().onLiveStart({ timestamp: T0, hasLiveTime: true });
+  await ctx.handlers().onRoomCutOff({
+    timestamp: new Date(T0.getTime() + 5 * 60 * 1000),
+    reason: "切断",
+  });
+
+  await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+  expect(checkLiveStatus).toHaveBeenCalledTimes(1);
+  expect(ctx.monitor.isInGracePeriod()).toBe(false);
+  expect(ctx.events.map((item) => item.type)).toEqual([
+    "live.started",
+    "live.cutoff",
+    "live.resumed",
+  ]);
+  expect(ctx.events[2]).toMatchObject({ type: "live.resumed", silent: true });
+});
+
+test("直播中收到重复 LIVE 包不会重复发 live.started", async () => {
+  const ctx = setup({ roomId: 123, streamer: "Nana" });
+
+  await ctx.handlers().onLiveStart({ timestamp: T0, hasLiveTime: true });
+  await ctx
+    .handlers()
+    .onLiveStart({ timestamp: new Date(T0.getTime() + 10_000), hasLiveTime: true });
+
+  expect(ctx.events).toHaveLength(1);
+  expect(ctx.events[0]?.type).toBe("live.started");
+});
+
+test("syncLiveState 初始化在播状态后，短时断流同样进入宽限期；轮询兜底不绕过宽限期", async () => {
+  vi.useFakeTimers();
+  const ctx = setup({
+    roomId: 123,
+    streamer: "Nana",
+    gracePeriodMs: 10 * 60 * 1000,
+    minNormalLiveMs: 30 * 60 * 1000,
+  });
+
+  ctx.monitor.syncLiveState({ live: true, startedAt: T0 });
+  const pollAt = new Date(T0.getTime() + 10 * 60 * 1000);
+
+  // 不足 30 分钟时轮询发现离线：由监控器进入宽限期接管
+  expect(ctx.monitor.handlePollOffline(pollAt)).toBe(true);
+  expect(ctx.monitor.isInGracePeriod()).toBe(true);
+
+  // 宽限期内再次轮询：依然被接管
+  expect(ctx.monitor.handlePollOffline(new Date(pollAt.getTime() + 60_000))).toBe(true);
+
+  // 恢复后超过 30 分钟再轮询离线：允许轮询直接收尾
+  await ctx.handlers().onLiveStart({
+    timestamp: new Date(pollAt.getTime() + 120_000),
+    hasLiveTime: true,
+  });
+  expect(ctx.events.at(-1)?.type).toBe("live.resumed");
+  expect(ctx.monitor.handlePollOffline(new Date(T0.getTime() + 35 * 60 * 1000))).toBe(false);
 });

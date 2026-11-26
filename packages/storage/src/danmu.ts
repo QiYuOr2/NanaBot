@@ -9,6 +9,7 @@ import type {
   DanmuMessageInput,
   DanmuSession,
   DanmuSessionCloseReason,
+  DanmuSessionCutOff,
   DanmuSessionWithStats,
   LiveSummaryRecord,
   LiveSummarySource,
@@ -35,6 +36,20 @@ export interface CloseDanmuSessionInput {
   endedAt?: string;
   /** 结束原因。 */
   reason: DanmuSessionCloseReason;
+}
+
+/** 记录一次超管切断所需的入参。 */
+export interface RecordDanmuSessionCutOffInput {
+  /** 关联的弹幕场次 ID；无活跃场次时为 null。 */
+  sessionId?: number | null;
+  /** 直播间号。 */
+  roomId: number;
+  /** 主播名。 */
+  streamer: string;
+  /** 切断时间（ISO 字符串），缺省取当前时间。 */
+  cutOffAt?: string;
+  /** B 站返回的切断原因，缺省为空字符串。 */
+  reason?: string;
 }
 
 function openDanmuDatabase(options?: StorageOptions): DatabaseSync {
@@ -66,6 +81,22 @@ function openDanmuDatabase(options?: StorageOptions): DatabaseSync {
   `);
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_danmu_message_session ON danmu_message(session_id);
+  `);
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS danmu_session_cutoff (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER,
+      room_id TEXT NOT NULL,
+      streamer TEXT NOT NULL,
+      cut_off_at TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT ''
+    ) STRICT;
+  `);
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_danmu_session_cutoff_session ON danmu_session_cutoff(session_id);
+  `);
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_danmu_session_cutoff_room ON danmu_session_cutoff(room_id, cut_off_at);
   `);
   ensureDanmuSessionColumns(database);
 
@@ -124,6 +155,18 @@ function mapDanmuSessionWithStatsRow(row: Record<string, unknown>): DanmuSession
   return {
     ...mapDanmuSessionRow(row),
     participantCount: Number(row.participant_count),
+    cutOffCount: Number(row.cut_off_count ?? 0),
+  };
+}
+
+function mapDanmuSessionCutOffRow(row: Record<string, unknown>): DanmuSessionCutOff {
+  return {
+    id: Number(row.id),
+    sessionId: row.session_id == null ? null : Number(row.session_id),
+    roomId: String(row.room_id),
+    streamer: String(row.streamer),
+    cutOffAt: String(row.cut_off_at),
+    reason: row.reason == null ? "" : (row.reason as string),
   };
 }
 
@@ -283,7 +326,7 @@ export function closeDanmuSession(
   }
 }
 
-/** 列出历史场次（含参与人数），按开始时间倒序。 */
+/** 列出历史场次（含参与人数与超管切断次数），按开始时间倒序。 */
 export function listDanmuSessions(options?: StorageOptions, limit = 20): DanmuSessionWithStats[] {
   const database = openDanmuDatabase(options);
 
@@ -295,7 +338,9 @@ export function listDanmuSessions(options?: StorageOptions, limit = 20): DanmuSe
           (SELECT COUNT(DISTINCT
              CASE WHEN m.user_id = '0' THEN m.user_id || char(0) || m.username ELSE m.user_id END
            ) FROM danmu_message m WHERE m.session_id = s.id)
-            AS participant_count
+            AS participant_count,
+          (SELECT COUNT(*) FROM danmu_session_cutoff c WHERE c.session_id = s.id)
+            AS cut_off_count
         FROM danmu_session s
         ORDER BY s.started_at DESC, s.id DESC
         LIMIT ?
@@ -303,6 +348,84 @@ export function listDanmuSessions(options?: StorageOptions, limit = 20): DanmuSe
       .all(limit) as Record<string, unknown>[];
 
     return rows.map(mapDanmuSessionWithStatsRow);
+  } finally {
+    database.close();
+  }
+}
+
+/** 记录一次超管切断事件。 */
+export function recordDanmuSessionCutOff(
+  input: RecordDanmuSessionCutOffInput,
+  options?: StorageOptions,
+): DanmuSessionCutOff {
+  const database = openDanmuDatabase(options);
+  const cutOffAt = input.cutOffAt ?? new Date().toISOString();
+  const reason = input.reason?.trim() ?? "";
+  const sessionId = input.sessionId ?? null;
+
+  try {
+    const result = database
+      .prepare(`
+        INSERT INTO danmu_session_cutoff (session_id, room_id, streamer, cut_off_at, reason)
+        VALUES (?, ?, ?, ?, ?)
+      `)
+      .run(sessionId, String(input.roomId), input.streamer, cutOffAt, reason);
+
+    return {
+      id: Number(result.lastInsertRowid),
+      sessionId,
+      roomId: String(input.roomId),
+      streamer: input.streamer,
+      cutOffAt,
+      reason,
+    };
+  } finally {
+    database.close();
+  }
+}
+
+/** 读取某场次的全部超管切断记录，按发生时间升序。 */
+export function readDanmuSessionCutOffs(
+  sessionId: number,
+  options?: StorageOptions,
+): DanmuSessionCutOff[] {
+  const database = openDanmuDatabase(options);
+
+  try {
+    const rows = database
+      .prepare(`
+        SELECT id, session_id, room_id, streamer, cut_off_at, reason
+        FROM danmu_session_cutoff
+        WHERE session_id = ?
+        ORDER BY cut_off_at ASC, id ASC
+      `)
+      .all(sessionId) as Record<string, unknown>[];
+
+    return rows.map(mapDanmuSessionCutOffRow);
+  } finally {
+    database.close();
+  }
+}
+
+/** 读取每个直播间最近一次超管切断记录。 */
+export function readLatestCutOffByRooms(options?: StorageOptions): DanmuSessionCutOff[] {
+  const database = openDanmuDatabase(options);
+
+  try {
+    const rows = database
+      .prepare(`
+        SELECT id, session_id, room_id, streamer, cut_off_at, reason
+        FROM (
+          SELECT
+            id, session_id, room_id, streamer, cut_off_at, reason,
+            ROW_NUMBER() OVER (PARTITION BY room_id ORDER BY cut_off_at DESC, id DESC) AS rn
+          FROM danmu_session_cutoff
+        )
+        WHERE rn = 1
+      `)
+      .all() as Record<string, unknown>[];
+
+    return rows.map(mapDanmuSessionCutOffRow);
   } finally {
     database.close();
   }

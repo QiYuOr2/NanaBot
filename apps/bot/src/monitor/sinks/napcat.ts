@@ -1,10 +1,11 @@
+import type { PushLogPurpose } from "@nana/constants";
 import type { MonitorEvent, MonitorSink } from "@nana/monitor";
 import { atAllPart, textPart, type MessagePart } from "../../message/parts.ts";
 import type { FeatureContext } from "../../core";
 
 const AT_ALL_TOKEN = "{@all}";
 
-/** 把直播监控事件转换成 QQ 群 / 管理员的 NapCat 通知，并记录推送结果。 */
+/** 把直播监控事件转换成 QQ 群 / 管理员的推送通知，并记录推送结果。 */
 export function createNapcatMonitorSink(
   context: FeatureContext,
   notifyGroupIds: number[] = [],
@@ -18,7 +19,28 @@ export function createNapcatMonitorSink(
 
       switch (event.type) {
         case "live.started":
-          await sendGroupText(context, notifyGroupIds, event.message, event.streamer);
+          await sendGroupText(context, notifyGroupIds, event.message, event.streamer, {
+            purpose: "live.start",
+            actionName: "开播通知",
+            allowAtAll: true,
+          });
+          return;
+        case "live.resumed":
+          if (event.silent) {
+            return;
+          }
+          await sendGroupText(context, notifyGroupIds, event.message, event.streamer, {
+            purpose: "live.resume",
+            actionName: "恢复开播通知",
+            allowAtAll: false,
+          });
+          return;
+        case "live.cutoff":
+          await sendGroupText(context, notifyGroupIds, event.message, event.streamer, {
+            purpose: "live.cutoff",
+            actionName: "超管切断通知",
+            allowAtAll: false,
+          });
           return;
         case "monitor.test":
           await context.sendAdminMsg(toMessageSegments(`直播间连接测试 ${AT_ALL_TOKEN}`), {
@@ -52,28 +74,40 @@ export function createNapcatMonitorSink(
   };
 }
 
+interface SendGroupOptions {
+  purpose: PushLogPurpose;
+  actionName: string;
+  allowAtAll: boolean;
+}
+
 async function sendGroupText(
   context: FeatureContext,
   groupIds: number[],
   text: string,
   streamer: string,
+  options: SendGroupOptions,
 ) {
   const content = text.replaceAll(AT_ALL_TOKEN, "").trim();
 
   for (const groupId of groupIds) {
     const isAdminGroup = groupId === context.adminGroupId;
+    const messageSegments =
+      options.allowAtAll && !isAdminGroup ? toMessageSegments(text) : [textPart(content)];
 
     try {
       await context.sendGroupMsg(
         groupId,
-        { purpose: "live.start", content, subject: streamer },
-        toMessageSegments(isAdminGroup ? content : text),
+        { purpose: options.purpose, content, subject: streamer },
+        messageSegments,
       );
     } catch (error) {
-      context.logger.error(`[直播监控] 向群 ${groupId} 发送 "${streamer}" 开播通知失败`, error);
+      context.logger.error(
+        `[直播监控] 向群 ${groupId} 发送 "${streamer}" ${options.actionName}失败`,
+        error,
+      );
       await context.sendAdminMsg(
         [
-          textPart(`向群 ${groupId} 发送 "${streamer}" 开播通知失败`),
+          textPart(`向群 ${groupId} 发送 "${streamer}" ${options.actionName}失败`),
           textPart(`错误信息: ${error instanceof Error ? error.message : JSON.stringify(error)}`),
         ],
         { purpose: "notification", label: "错误" },

@@ -31,6 +31,8 @@ export const DYNAMIC_FILE = "dynamic.sqlite";
 /** 推送目的的事件名，用于标记一次推送的类型。 */
 export const PUSH_LOG_PURPOSES = [
   "live.start",
+  "live.resume",
+  "live.cutoff",
   "live.end",
   "app.online",
   "app.offline",
@@ -51,6 +53,8 @@ export type PushLogPurpose = (typeof PUSH_LOG_PURPOSES)[number];
 /** 推送目的对应的中文展示名。 */
 export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
   "live.start": "开播",
+  "live.resume": "恢复开播",
+  "live.cutoff": "超管切断",
   "live.end": "下播",
   "app.online": "上线",
   "app.offline": "下线",
@@ -64,6 +68,12 @@ export const PUSH_PURPOSE_LABELS: Record<PushLogPurpose, string> = {
   "dynamic.opus": "图文动态",
   "dynamic.article": "专栏动态",
 };
+
+/** 直播异常中断（超管切断 / 直播时长不足）的默认宽限期（秒）：10 分钟。 */
+export const LIVE_GRACE_PERIOD_SECONDS = 600;
+
+/** 视为正常下播的最短直播时长（秒）：30 分钟，不足此时长下播进入宽限期。 */
+export const LIVE_MIN_NORMAL_DURATION_SECONDS = 1800;
 
 /** QQ 连接通道的展示名称。 */
 export const QQ_PROVIDER_LABELS = { official: "官方 API", napcat: "NapCat" } as const;

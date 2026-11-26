@@ -36,6 +36,8 @@ test("全量示例通过实际业务配置加载器，账号、通知、词云�
     expect.objectContaining({
       notifyEnabled: true,
       notifyGroups: [100000003],
+      gracePeriodMs: 600_000,
+      minNormalLiveMs: 1_800_000,
       wordCloud: { enabled: true, notifyGroups: [100000004] },
     }),
   ]);

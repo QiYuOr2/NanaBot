@@ -6,6 +6,7 @@ export type {
   DanmuMessageInput,
   DanmuSession,
   DanmuSessionCloseReason,
+  DanmuSessionCutOff,
   DanmuSessionWithStats,
   DynamicItemRecord,
   DynamicMonitorState,
@@ -27,7 +28,11 @@ export type { AppState } from "./app-state.ts";
 export { readAppState, writeAppState } from "./app-state.ts";
 export type { OfflineAlertInput, OfflineAlertRecord } from "./offline-alert.ts";
 export { appendOfflineAlert, readOfflineAlerts } from "./offline-alert.ts";
-export type { CloseDanmuSessionInput, OpenDanmuSessionInput } from "./danmu.ts";
+export type {
+  CloseDanmuSessionInput,
+  OpenDanmuSessionInput,
+  RecordDanmuSessionCutOffInput,
+} from "./danmu.ts";
 export {
   LIVE_SUMMARY_CLAIM_STALE_MS,
   appendDanmuMessages,
@@ -41,7 +46,10 @@ export {
   openDanmuSession,
   readDanmuMessages,
   readDanmuSession,
+  readDanmuSessionCutOffs,
+  readLatestCutOffByRooms,
   readLiveSummary,
+  recordDanmuSessionCutOff,
 } from "./danmu.ts";
 export { resolveDbPath } from "./paths.ts";
 export {

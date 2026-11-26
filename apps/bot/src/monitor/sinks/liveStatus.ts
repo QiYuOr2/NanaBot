@@ -16,13 +16,18 @@ export interface LiveStatusSinkOptions extends StorageOptions {
   logger?: Logger;
 }
 
-/** 监听开播 / 下播事件，把直播状态持久化到 SQLite。 */
+/** 监听开播 / 恢复 / 超管切断 / 下播事件，把直播状态持久化到 SQLite。 */
 export function createLiveStatusSink(options: LiveStatusSinkOptions = {}): MonitorSink {
   const logger = options.logger ?? consoleLogger;
 
   return {
     async handle(event: MonitorEvent) {
-      if (event.type !== "live.started" && event.type !== "live.ended") {
+      if (
+        event.type !== "live.started" &&
+        event.type !== "live.resumed" &&
+        event.type !== "live.cutoff" &&
+        event.type !== "live.ended"
+      ) {
         return;
       }
 
@@ -39,7 +44,7 @@ export function createLiveStatusSink(options: LiveStatusSinkOptions = {}): Monit
         event.roomId,
         buildLiveStatus({
           streamer: event.streamer,
-          live: event.type === "live.started",
+          live: event.type === "live.started" || event.type === "live.resumed",
           updatedAt: event.timestamp.toISOString(),
           info,
         }),

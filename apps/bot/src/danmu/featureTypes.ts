@@ -34,6 +34,11 @@ export interface WordCloudFeatureOptions extends StorageOptions {
    * 录制器在监控启动时才写入。必须传同一个 `Map`，不能在 `app.use` 时把当时的内容拷成数组。
    */
   recorders?: Map<number, DanmuRecorder>;
+  /**
+   * 轮询兜底发现主播不在播时调用。
+   * 返回 true 表示由监控器的异常中断宽限期接管，轮询本次不直接结束场次。
+   */
+  onPollOffline?: (roomId: number) => boolean;
 }
 
 /** 一场弹幕已经收尾。`streamer` 是监控配置里的完整主播，方便摘要找到开播通知群。 */

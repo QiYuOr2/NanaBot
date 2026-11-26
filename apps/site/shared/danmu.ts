@@ -25,10 +25,18 @@ export const DANMU_DETAIL_MESSAGE_LIMIT = 200;
 /** 结束原因的中文展示名；进行中的场次 `closeReason` 为 null。 */
 export const DANMU_CLOSE_REASON_LABELS: Record<DanmuSessionCloseReason, string> = {
   "live.ended": "正常下播",
+  cut_off: "超管切断",
   poll: "轮询兜底",
   shutdown: "进程退出",
   stale: "残留清理",
 };
+
+/** 场次内单次超管切断记录。 */
+export interface DanmuSessionCutOffDto {
+  id: number;
+  cutOffAt: string;
+  reason: string;
+}
 
 /** 最终产出格式：PNG 图片（浏览器展示）或 SVG 文本（PNG 渲染失败时的降级）。 */
 export type DanmuWordCloudFormat = "png" | "svg";
@@ -56,6 +64,8 @@ export interface DanmuSessionSummaryDto {
   durationText: string;
   msgCount: number;
   participantCount: number;
+  /** 本场期间发生超管切断的次数。 */
+  cutOffCount: number;
   /** Top 词；超过 {@link DANMU_SESSION_TOP_WORDS_SESSIONS} 的旧场次为空数组。 */
   topWords: DanmuWordCountDto[];
   /** 该场是否仍在进行中。 */
@@ -108,6 +118,8 @@ export interface DanmuSessionDetailResponse {
   stats: DanmuSessionStatsDto;
   /** 本场摘要。还没生成时 `status` 为 null。 */
   liveSummary: DanmuLiveSummaryDto;
+  /** 本场记录到的超管切断事件（按发生时间升序）。 */
+  cutOffs: DanmuSessionCutOffDto[];
   /** Top 词，最多 {@link DANMU_DETAIL_TOP_WORDS} 个。 */
   topWords: DanmuWordCountDto[];
   /** 最近若干条弹幕，按时间倒序（最新在前）。 */
@@ -135,6 +147,7 @@ export function toDanmuSessionSummary(
     durationText: duration.text,
     msgCount: session.msgCount,
     participantCount: session.participantCount,
+    cutOffCount: session.cutOffCount ?? 0,
     topWords,
     active: session.endedAt === null,
   };

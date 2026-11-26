@@ -472,3 +472,52 @@ test("失败明细按群去重并带上错误信息与重试次数", () => {
   });
   expect(failures[0]?.purposeLabel).toBe("开播");
 });
+
+test("超管切断与恢复开播独立成条展示，不被归并进开播活动，且多群同时推送合并为一条", () => {
+  const activities = buildPushActivities([
+    createLog({
+      targetId: "1",
+      target: "群1",
+      purpose: "live.start",
+      purposeLabel: "开播",
+      content: "饭总播了",
+      pushedAt: "2026-09-15T10:00:00.000Z",
+    }),
+    createLog({
+      targetId: "1",
+      target: "群1",
+      purpose: "live.cutoff",
+      purposeLabel: "超管切断",
+      content: "饭总 直播间被超管切断（原因：画面违规）",
+      pushedAt: "2026-09-15T10:10:00.000Z",
+    }),
+    createLog({
+      targetId: "2",
+      target: "群2",
+      purpose: "live.cutoff",
+      purposeLabel: "超管切断",
+      content: "饭总 直播间被超管切断（原因：画面违规）",
+      pushedAt: "2026-09-15T10:10:00.200Z",
+    }),
+    createLog({
+      targetId: "1",
+      target: "群1",
+      purpose: "live.resume",
+      purposeLabel: "恢复开播",
+      content: "饭总播了",
+      pushedAt: "2026-09-15T10:15:00.000Z",
+    }),
+  ]);
+
+  expect(activities.map((item) => item.purpose)).toEqual([
+    "live.resume",
+    "live.cutoff",
+    "live.start",
+  ]);
+  expect(activities[1]).toMatchObject({
+    purpose: "live.cutoff",
+    purposeLabel: "超管切断",
+    targetCount: 2,
+    successCount: 2,
+  });
+});

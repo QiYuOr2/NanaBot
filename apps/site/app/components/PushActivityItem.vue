@@ -34,6 +34,8 @@ const AVATAR_COLORS = [
 
 const PURPOSE_TAG: Record<string, string> = {
   "live.start": "bg-status-pink/10 text-status-pink",
+  "live.resume": "bg-status-cyan/10 text-status-cyan",
+  "live.cutoff": "bg-status-red/10 text-status-red",
   "live.end": "bg-status-teal/10 text-status-teal",
   "app.online": "bg-status-blue/10 text-status-blue",
   "app.offline": "bg-status-cyan/10 text-status-cyan",

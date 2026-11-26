@@ -121,6 +121,14 @@ message:
     ruleUserMs: 3000
     ruleConversationMs: 1000
 
+# 直播异常中断默认参数（可选；可在单个主播的 liveMonitorConfig 中覆盖）。
+liveMonitor:
+  # 超管切断或短时中断后的宽限期（秒），默认 600（10 分钟）；0 表示关闭宽限期。
+  # 宽限期内重新开播视为同一场续播，不推送词云/总结，且重新开播通知不带 @all。
+  gracePeriodSeconds: 600
+  # 视为正常下播的最短直播时长（秒），默认 1800（30 分钟）。不足此时长触发下播进入宽限期。
+  minNormalLiveSeconds: 1800
+
 # 主播需要显式指定 qqAccount；未填写时不参与账号推送。
 up:
   - uname: 示例主播（官方推送）
@@ -131,10 +139,17 @@ up:
     liveMonitorConfig:
       enableNotify: true
       notifyGroups: [100000003]
+      # 可选，按主播覆盖顶层 liveMonitor 的默认宽限期与最短正常时长（秒）。
+      # gracePeriodSeconds: 600
+      # minNormalLiveSeconds: 1800
       messageTemplate:
         # 支持 {uname}、{roomId}、{@all}。
         # 官方 @全体要求机器人是群管理员，且每群每天仅限一次。
         start: "{uname}开播了 https://live.bilibili.com/{roomId} {@all}"
+        # 可选：宽限期内重新开播的文案（默认沿用 start 并去掉 {@all}；始终不发 @all）。
+        # resume: "{uname} 重新开播了 https://live.bilibili.com/{roomId}"
+        # 可选：超管切断时发到通知群的普通消息文案（支持 {uname}、{roomId}、{reason}）。
+        # cutOff: "{uname} 直播间被超管切断（原因：{reason}）"
     wordcloud:
       enabled: true
       notifyGroups: [100000004]

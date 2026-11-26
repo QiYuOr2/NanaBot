@@ -1,3 +1,8 @@
+export interface StreamerCutOff {
+  cutOffAt: string;
+  reason: string;
+}
+
 export interface StreamerStatus {
   streamer: string;
   roomId: number;
@@ -6,6 +11,7 @@ export interface StreamerStatus {
   area: string | null;
   viewer: number | null;
   updatedAt: string | null;
+  lastCutOff?: StreamerCutOff | null;
 }
 
 export interface LiveStatusResponse {
@@ -37,6 +43,7 @@ export type {
   DanmuLiveSummaryDto,
   DanmuLiveSummaryResponse,
   DanmuMessageDto,
+  DanmuSessionCutOffDto,
   DanmuSessionDetailResponse,
   DanmuSessionStatsDto,
   DanmuSessionSummaryDto,

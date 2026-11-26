@@ -117,6 +117,21 @@ function formatDateTime(iso: string | null): string {
     minute: "2-digit",
   }).format(date);
 }
+
+function formatCutOffTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+}
 </script>
 
 <template>
@@ -129,7 +144,12 @@ function formatDateTime(iso: string | null): string {
 
     <div v-else class="grid grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-start">
       <aside class="lg:sticky lg:top-16">
-        <DanmuSessionList :sessions="sessions" :selected-id="selectedId" @select="onSelect" />
+        <DanmuSessionList
+          class="max-h-[50dvh] lg:max-h-[calc(100dvh-5.5rem)]"
+          :sessions="sessions"
+          :selected-id="selectedId"
+          @select="onSelect"
+        />
       </aside>
 
       <div class="min-w-0 space-y-4">
@@ -150,7 +170,7 @@ function formatDateTime(iso: string | null): string {
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div class="min-w-0">
                 <h1
-                  class="flex min-w-0 items-center gap-2 text-[15px] font-medium tracking-tight text-ink"
+                  class="flex min-w-0 flex-wrap items-center gap-2 text-[15px] font-medium tracking-tight text-ink"
                 >
                   <span class="truncate">{{ detail.session.streamer }}</span>
                   <span
@@ -161,9 +181,26 @@ function formatDateTime(iso: string | null): string {
                   </span>
                   <span
                     v-else-if="detail.session.closeReasonLabel"
-                    class="shrink-0 rounded bg-recessed px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary"
+                    class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium"
+                    :class="
+                      detail.session.closeReason === 'cut_off'
+                        ? 'bg-status-red/10 text-status-red'
+                        : 'bg-recessed text-ink-secondary'
+                    "
                   >
                     {{ detail.session.closeReasonLabel }}
+                  </span>
+                  <span
+                    v-if="
+                      detail.session.cutOffCount > 0 && detail.session.closeReason !== 'cut_off'
+                    "
+                    class="shrink-0 rounded bg-status-red/10 px-1.5 py-0.5 text-[11px] font-medium text-status-red"
+                  >
+                    {{
+                      detail.session.cutOffCount > 1
+                        ? `切断 ${detail.session.cutOffCount} 次`
+                        : "曾被切断"
+                    }}
                   </span>
                 </h1>
                 <p class="mt-0.5 text-[12px] text-ink-muted">{{ timeRange }}</p>
@@ -226,6 +263,29 @@ function formatDateTime(iso: string | null): string {
                   }}
                 </span>
               </span>
+            </div>
+
+            <div
+              v-if="detail.cutOffs.length > 0"
+              class="mt-3 rounded-md border border-status-red/20 bg-status-red/5 px-3 py-2 text-[12px]"
+            >
+              <p class="font-medium text-status-red">
+                超管切断记录（{{ detail.cutOffs.length }} 次）
+              </p>
+              <ul class="mt-1 space-y-1 text-ink-secondary">
+                <li
+                  v-for="cutOff in detail.cutOffs"
+                  :key="cutOff.id"
+                  class="flex min-w-0 items-baseline gap-2"
+                >
+                  <span class="shrink-0 font-mono text-[11px] tabular-nums text-ink-muted">
+                    {{ formatCutOffTime(cutOff.cutOffAt) }}
+                  </span>
+                  <span class="min-w-0 break-words text-ink">
+                    {{ cutOff.reason || "未提供具体原因" }}
+                  </span>
+                </li>
+              </ul>
             </div>
           </section>
 

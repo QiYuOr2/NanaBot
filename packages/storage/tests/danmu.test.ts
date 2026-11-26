@@ -10,6 +10,9 @@ import {
   openDanmuSession,
   readDanmuMessages,
   readDanmuSession,
+  readDanmuSessionCutOffs,
+  readLatestCutOffByRooms,
+  recordDanmuSessionCutOff,
 } from "../src/index.ts";
 import { createRootDir } from "./setup.ts";
 
@@ -297,5 +300,102 @@ describe("listDanmuSessions", () => {
   test("空数据库返回空数组", () => {
     const rootDir = createRootDir();
     expect(listDanmuSessions({ rootDir })).toEqual([]);
+  });
+});
+
+describe("超管切断记录", () => {
+  test("记录并按场次读取超管切断，同时体现在列表 cutOffCount 与关闭原因中", () => {
+    const rootDir = createRootDir();
+
+    const session = openDanmuSession(
+      { roomId: ROOM_ID, streamer: "饭总", startedAt: "2026-10-01T10:00:00.000Z" },
+      { rootDir },
+    );
+
+    const first = recordDanmuSessionCutOff(
+      {
+        sessionId: session.id,
+        roomId: ROOM_ID,
+        streamer: "饭总",
+        cutOffAt: "2026-10-01T10:15:00.000Z",
+        reason: "画面涉嫌违规",
+      },
+      { rootDir },
+    );
+    const second = recordDanmuSessionCutOff(
+      {
+        sessionId: session.id,
+        roomId: ROOM_ID,
+        streamer: "饭总",
+        cutOffAt: "2026-10-01T10:25:00.000Z",
+        reason: "  二次切断  ",
+      },
+      { rootDir },
+    );
+
+    closeDanmuSession(
+      session.id,
+      { endedAt: "2026-10-01T10:25:00.000Z", reason: "cut_off" },
+      { rootDir },
+    );
+
+    expect(first).toMatchObject({
+      sessionId: session.id,
+      roomId: String(ROOM_ID),
+      streamer: "饭总",
+      reason: "画面涉嫌违规",
+    });
+    expect(second.reason).toBe("二次切断");
+
+    const cutOffs = readDanmuSessionCutOffs(session.id, { rootDir });
+    expect(cutOffs.map((item) => item.reason)).toEqual(["画面涉嫌违规", "二次切断"]);
+
+    const listed = listDanmuSessions({ rootDir });
+    expect(listed[0]).toMatchObject({
+      id: session.id,
+      closeReason: "cut_off",
+      cutOffCount: 2,
+    });
+  });
+
+  test("readLatestCutOffByRooms 返回每个直播间最近一次切断（含无关联场次的记录）", () => {
+    const rootDir = createRootDir();
+
+    recordDanmuSessionCutOff(
+      {
+        sessionId: null,
+        roomId: ROOM_ID,
+        streamer: "饭总",
+        cutOffAt: "2026-10-01T10:00:00.000Z",
+        reason: "旧原因",
+      },
+      { rootDir },
+    );
+    recordDanmuSessionCutOff(
+      {
+        sessionId: null,
+        roomId: ROOM_ID,
+        streamer: "饭总",
+        cutOffAt: "2026-10-01T12:00:00.000Z",
+        reason: "新原因",
+      },
+      { rootDir },
+    );
+    recordDanmuSessionCutOff(
+      {
+        sessionId: null,
+        roomId: 10086,
+        streamer: "另一主播",
+        cutOffAt: "2026-10-01T11:00:00.000Z",
+        reason: "其他房间",
+      },
+      { rootDir },
+    );
+
+    const latest = readLatestCutOffByRooms({ rootDir });
+    const byRoom = new Map(latest.map((item) => [item.roomId, item]));
+    expect(byRoom.size).toBe(2);
+    expect(byRoom.get(String(ROOM_ID))?.reason).toBe("新原因");
+    expect(byRoom.get("10086")?.reason).toBe("其他房间");
   });
 });

@@ -1,9 +1,12 @@
 import { readConfig } from "@nana/config";
+import { LIVE_GRACE_PERIOD_SECONDS, LIVE_MIN_NORMAL_DURATION_SECONDS } from "@nana/constants";
 import { z } from "zod";
 
 export interface MonitorMessageConfig {
   liveStart: string;
   liveEnd: string;
+  liveResume?: string;
+  liveCutOff?: string;
 }
 
 /** 某个主播自己的词云通知。词云属于这场直播的主播，不走全局推送目标。 */
@@ -23,6 +26,10 @@ export interface MonitorStreamerConfig {
   notifyEnabled: boolean;
   notifyGroups: number[];
   messages: MonitorMessageConfig;
+  /** 异常中断（超管切断 / 直播时长不足）宽限期（毫秒）。缺省使用监控默认值（10 分钟）。 */
+  gracePeriodMs?: number;
+  /** 视为正常下播的最短直播时长（毫秒）。缺省使用监控默认值（30 分钟）。 */
+  minNormalLiveMs?: number;
   wordCloud: StreamerWordCloudConfig;
 }
 
@@ -35,6 +42,11 @@ const StreamerWordCloudConfigSchema = z.object({
   notifyGroups: z.array(z.number().int().positive()).default([]),
 });
 
+const LiveMonitorDefaultsSchema = z.object({
+  gracePeriodSeconds: z.number().int().min(0).default(LIVE_GRACE_PERIOD_SECONDS),
+  minNormalLiveSeconds: z.number().int().min(0).default(LIVE_MIN_NORMAL_DURATION_SECONDS),
+});
+
 const UpMonitorConfigSchema = z
   .object({
     live: z.boolean(),
@@ -43,8 +55,12 @@ const UpMonitorConfigSchema = z
       .object({
         enableNotify: z.boolean().default(true),
         notifyGroups: z.array(z.number().int()),
+        gracePeriodSeconds: z.number().int().min(0).optional(),
+        minNormalLiveSeconds: z.number().int().min(0).optional(),
         messageTemplate: z.object({
           start: z.string(),
+          resume: z.string().optional(),
+          cutOff: z.string().optional(),
         }),
       })
       .optional(),
@@ -74,27 +90,43 @@ const UpMonitorConfigSchema = z
   });
 
 type UpMonitorConfig = z.infer<typeof UpMonitorConfigSchema>;
+type LiveMonitorDefaults = z.infer<typeof LiveMonitorDefaultsSchema>;
 
 const NanaMonitorConfigSchema = z.object({
+  liveMonitor: LiveMonitorDefaultsSchema.optional(),
   up: z.array(UpMonitorConfigSchema),
 });
 
 /** 从 `nana.config.yaml` 读取直播监控配置，只保留 `live: true` 的主播。 */
 export function loadMonitorConfig(): MonitorConfig {
   const config = NanaMonitorConfigSchema.parse(readConfig());
+  const defaults = config.liveMonitor ?? {
+    gracePeriodSeconds: LIVE_GRACE_PERIOD_SECONDS,
+    minNormalLiveSeconds: LIVE_MIN_NORMAL_DURATION_SECONDS,
+  };
 
   return {
-    streamers: config.up.filter((monitorConfig) => monitorConfig.live).map(toMonitorStreamerConfig),
+    streamers: config.up
+      .filter((monitorConfig) => monitorConfig.live)
+      .map((monitorConfig) => toMonitorStreamerConfig(monitorConfig, defaults)),
   };
 }
 
-function toMonitorStreamerConfig(config: UpMonitorConfig): MonitorStreamerConfig {
+function toMonitorStreamerConfig(
+  config: UpMonitorConfig,
+  defaults: LiveMonitorDefaults,
+): MonitorStreamerConfig {
   // schema 的 superRefine 已保证 live:true 的条目一定有这两个字段。
   if (config.liveRoomId === undefined || config.liveMonitorConfig === undefined) {
     throw new Error(
       `主播 ${config.uname} 启用了直播监控，但缺少 liveRoomId 或 liveMonitorConfig。`,
     );
   }
+  const gracePeriodSeconds =
+    config.liveMonitorConfig.gracePeriodSeconds ?? defaults.gracePeriodSeconds;
+  const minNormalLiveSeconds =
+    config.liveMonitorConfig.minNormalLiveSeconds ?? defaults.minNormalLiveSeconds;
+
   return {
     uid: config.uid,
     roomId: config.liveRoomId,
@@ -105,7 +137,15 @@ function toMonitorStreamerConfig(config: UpMonitorConfig): MonitorStreamerConfig
     messages: {
       liveStart: config.liveMonitorConfig.messageTemplate.start,
       liveEnd: `${config.uname} 下播了`,
+      ...(config.liveMonitorConfig.messageTemplate.resume !== undefined
+        ? { liveResume: config.liveMonitorConfig.messageTemplate.resume }
+        : {}),
+      ...(config.liveMonitorConfig.messageTemplate.cutOff !== undefined
+        ? { liveCutOff: config.liveMonitorConfig.messageTemplate.cutOff }
+        : {}),
     },
+    gracePeriodMs: gracePeriodSeconds * 1000,
+    minNormalLiveMs: minNormalLiveSeconds * 1000,
     wordCloud: {
       enabled: config.wordcloud?.enabled ?? false,
       notifyGroups: config.wordcloud?.notifyGroups ?? [],

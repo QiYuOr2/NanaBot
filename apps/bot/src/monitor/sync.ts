@@ -11,6 +11,8 @@ export interface SyncLiveStatusOptions extends StorageOptions {
   fetch?: typeof globalThis.fetch;
   /** 日志出口。 */
   logger?: Logger;
+  /** 每个主播同步完成后回调，供监控状态机初始化是否在播及真实开播时间。 */
+  onSynced?: (roomId: number, state: { live: boolean; startedAt?: Date }) => void;
 }
 
 /**
@@ -44,20 +46,26 @@ export async function syncLiveStatus(
       continue;
     }
 
+    const liveNow = isLiveStatus(info);
     writeLiveStatus(
       streamer.roomId,
       buildLiveStatus({
         streamer: streamer.streamer,
-        live: isLiveStatus(info),
+        live: liveNow,
         updatedAt: syncedAt,
         info,
       }),
       options,
     );
 
+    options.onSynced?.(streamer.roomId, {
+      live: liveNow,
+      startedAt: liveNow && info.live_time > 0 ? new Date(info.live_time * 1000) : undefined,
+    });
+
     logger.info(
       `[直播监控] 已同步 "${streamer.streamer}" 直播间 ${streamer.roomId} 状态：${
-        isLiveStatus(info) ? "直播中" : "未开播"
+        liveNow ? "直播中" : "未开播"
       }`,
     );
   }

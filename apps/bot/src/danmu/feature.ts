@@ -51,7 +51,13 @@ export const wordCloudFeature = defineFeature<WordCloudFeatureOptions>({
     let pollTimer: ReturnType<typeof setInterval> | undefined;
     if (options.config.pollIntervalMs > 0) {
       pollTimer = setInterval(() => {
-        void pollActiveRecorders(recorders, options.streamers, isLive, logger);
+        void pollActiveRecorders(
+          recorders,
+          options.streamers,
+          isLive,
+          logger,
+          options.onPollOffline,
+        );
       }, options.config.pollIntervalMs);
       if (unrefTimers) {
         pollTimer.unref?.();
@@ -110,12 +116,13 @@ export function createWordCloudMonitorSink(
   };
 }
 
-/** 轮询兜底：有活跃场次但 B 站已不在播，就收尾并推送词云。 */
+/** 轮询兜底：有活跃场次但 B 站已不在播，且不在异常中断宽限期内，就收尾并推送词云。 */
 async function pollActiveRecorders(
   recorders: Map<number, DanmuRecorder>,
   streamers: MonitorStreamerConfig[],
   isLive: LiveStatusChecker,
   logger: Logger,
+  onPollOffline?: (roomId: number) => boolean,
 ): Promise<void> {
   for (const streamer of streamers) {
     const recorder = recorders.get(streamer.roomId);
@@ -132,6 +139,11 @@ async function pollActiveRecorders(
     }
 
     if (liveNow) {
+      continue;
+    }
+
+    if (onPollOffline?.(streamer.roomId)) {
+      logger.info(`[弹幕词云] ${streamer.streamer} 处于异常中断宽限期，跳过本次轮询收尾`);
       continue;
     }
 
@@ -171,7 +183,12 @@ export async function resumeDanmuSessions(options: ResumeDanmuOptions): Promise<
     }
 
     if (liveNow) {
-      logger.info(`[弹幕词云] ${streamer.streamer} 仍在直播，继续记录场次 #${session.id}`);
+      const recorder = options.recorders?.get(streamer.roomId);
+      if (recorder && !recorder.active) {
+        recorder.start(new Date(session.startedAt));
+      } else {
+        logger.info(`[弹幕词云] ${streamer.streamer} 仍在直播，继续记录场次 #${session.id}`);
+      }
       continue;
     }
 

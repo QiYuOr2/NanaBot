@@ -63,7 +63,11 @@ function formatTime(iso: string | null): string {
         </a>
       </div>
 
-      <span class="dot" :class="status.live ? 'bg-live' : 'bg-ink-muted'" />
+      <span
+        class="dot"
+        :class="status.live ? 'bg-live' : status.lastCutOff ? 'bg-status-red' : 'bg-ink-muted'"
+        :title="status.live ? '正在直播' : status.lastCutOff ? '超管切断' : '未开播'"
+      />
 
       <div ref="menuRef" class="relative">
         <button
@@ -105,8 +109,24 @@ function formatTime(iso: string | null): string {
         <span v-if="status.live && status.viewer != null">{{ status.viewer }} 人气</span>
       </div>
 
+      <div
+        v-if="!status.live && status.lastCutOff"
+        class="flex min-w-0 items-center gap-1.5 rounded bg-status-red/10 px-2 py-1 text-[12px] text-status-red"
+        :title="
+          status.lastCutOff.reason
+            ? `超管切断（${formatTime(status.lastCutOff.cutOffAt)}）：${status.lastCutOff.reason}`
+            : `超管切断（${formatTime(status.lastCutOff.cutOffAt)}）`
+        "
+      >
+        <span class="shrink-0 font-medium">超管切断</span>
+        <span class="min-w-0 truncate text-[11px] opacity-90">
+          {{ status.lastCutOff.reason || formatTime(status.lastCutOff.cutOffAt) }}
+        </span>
+      </div>
+
       <p class="text-[12px] text-ink-muted">
-        {{ status.live ? "正在直播" : "未开播" }} · 更新于 {{ formatTime(status.updatedAt) }}
+        {{ status.live ? "正在直播" : status.lastCutOff ? "超管切断" : "未开播" }} · 更新于
+        {{ formatTime(status.updatedAt) }}
       </p>
     </div>
   </article>
