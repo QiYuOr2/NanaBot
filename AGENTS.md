@@ -19,55 +19,38 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 
 <!--VITE PLUS END-->
 
-# NanaBot 项目说明
+# NanaBot 开发约定
 
-NanaBot 是支持 QQ 官方 API 与 NapCat WebSocket 的 TypeScript QQ 机器人：监听 B 站直播间开播/下播并向 QQ 群推送通知，另有一个 Nuxt 4 Web 面板展示直播状态。仓库为 pnpm workspace，由 Vite+（`vp`）统一管理。
+NanaBot 是基于 pnpm workspace 与 Vite+（`vp`）的 TypeScript Monorepo，包含机器人主程序 `apps/bot`、Nuxt 4 管理面板 `apps/site` 以及共享包 `packages/*`。功能概览与配置说明见 `README.md` 与 `nana.config.yaml.example`。
 
-## 目录结构
+## 模块边界与代码规范
 
-```text
-apps/
-  bot/                 # QQ 机器人应用
-  site/                # 直播状态 Web 面板（Nuxt 4 + Vite+ + UnoCSS）
-packages/
-  bilibili-api/        # B 站直播状态 API（getLiveStatusByUids）
-  config/              # nana.config.yaml 读写
-  constants/           # 共享常量
-  monitor/             # 直播监控 source/controller/event/sink 抽象
-  qq/                  # QQ 官方通信、独立消息类型、@全体编码及扫码授权
-  storage/             # db/ 下 YAML + SQLite 存储（live-status / push-log / danmu）
-  utils/               # 通用工具
-  wordcloud/           # 弹幕分词、场次统计、词云 SVG/PNG 渲染（纯计算，无 NapCat 依赖）
-```
+- **单一职责**：`src/` 按职责拆分，`index.ts` 只做导出桶（barrel）。
+- **共享收口**：环境变量名、数据库文件名、推送目的（`PUSH_LOG_PURPOSES` / `PUSH_PURPOSE_LABELS`）等常量统一放 `@nana/constants`；项目根定位、鉴权口令读取（`readProjectAuthToken`）等通用逻辑放 `@nana/utils`，避免重复实现。
+- **依赖隔离**：
+  - 官方 QQ SDK（`@tencent-connect/qqbot-*`）只由 `@nana/qq` 依赖；该包不得依赖 NapCat、配置、存储或 bot 业务逻辑。
+  - `@nana/wordcloud`、`@nana/live-summary` 保持纯计算/生成，不依赖 QQ 通道实现。
+  - `apps/site` 不得依赖 `@nana/qq` 或读取机器人密钥；需要由机器人执行的动作（如测试发信）必须经 bot 本机控制接口转发。
+- **原生依赖**：`@node-rs/jieba`、`@resvg/resvg-js` 在 `apps/bot` 构建配置中必须保持 external。
 
-## 关键约定
+## 核心不变量（修改时必须遵守）
 
-- 单一职责：`src/` 按职责拆分，`index.ts` 只做导出桶（barrel）。
-- 共享常量放 `@nana/constants`；通用逻辑（项目根定位、深层赋值等）放 `@nana/utils`，避免重复实现。
-- 测试放 `tests/`（bot 为 `test/`），用 `vite-plus/test`；storage 测试用临时 rootDir 隔离，不写真实项目数据。
-- 直播状态字段：`room_id, streamer, live, updated_at, title, area, viewer`；`@nana/storage` 打开旧库会自动补列。
-- 推送记录字段：`target_id, target, purpose, purpose_label, pushed_at, success, error, content, subject`。推送目的事件名与展示名收口在 `@nana/constants`（`PUSH_LOG_PURPOSES`、`PUSH_PURPOSE_LABELS`），`@nana/storage` 提供 `writePushLog` / `readPushLogs`。
-- bot 业务通过 `BotApp` / `FeatureContext` 发送群消息。NapCat 使用 `core/napcat.ts` 的 `NapcatPushClient`，`get_group_info` 解析群昵称（失败回退 `群{id}`，带缓存）；官方通道使用 `qq/push.ts` 的 `OfficialPushClient`，由配置将数字群别名映射到 `group_openid`，群名取配置。两种通道成功与失败都会写推送记录，发送失败抛出原始错误，由调用方决定是否再通知管理员。
-- 弹幕词云：开播开始记录弹幕、下播停止并按场次生成词云推送到管理员群。场次与弹幕存 `db/danmu.sqlite`（`danmu_session` / `danmu_message`），`@nana/storage` 提供 `openDanmuSession` / `appendDanmuMessages` / `closeDanmuSession` / `listDanmuSessions` 等。录制编排在 `apps/bot/src/danmu`（`DanmuRecorder` + `wordCloudFeature`），分词/统计/渲染在 `@nana/wordcloud`。配置段 `nana.config.yaml#wordcloud`，技术方案见 `docs/plan/danmu-wordcloud.md`。
+- **账号与通道隔离**：`up[].qqAccount` 必须显式指定，不做默认账号回退；通道选择严格以 `accounts[].provider` 为准；单账号停用、缺凭据或失败时只跳过自身，绝不改发到其他账号或切换通道。
+- **发送失败与 `@all` 语义**：官方与 NapCat 通道发送成功与失败均需写推送日志，失败必须抛出原始错误；官方 `{@all}`（`<qqbot-at-everyone />`）发送失败时，**严禁**去掉提醒后降级为普通群消息重发。
+- **配置编辑保注释**：通过 `@nana/config` 原子更新 `nana.config.yaml`（如 `accounts[].groups`）时保留原有 YAML 注释；群映射在发送时实时读取，不要求重启 bot。
+- **安全与敏感信息**：
+  - `apps/site` 除登录鉴权与 `/api/health` 外，其余业务页面与 API 均受 `NANA_AUTH_TOKEN` 保护；日志查看接口必须拒绝路径越界与符号链接。
+  - 绝不向接口或日志输出密钥与敏感凭据（`AppSecret`、`BILIBILI_COOKIE`、管理口令等）；绝不提交 `.env`、`nana.config.yaml`、`db/*.sqlite`、`logs/`。
 
-## 运行时配置
+## 测试规范
 
-- 根目录 `nana.config.yaml`：本地直播监控配置与顶层 `accounts` 账号列表（全量示例 `nana.config.yaml.example`），同时作为项目根目录标记（`@nana/config` 读取）；该文件已 gitignore，不提交真实群号、账号或邮箱。
-- `apps/bot/.env`（参考 `.env.example`）：`NC_WS_URL`、`NC_ACCESS_TOKEN`、`NC_DEBUG`、`BARK_KEY`、`NANA_BOT_CONTROL_PORT`，变量名收口在 `@nana/constants` 的 `ENV_KEYS`。
-- 多 QQ：顶层 `accounts` 统一配置多账号，每项显式 `provider: official | napcat`，连接参数放同名子段；主播必须通过 `up[].qqAccount` 显式选账号，未配置时不分配账号、不启动该主播的账号监控及录制、不推送；没有默认账号回退。允许两种通道同时运行；单账号失败不改发到其他账号。解析归一化在 `@nana/config`，凭据、路由、应用工厂及启动隔离在 `apps/bot/src/accounts/`。只支持顶层账号列表和同名连接子段，不保留旧配置兼容；群映射保存到 `accounts[].groups`。
-- 账号启停与提醒：`accounts[].enabled: false` 跳过连接及该账号主播任务；NapCat 的 `napcat.watchdog` 默认 false，关闭看门狗和自动重连，true 恢复持续重连。`botNotifications.online/offline` 各支持 `enabled` 与 `messageTemplate`，占位符 `{accountId}` / `{accountName}` / `{provider}`，上线默认不附加账号名。修改后重启 bot。
-- site 运维页：`/logs` 读取项目 `logs/` 末尾日志（256 KiB / 2000 行上限），拒绝路径越界与符号链接；`/system` 按刷新采集 CPU、内存、磁盘、NVIDIA GPU，GPU 不可用时独立降级；均受鉴权保护。
-- 官方 QQ：`accounts[].provider: official` 选择官方通道，连接参数放 `official` 子段，可沿用 `qqAccount` 标识。凭据通过 `QQ_BOT_APP_ID` / `QQ_BOT_APP_SECRET` 或账号指定的环境变量读取；`groups.<数字别名>.openid` 必须配置，不能直接用 QQ 群号。`qq:bind` 扫码写入 `.env`，`qq:discover` 获取群 openid。群主需授权主动发言；`{@all}` 转为官方文本标记 `<qqbot-at-everyone />`，机器人需为群管理员且每群每天限一次（官方 2026-10-26 变更）。发送失败不得省略提醒后重发为普通群消息。服务选择只以账号的 `provider` 为准。
-- 群映射支持在 site「设置」中编辑，全站管理口令为根目录 `.env#NANA_AUTH_TOKEN`（兼容旧 `apps/site/.env#NANA_SITE_CONFIG_TOKEN`）（至少 16 位，或通过进程环境变量配置）；测试消息经 `NANA_BOT_CONTROL_URL` 调用 bot 控制接口。bot 自动记录群消息/入群事件中的 openid 到 `db/qq-group.sqlite`，按账号隔离供页面选择；未绑定群不阻止连接，只跳过推送。`@nana/config` 共享 QQ 配置解析与单群原子更新，保留 YAML 注释；群映射在每次发送时读取，保存无需重启 bot。接口只返回展示数据，不返回机器人密钥。
-- 官方 SDK 只由 `@nana/qq` 依赖：`QQClient` 统一连接事件、独立的 `QQMessagePart`、发送及 `QQSendError`；`@nana/qq/connect` 提供扫码授权。该包不依赖 NapCat、配置、存储或 bot。OneBot 消息段转换、群映射、发现群持久化和推送日志留在 `apps/bot/src/qq`。bot 与 `qq:discover` 统一使用该客户端；site 不依赖 `@nana/qq`、不读取机器人凭据，只把设置页测试消息转发给 bot 的 `127.0.0.1:6365` 内部控制接口（`NANA_BOT_CONTROL_URL` 可改）。bot 用运行中的 `BotApp.sendGroupMsg` 按账号发送，推送记录也由 bot 写入；普通与 @全体均记录 `message.test`，失败不降级重发。控制接口与 site 全站共用 `NANA_AUTH_TOKEN`，读取统一用 `@nana/utils.readProjectAuthToken`。site 登录使用 30 天 HttpOnly 签名 Cookie；仅 auth 与 health 接口公开。
-- `db/*.sqlite`：运行时 SQLite（`live-status.sqlite` / `push-log.sqlite` / `danmu.sqlite`，已 gitignore）。
-- `apps/site/ecosystem.config.cjs`：site 的 PM2 配置，端口 `3000`（`PORT`），运行 `.output/server/index.mjs`。
+- 测试目录为 `tests/`（`apps/bot` 为 `test/`），统一从 `vite-plus/test` 导入测试 API。
+- 涉及存储、配置或文件系统的测试必须使用临时目录隔离，不得读写项目根目录的真实 `db/` 或 `nana.config.yaml`。
 
-## 常用命令（仓库根执行）
+## 常用命令（仓库根目录）
 
-- `vp install` / `pnpm install` —— 安装并链接 workspace（按 devEngines 锁定 pnpm 11.20.0）。
-- `vp check` —— 格式化 + lint + 类型检查；`vp test` —— 运行 Vitest。
-- `vp run @nana/bot#build` —— 构建 bot（含 workspace 依赖）。
-- `pnpm dev:site` —— site 开发服务器（默认 3000）；`pnpm build:site` —— 构建 site（`.output/`）。
-- `pnpm app <list|build|deploy|start|restart|stop|delete|logs> [应用名...|all]` —— 按应用名操作单个应用（应用从 `apps/*` 自动发现，新增应用不需要加脚本）：`pnpm app deploy <应用>` 构建并只重启该应用；`all` 指带 `ecosystem.config.cjs` 的可部署应用。
-- 前端技能包（Vue/Nuxt/UnoCSS 等）安装在 `.agents/skills/`。
+- `vp check` —— 格式化、Lint 与类型检查
+- `vp test` —— 运行全仓 Vitest 测试
+- `pnpm build:bot` / `pnpm build:site` —— 构建 bot / site
+- `pnpm dev:site` —— 启动 site 开发服务器
+- `pnpm app <list|build|deploy|start|restart|stop|delete|logs> [应用名...|all]` —— 按应用管理构建与 PM2 进程
