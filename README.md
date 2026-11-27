@@ -249,7 +249,7 @@ NanaBot 通过 [`@nana/qq`](./packages/qq/README.md) 封装 [`@tencent-connect/q
 
 ## Web 控制台
 
-`apps/site` 提供面向日常监控与运维的 Web 面板，除登录接口与 `/api/health` 健康检查外，所有页面与 API 均受根目录 `.env#NANA_AUTH_TOKEN` 鉴权保护（登录后通过 HttpOnly Cookie 保持 30 天会话）。
+`apps/site` 提供面向日常监控与运维的 Web 面板，除登录接口与 `/api/health`、`/api/status` 公开探针外，所有页面与 API 均受根目录 `.env#NANA_AUTH_TOKEN` 鉴权保护（登录后通过 HttpOnly Cookie 保持 30 天会话）。
 
 | 路由        | 页面       | 功能说明                                                                  |
 | ----------- | ---------- | ------------------------------------------------------------------------- |

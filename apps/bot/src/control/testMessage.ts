@@ -31,7 +31,7 @@ export class BotControlError extends Error {
 
 export interface TestMessageRuntime {
   account: QQRuntimeAccount;
-  app: Pick<BotApp, "sendGroupMsg">;
+  app: Pick<BotApp, "sendGroupMsg"> & Partial<Pick<BotApp, "connected">>;
 }
 
 export interface TestMessageDeps {

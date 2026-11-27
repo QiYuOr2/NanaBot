@@ -108,6 +108,7 @@ export const BOT_CONTROL_DEFAULT_PORT = 6365;
 export const BOT_CONTROL_DEFAULT_URL = `http://127.0.0.1:${BOT_CONTROL_DEFAULT_PORT}`;
 export const BOT_CONTROL_TEST_MESSAGE_PATH = "/api/qq/test-message";
 export const BOT_CONTROL_HEALTH_PATH = "/health";
+export const BOT_CONTROL_STATUS_PATH = "/status";
 /** Rei 桥接接口：只认桥接专用口令（或全站管理口令），且仅监听本机。 */
 export const BOT_CONTROL_BRIDGE_STATUS_PATH = "/bridge/status";
 export const BOT_CONTROL_BRIDGE_MESSAGES_PATH = "/bridge/messages";

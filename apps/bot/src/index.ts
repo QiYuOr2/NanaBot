@@ -392,6 +392,7 @@ async function main(): Promise<void> {
         { app: runtime.app, store: bridgeStores.get(runtime.account.id)! },
       ]),
   );
+  const enabledAccountCount = accounts.length + unavailable.length;
   try {
     controlServer = await startBotControlServer({
       runtimes: new Map(
@@ -401,6 +402,11 @@ async function main(): Promise<void> {
         ]),
       ),
       ...(bridges.size > 0 ? { bridges } : {}),
+      getStatus: () => ({
+        totalAccounts: enabledAccountCount,
+        connectedAccounts: activeRuntimes.filter((runtime) => runtime.app.connected).length,
+        startedAt: processStartedAt,
+      }),
       rootDir: projectRoot,
       logger: appLogger,
       ...(controlPort === undefined ? {} : { port: controlPort }),

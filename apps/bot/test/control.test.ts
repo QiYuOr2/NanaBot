@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { BOT_CONTROL_HEALTH_PATH, BOT_CONTROL_TEST_MESSAGE_PATH } from "@nana/constants";
+import {
+  BOT_CONTROL_HEALTH_PATH,
+  BOT_CONTROL_STATUS_PATH,
+  BOT_CONTROL_TEST_MESSAGE_PATH,
+} from "@nana/constants";
 import { readPushLogs } from "@nana/storage";
 import type { QQClientPort, QQMessagePart } from "@nana/qq";
 import { parseQQConfig, resolveOfficialAccounts } from "../src/qq/config.ts";
@@ -291,5 +295,98 @@ test("健康检查不需要口令，只返回存活状态", async () => {
     const response = await fetch(`${url}${BOT_CONTROL_HEALTH_PATH}`);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
+  });
+});
+
+test("本机状态探针不需要口令，返回脱敏的通道在线汇总（ok / degraded / error）", async () => {
+  const { rootDir, logger } = harness();
+  let snapshot = {
+    totalAccounts: 2,
+    connectedAccounts: 2,
+    startedAt: Date.now() - 12_000,
+  };
+  const server = await startBotControlServer({
+    runtimes: new Map(),
+    getStatus: () => snapshot,
+    rootDir,
+    logger,
+    port: 0,
+  });
+  try {
+    const okResp = await fetch(`${server.url}${BOT_CONTROL_STATUS_PATH}`);
+    expect(okResp.status).toBe(200);
+    expect(okResp.headers.get("cache-control")).toBe("no-store");
+    const okBody = (await okResp.json()) as Record<string, unknown>;
+    expect(Object.keys(okBody).sort()).toEqual(["channels", "ok", "uptimeSeconds"]);
+    expect(okBody).toEqual({
+      ok: true,
+      uptimeSeconds: expect.any(Number),
+      channels: { status: "ok", total: 2, connected: 2 },
+    });
+
+    snapshot = { totalAccounts: 2, connectedAccounts: 1, startedAt: snapshot.startedAt };
+    const degradedBody = await (await fetch(`${server.url}${BOT_CONTROL_STATUS_PATH}`)).json();
+    expect(degradedBody).toEqual({
+      ok: true,
+      uptimeSeconds: expect.any(Number),
+      channels: { status: "degraded", total: 2, connected: 1 },
+    });
+
+    snapshot = { totalAccounts: 2, connectedAccounts: 0, startedAt: snapshot.startedAt };
+    const errorBody = await (await fetch(`${server.url}${BOT_CONTROL_STATUS_PATH}`)).json();
+    expect(errorBody).toEqual({
+      ok: true,
+      uptimeSeconds: expect.any(Number),
+      channels: { status: "error", total: 2, connected: 0 },
+    });
+
+    snapshot = { totalAccounts: 0, connectedAccounts: 0, startedAt: snapshot.startedAt };
+    const emptyBody = await (await fetch(`${server.url}${BOT_CONTROL_STATUS_PATH}`)).json();
+    expect(emptyBody).toEqual({
+      ok: true,
+      uptimeSeconds: expect.any(Number),
+      channels: { status: "error", total: 0, connected: 0 },
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+test("本机状态探针缺省 getStatus 时按 runtimes 实时连接态汇总且不泄露敏感字段", async () => {
+  const { rootDir, account, logger } = harness();
+  let connected = true;
+  const runtimes = new Map<string, TestMessageRuntime>([
+    [
+      "official",
+      {
+        account,
+        app: {
+          sendGroupMsg: vi.fn(async () => "测试群"),
+          get connected() {
+            return connected;
+          },
+        },
+      },
+    ],
+  ]);
+  await withControl(runtimes, rootDir, logger, async (url) => {
+    const first = await fetch(`${url}${BOT_CONTROL_STATUS_PATH}`);
+    const firstText = await first.text();
+    expect(firstText).not.toContain("official");
+    expect(firstText).not.toContain("GROUP_OPENID");
+    expect(firstText).not.toContain("super-secret");
+    expect(JSON.parse(firstText)).toEqual({
+      ok: true,
+      uptimeSeconds: expect.any(Number),
+      channels: { status: "ok", total: 1, connected: 1 },
+    });
+
+    connected = false;
+    const second = await (await fetch(`${url}${BOT_CONTROL_STATUS_PATH}`)).json();
+    expect(second).toEqual({
+      ok: true,
+      uptimeSeconds: expect.any(Number),
+      channels: { status: "error", total: 1, connected: 0 },
+    });
   });
 });

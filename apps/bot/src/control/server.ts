@@ -8,6 +8,7 @@ import {
   BOT_CONTROL_BRIDGE_TYPING_PATH,
   BOT_CONTROL_DEFAULT_PORT,
   BOT_CONTROL_HEALTH_PATH,
+  BOT_CONTROL_STATUS_PATH,
   BOT_CONTROL_TEST_MESSAGE_PATH,
   ENV_KEYS,
 } from "@nana/constants";
@@ -22,6 +23,7 @@ import {
   type BridgeDeps,
   type BridgeRuntime,
 } from "./bridge.ts";
+import { buildBotControlStatus, type BotStatusSnapshot } from "./status.ts";
 import { BotControlError, sendTestMessage, type TestMessageRuntime } from "./testMessage.ts";
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -32,6 +34,8 @@ export interface BotControlServerOptions {
   runtimes: ReadonlyMap<string, TestMessageRuntime>;
   /** 已启用桥接的账号运行时；未传或为空时桥接接口一律返回 503。 */
   bridges?: ReadonlyMap<string, BridgeRuntime>;
+  /** 返回脱敏的账号连接与运行态汇总，供本机 GET /status 探针使用。 */
+  getStatus?: () => BotStatusSnapshot;
   rootDir: string;
   logger: Logger;
   port?: number;
@@ -187,6 +191,19 @@ async function handleBridgeRequest(
   }
 }
 
+function defaultStatusSnapshot(
+  runtimes: ReadonlyMap<string, TestMessageRuntime>,
+): BotStatusSnapshot {
+  let connectedAccounts = 0;
+  for (const runtime of runtimes.values()) {
+    if (runtime.app.connected === true) connectedAccounts += 1;
+  }
+  return {
+    totalAccounts: runtimes.size,
+    connectedAccounts,
+  };
+}
+
 async function handleRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -196,6 +213,14 @@ async function handleRequest(
   // 健康检查只证明进程存活，不需要口令，也不返回任何运行细节。
   if (request.method === "GET" && url.pathname === BOT_CONTROL_HEALTH_PATH) {
     sendJson(response, 200, { ok: true });
+    return;
+  }
+  // 脱敏状态探针仅监听本机，只返回粗粒度通道在线汇总与运行秒数。
+  if (request.method === "GET" && url.pathname === BOT_CONTROL_STATUS_PATH) {
+    const snapshot = options.getStatus
+      ? options.getStatus()
+      : defaultStatusSnapshot(options.runtimes);
+    sendJson(response, 200, buildBotControlStatus(snapshot));
     return;
   }
 

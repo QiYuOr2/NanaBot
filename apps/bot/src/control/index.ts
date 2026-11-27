@@ -4,6 +4,14 @@ export {
   type BotControlServerOptions,
 } from "./server.ts";
 export {
+  buildBotControlStatus,
+  summarizeChannelStatus,
+  type BotChannelStatus,
+  type BotChannelsSummary,
+  type BotControlStatusPayload,
+  type BotStatusSnapshot,
+} from "./status.ts";
+export {
   BotControlError,
   sendTestMessage,
   type TestMessageDeps,

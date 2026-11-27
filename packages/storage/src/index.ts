@@ -52,6 +52,7 @@ export {
   recordDanmuSessionCutOff,
 } from "./danmu.ts";
 export { resolveDbPath } from "./paths.ts";
+export { checkStorageHealth } from "./health.ts";
 export {
   hasDynamicItem,
   listPendingDynamics,
