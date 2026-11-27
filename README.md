@@ -2,10 +2,11 @@
 
 # NanaBot
 
-**面向 B 站直播与 UP 主动态的 TypeScript QQ 机器人与可视化运维面板**
+**QQ 机器人与可视化运维面板**
 
 支持 **QQ 官方 Bot API** 与 **NapCat WebSocket** 双通道多账号混合运行，内置弹幕词云、AI 直播摘要与 Nuxt 4 控制台。
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.18.0-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-11.20.0-F69220?logo=pnpm&logoColor=white)](https://pnpm.io/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-ESM-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -14,7 +15,7 @@
 [![Build Bot](https://github.com/QiYuOr2/NanaBot/actions/workflows/bot.yml/badge.svg)](https://github.com/QiYuOr2/NanaBot/actions/workflows/bot.yml)
 [![Build Site](https://github.com/QiYuOr2/NanaBot/actions/workflows/site.yml/badge.svg)](https://github.com/QiYuOr2/NanaBot/actions/workflows/site.yml)
 
-[核心特性](#核心特性) · [工程架构](#工程架构) · [快速开始](#快速开始) · [配置指南](#配置指南) · [Web 控制台](#web-控制台) · [部署与运维](#部署与运维) · [开发与贡献](#开发与贡献)
+[核心特性](#核心特性) · [工程架构](#工程架构) · [快速开始](#快速开始) · [配置指南](#配置指南) · [Web 控制台](#web-控制台) · [部署与运维](#部署与运维) · [本地开发](#本地开发)
 
 </div>
 
@@ -337,7 +338,7 @@ nana.config.yaml       # 本地运行时配置（已 gitignore）
 ecosystem.config.cjs   # PM2 合并入口
 ```
 
-## 开发与贡献
+## 本地开发
 
 ### 常用命令
 
@@ -358,14 +359,6 @@ ecosystem.config.cjs   # PM2 合并入口
 - [`@nana/qq` 通信包文档](./packages/qq/README.md)
 - [项目功能变更记录](./docs/changes/README.md)
 
-### 参与贡献
-
-欢迎通过 Issue 反馈问题、提出建议或直接提交 Pull Request：
-
-1. Fork 本仓库并基于默认分支创建特性分支（如 `feat/your-feature` 或 `fix/your-bug`）。
-2. 完成修改后，在仓库根目录运行 `vp check` 与 `vp test` 确保格式、类型检查与测试全部通过。
-3. 请勿提交 `.env`、`nana.config.yaml`、`db/*.sqlite`、`logs/` 等本地敏感配置或运行时文件。
-
 ## 致谢与免责声明
 
 感谢以下开源项目与社区资料为 NanaBot 提供的支持：
@@ -374,3 +367,7 @@ ecosystem.config.cjs   # PM2 合并入口
 
 > [!NOTE]
 > 本项目仅供学习交流与个人自建使用。使用过程中请合理控制轮询与推送频率，遵守 B 站及 QQ 开放平台的相关服务条款与规范。
+
+## 开源协议
+
+本项目基于 [MIT License](./LICENSE) 开源。
