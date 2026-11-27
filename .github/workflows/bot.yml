@@ -2,7 +2,7 @@ name: Build bot
 
 on:
   push:
-    branches: [v2]
+    branches: [main]
     paths:
       - "apps/bot/**"
       - "packages/bilibili-api/**"
